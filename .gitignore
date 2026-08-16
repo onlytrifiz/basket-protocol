@@ -1,6 +1,6 @@
 out/
 cache/
-lib/
+/lib/
 .env
 node_modules/
 

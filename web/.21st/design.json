@@ -38,7 +38,7 @@
     "installed": [],
     "preferredPrimitives": [],
     "patterns": [
-      "21st Stock Portfolio Card (catalog component 8704) adapted as a dependency-free pre-launch dividend-vault preview."
+      "21st Sectors Donut (catalog component 20086) adapted as a dependency-free interactive B20-universe count, with linked SVG arcs and legend rows."
     ]
   },
   "constraints": {
@@ -53,12 +53,12 @@
   },
   "decisions": [
     {
-      "choice": "Base reserve-ledger direction",
-      "reason": "Use the refined, calm hierarchy of the Backed product as the reference: display-serif type, rounded utility surfaces, measured data density and a warm neutral canvas."
+      "choice": "Base market-system direction",
+      "reason": "Keep the compact utility navigation and footer, while moving the content to a Space Grotesk-only, Base-blue market system with square-edged data surfaces and no display-serif editorial treatment."
     },
     {
-      "choice": "Portfolio-led hero",
-      "reason": "The selected 21st Stock Portfolio Card structure is adapted for the pre-launch dividend-vault preview without adding Tailwind, Framer Motion or simulated live figures."
+      "choice": "Universe-led hero",
+      "reason": "The selected 21st Sectors Donut interaction is adapted for the 13-title B20 universe; it reports title counts rather than suggesting an unapproved allocation or live market data."
     }
   ],
   "evidence": [

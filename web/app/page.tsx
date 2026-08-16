@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { BasketUniverse } from "./components/basket-universe";
 import { SiteFooter, SiteHeader } from "./components/site-chrome";
 import { StockGrid } from "./components/stock-grid";
 
@@ -8,35 +9,21 @@ const mechanics = [
   ["03", "Receive the stocks", "The dividend vault pushes each acquired asset pro-rata to eligible BASKET holders."],
 ];
 
-const portfolioRows = [
-  ["NV", "NVDAc", "NVIDIA", "B20 route pending"],
-  ["AP", "AAPLc", "Apple", "B20 route pending"],
-  ["GO", "GOOGLc", "Alphabet", "B20 route pending"],
-];
-
 export default function Home() {
   return (
     <div className="site-shell">
       <SiteHeader active="overview" />
       <main>
         <header className="hero-card" id="overview">
-          <div className="hero-wash" aria-hidden="true" />
           <div className="hero-inner">
             <div className="hero-copy">
-              <p className="eyebrow">TOKENIZED STOCK DIVIDENDS · BASE</p>
-              <h1>Trading fees,<br /><em>paid in stocks.</em></h1>
-              <p className="hero-lede">Basket turns BASKET trading volume into direct distributions of Base-native tokenized equities. Hold the token, receive the basket.</p>
+              <p className="eyebrow">BASE · B20 EQUITY DIVIDENDS</p>
+              <h1>Hold Basket.<br /><span>Receive stocks.</span></h1>
+              <p className="hero-lede">Basket routes trading fees into Base-native tokenized equities, then distributes the acquired assets to qualifying BASKET holders.</p>
               <div className="hero-actions"><Link className="button button-ink" href="/distributions">View distributions <span>→</span></Link><Link className="button button-ghost" href="/protocol">Read the protocol</Link></div>
               <p className="hero-note"><i /> 3% trading fee · 90% allocated to stocks · push payouts</p>
             </div>
-            <aside className="portfolio-card" aria-label="Pre-launch basket preview">
-              <div className="portfolio-head"><div><span>DIVIDEND VAULT</span><strong>Pre-launch preview</strong></div><b>BASE</b></div>
-              <div className="portfolio-value"><span>Next distribution</span><strong>Waiting for market</strong><p>Acquired B20 stocks will appear here per settled cycle.</p></div>
-              <div className="portfolio-list">
-                {portfolioRows.map(([mark, symbol, name, status]) => <div className="portfolio-row" key={symbol}><span className="stock-mark">{mark}</span><div><strong>{symbol}</strong><span>{name}</span></div><small>{status}</small></div>)}
-              </div>
-              <Link href="/distributions" className="portfolio-link">Distribution desk <span>→</span></Link>
-            </aside>
+            <BasketUniverse />
           </div>
         </header>
 
