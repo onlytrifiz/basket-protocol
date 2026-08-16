@@ -1,0 +1,91 @@
+{
+  "version": 1,
+  "project": {
+    "name": "basket-web",
+    "productType": "pre-launch financial protocol",
+    "stack": [
+      "nextjs",
+      "react"
+    ]
+  },
+  "sources": {
+    "tokens": [
+      "app/globals.css"
+    ],
+    "components": [],
+    "assets": [],
+    "instructions": [
+      "AGENTS.md",
+      "CLAUDE.md"
+    ]
+  },
+  "design": {
+    "colorMode": "light",
+    "colors": {
+      "--muted": {
+        "value": "#5f6676",
+        "source": "app/globals.css"
+      }
+    },
+    "typography": {},
+    "spacing": {},
+    "radius": {},
+    "shadows": {},
+    "motion": {},
+    "density": "compact"
+  },
+  "components": {
+    "installed": [],
+    "preferredPrimitives": [],
+    "patterns": [
+      "21st Stock Portfolio Card (catalog component 8704) adapted as a dependency-free pre-launch dividend-vault preview."
+    ]
+  },
+  "constraints": {
+    "must": [
+      "Keep pre-launch states explicit; never present placeholder figures as live protocol data.",
+      "Use Base blue as the primary brand signal with accessible high-contrast type."
+    ],
+    "avoid": [
+      "Generic crypto-dashboard visual language, gradients, and simulated live metrics.",
+      "Claims of trustlessness where keeper or owner operation remains involved."
+    ]
+  },
+  "decisions": [
+    {
+      "choice": "Base reserve-ledger direction",
+      "reason": "Use the refined, calm hierarchy of the Backed product as the reference: display-serif type, rounded utility surfaces, measured data density and a warm neutral canvas."
+    },
+    {
+      "choice": "Portfolio-led hero",
+      "reason": "The selected 21st Stock Portfolio Card structure is adapted for the pre-launch dividend-vault preview without adding Tailwind, Framer Motion or simulated live figures."
+    }
+  ],
+  "evidence": [
+    {
+      "fact": "design.colorMode:light",
+      "source": "app/globals.css"
+    },
+    {
+      "fact": "design.tokens",
+      "source": "app/globals.css"
+    },
+    {
+      "fact": "project.instructions",
+      "source": "AGENTS.md"
+    },
+    {
+      "fact": "project.instructions",
+      "source": "CLAUDE.md"
+    },
+    {
+      "fact": "project.stack:nextjs",
+      "source": "package.json"
+    },
+    {
+      "fact": "project.stack:react",
+      "source": "package.json"
+    }
+  ],
+  "generatedAt": "2026-08-16T23:05:19.699Z"
+}

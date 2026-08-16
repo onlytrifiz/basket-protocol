@@ -1,0 +1,27 @@
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+solc = "0.8.26"
+evm_version = "cancun"          # Base supports Cancun / transient storage — required by Uniswap v4
+optimizer = true
+optimizer_runs = 200
+via_ir = true
+fs_permissions = [{ access = "read-write", path = "./" }]
+
+remappings = [
+    "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
+    "v4-core/=lib/v4-core/",
+    "v4-periphery/=lib/v4-periphery/",
+    "forge-std/=lib/forge-std/src/",
+    "@uniswap/v4-core/=lib/v4-core/",
+]
+
+[rpc_endpoints]
+base = "https://mainnet.base.org"
+base_sepolia = "https://sepolia.base.org"
+
+[etherscan]
+# Etherscan API V2 serves Base through the common endpoint with chainid 8453. Do not point this
+# at the legacy BaseScan API: Foundry selects Etherscan V2 when no legacy explorer URL is supplied.
+base = { key = "${ETHERSCAN_API_KEY}", chain = 8453 }

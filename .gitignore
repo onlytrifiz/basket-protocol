@@ -1,0 +1,10 @@
+out/
+cache/
+lib/
+.env
+node_modules/
+
+# Frontend build and browser-test artifacts
+web/.next/
+web/.playwright-cli/
+web/output/
