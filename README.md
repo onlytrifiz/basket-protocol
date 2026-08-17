@@ -1,51 +1,51 @@
-# Basket — `$BASKET`
+# Stockify — `$STFY`
 
 **Stock dividend protocol for Coinbase L2’s tokenized stocks.**
 
-Basket is a fixed-supply ERC-20 on Base. Its intended `ETH/BASKET` Uniswap v4 pool charges a **3% ETH hook fee** on each buy and sell. A keeper uses **90%** of each allocated fee to buy the owner-configurable active B20 stock basket; the remaining **10% of the hook fee** is protocol revenue. Every stock balance is pushed directly to BASKET holders, pro-rata, with at least one hour between distribution-cycle starts.
+Stockify is a fixed-supply ERC-20 on Base. Its intended `ETH/STFY` Uniswap v4 pool charges a **3% ETH hook fee** on each buy and sell. A keeper uses **90%** of each allocated fee to buy the owner-configurable active B20 stock index; the remaining **10% of the hook fee** is protocol revenue. Every stock balance is pushed directly to STFY holders, pro-rata, with at least one hour between distribution-cycle starts.
 
 `1%` is the LP fee configured on the v4 pool. It is separate from the `3%` hook fee.
 
-> Pre-launch implementation. The B20 stock contracts exist, but their public liquidity routes are not available yet. The keeper will leave ETH untouched whenever it cannot obtain a complete Uniswap route for the entire fixed basket.
+> Pre-launch implementation. The B20 stock contracts exist, but their public liquidity routes are not available yet. The keeper will leave ETH untouched whenever it cannot obtain a complete Uniswap route for the entire fixed index.
 
 ## Economics
 
 | Flow | Share of trading volume |
 | --- | ---: |
 | Uniswap v4 LP fee | 1.00% |
-| Basket hook fee | 3.00% |
+| Stockify hook fee | 3.00% |
 | B20 stock purchases | 2.70% |
-| Basket protocol revenue | 0.30% |
+| Stockify protocol revenue | 0.30% |
 
 The `0.30%` protocol revenue is 10% of the 3% hook fee, not an additional charge.
 
 ## Architecture
 
 ```text
-trade ETH / BASKET on Uniswap v4
+trade ETH / STFY on Uniswap v4
                  │
                  │ 3% native ETH hook fee, both directions
                  ▼
           DividendVault
           ├─ 10% of allocated fee → platformClaimable
-          └─ 90% → official Base Universal Router → active B20 stock basket
+          └─ 90% → official Base Universal Router → active B20 stock index
                                                      │
                                                      │ hourly keeper payout
                                                      ▼
-                                      BASKET holders, pro-rata in each stock
+                                      STFY holders, pro-rata in each stock
 ```
 
 ### Contracts
 
-- `src/BasketToken.sol` — fixed `1,000,000,000 BASKET` ERC-20 supply with an on-chain eligible-holder registry. Its owner can set the registry threshold only from `10,000` to `100,000 BASKET` and can manage reward exclusions.
-- `src/BasketFeeHook.sol` — Uniswap v4 hook that takes exactly 3% in native ETH and forwards it to the vault. Its CREATE2 address is mined for the necessary v4 permission flags.
-- `src/DividendVault.sol` — owner-configurable B20 buy basket, keeper-only buys through the **pinned** Base Universal Router, 10% platform fee accounting, on-chain holder snapshots, and batched push payouts.
+- `src/StockifyToken.sol` — fixed `1,000,000,000 STFY` ERC-20 supply with an on-chain eligible-holder registry. Its owner can set the registry threshold only from `10,000` to `100,000 STFY` and can manage reward exclusions.
+- `src/StockifyFeeHook.sol` — Uniswap v4 hook that takes exactly 3% in native ETH and forwards it to the vault. Its CREATE2 address is mined for the necessary v4 permission flags.
+- `src/DividendVault.sol` — owner-configurable B20 buy index, keeper-only buys through the **pinned** Base Universal Router, 10% platform fee accounting, on-chain holder snapshots, and batched push payouts.
 
 There is no owner or keeper withdrawal path for ETH reserved to buy stocks. The owner multisig has an explicit emergency ERC-20 recovery path (including B20 stocks), while the platform recipient can claim only the accrued 10% fee.
 
-## Initial B20 basket
+## Initial B20 index
 
-The deployment configures these thirteen Base B20 assets at effectively equal weight (twelve at `769 bps`, TSLA at `772 bps` to make the total exactly `10,000 bps`). The owner multisig can later replace the active buy basket and weights atomically. Any asset ever admitted remains eligible for distribution, so removing it from future buys cannot strand stock already held by the vault.
+The deployment configures these thirteen Base B20 assets at effectively equal weight (twelve at `769 bps`, TSLA at `772 bps` to make the total exactly `10,000 bps`). The owner multisig can later replace the active buy index and weights atomically. Any asset ever admitted remains eligible for distribution, so removing it from future buys cannot strand stock already held by the vault.
 
 | Symbol | Company | B20 address |
 | --- | --- | --- |
@@ -69,13 +69,13 @@ The vault validates ERC-20 read compatibility rather than `extcodesize`: B20 ass
 
 Payouts are deliberately **push**, as opposed to a Merkle claim system:
 
-1. `BasketToken` maintains its own holder array on every transfer; only balances at or above the configured threshold are registered.
+1. `StockifyToken` maintains its own holder array on every transfer; only balances at or above the configured threshold are registered.
 2. The keeper calls `snapshotHolders(count)` until the entire registry is captured, then calls `startCycle()`.
 3. The vault freezes the B20 pots and sends `pot × min(snapshotBalance, liveBalance) / eligibleSupply` in `distributeBatch(count)` calls.
 
 This makes the recipient set fully on-chain: the keeper proposes prices and submits transactions but never supplies a holder list. Snapshotting is keeper-gated and payout clamps the snapshot weight to live balance, preventing a balance borrowed only for the snapshot from being paid after it has been returned. A paginated snapshot is not a single-block atomic snapshot: transfers can mutate the swap-and-pop holder registry between keeper calls, so that window is an operationally sensitive period even though the vault deduplicates addresses seen in the current epoch.
 
-The token starts with a `100,000 BASKET` eligibility threshold; the owner multisig can change it only within `10,000–100,000 BASKET`. It can also use `setRewardsExcluded`, as in the reference Index token. Those controls are an explicit governance trust assumption: an excluded wallet is absent from subsequent snapshots. Infrastructure addresses are excluded during deployment. A threshold change is reflected when an account next transfers (or its exclusion status is changed), mirroring the reference token’s low-gas registry model.
+The token starts with a `100,000 STFY` eligibility threshold; the owner multisig can change it only within `10,000–100,000 STFY`. It can also use `setRewardsExcluded`, as in the reference implementation. Those controls are an explicit governance trust assumption: an excluded wallet is absent from subsequent snapshots. Infrastructure addresses are excluded during deployment. A threshold change is reflected when an account next transfers (or its exclusion status is changed), mirroring the reference token’s low-gas registry model.
 
 B20 transfers that fail receiver policy checks do not brick a batch. The exact failed entitlement is stored for the holder and may be retried with `flushUnpaidDividend`.
 

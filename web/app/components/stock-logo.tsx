@@ -1,7 +1,7 @@
-import type { BasketStock } from "../../lib/stocks";
+import type { IndexStock } from "../../lib/stocks";
 
 type StockLogoProps = {
-  stock: BasketStock;
+  stock: IndexStock;
   size?: "small" | "regular" | "large";
 };
 

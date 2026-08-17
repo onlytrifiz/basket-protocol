@@ -6,15 +6,15 @@ import {ReentrancyGuard} from "@openzeppelin/contracts/utils/ReentrancyGuard.sol
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
-interface IBasketToken is IERC20 {
+interface IStockifyToken is IERC20 {
     function totalSupply() external view returns (uint256);
     function holderCount() external view returns (uint256);
     function holderAt(uint256 index) external view returns (address);
 }
 
 /// @title DividendVault
-/// @notice Receives Basket v4 hook fees, buys the owner-configurable B20 basket, then directly pushes stocks to
-/// the BasketToken on-chain holder registry once per hour.
+/// @notice Receives Stockify v4 hook fees, buys the owner-configurable B20 index, then directly pushes stocks to
+/// the StockifyToken on-chain holder registry once per hour.
 /// @dev The snapshot and payout are batched, so the keeper never submits an off-chain recipient
 /// list. Snapshot weight is limited to live balance on payout to prevent a flash-borrowed balance
 /// from receiving a dividend after it has been returned.
@@ -28,16 +28,16 @@ contract DividendVault is Ownable, ReentrancyGuard {
 
     /// @dev Official Base v4 Universal Router at deployment time. See Deploy.s.sol for its source.
     address public immutable universalRouter;
-    IBasketToken public immutable basketToken;
+    IStockifyToken public immutable stockifyToken;
 
     struct Stock {
         address token;
         uint16 weightBps;
     }
 
-    /// @dev Active buy basket, configured by the owner multisig.
-    Stock[] private _stocks;
-    /// @dev Every asset ever admitted to a basket. Removed assets stay in this set so already-bought
+    /// @dev Active buy index, configured by the owner multisig.
+    Stock[] private _index;
+    /// @dev Every asset ever admitted to an index. Removed assets stay in this set so already-bought
     /// balances and failed payouts remain distributable instead of becoming stranded.
     address[] private _distributionStocks;
     mapping(address => bool) public isStock;
@@ -45,11 +45,11 @@ contract DividendVault is Ownable, ReentrancyGuard {
     mapping(address => bool) public keeper;
 
     /// @dev These infrastructure addresses are defensively skipped if ever present in the token
-    /// registry. BasketToken additionally excludes them through `rewardsExcluded` at deployment.
+    /// registry. StockifyToken additionally excludes them through `rewardsExcluded` at deployment.
     mapping(address => bool) public excluded;
     address[] private _excludedAccounts;
 
-    // A snapshot word is `(balance << 160) | uint160(holder)`. The 1B BASKET fixed supply fits in
+    // A snapshot word is `(balance << 160) | uint160(holder)`. The 1B STFY fixed supply fits in
     // 96 bits, so one storage word carries both holder and weight.
     uint256[] private _snapshot;
     address[] private _cycleStocks;
@@ -79,7 +79,7 @@ contract DividendVault is Ownable, ReentrancyGuard {
     event MaxGrossSpendPerCycleSet(uint256 amount);
     event StocksBought(uint256 grossEth, uint256 platformFee, uint256 stockEth);
     event StockBought(address indexed stock, uint256 ethSpent, uint256 received);
-    event BasketConfigured(uint256 indexed stockCount);
+    event IndexConfigured(uint256 indexed stockCount);
     event DistributionStockRegistered(address indexed stock);
     event PlatformClaimed(address indexed recipient, uint256 amount);
     event EmergencyERC20Withdrawn(address indexed token, address indexed owner, uint256 amount);
@@ -93,7 +93,7 @@ contract DividendVault is Ownable, ReentrancyGuard {
 
     error OnlyKeeper();
     error ZeroAddress();
-    error InvalidBasket();
+    error InvalidIndex();
     error RouterCallFailed();
     error InsufficientOutput(address stock, uint256 got, uint256 minimum);
     error InsufficientEth(uint256 wanted, uint256 available);
@@ -117,7 +117,7 @@ contract DividendVault is Ownable, ReentrancyGuard {
     }
 
     constructor(
-        address basketToken_,
+        address stockifyToken_,
         address universalRouter_,
         address owner_,
         address platformRecipient_,
@@ -126,16 +126,16 @@ contract DividendVault is Ownable, ReentrancyGuard {
         uint16[] memory weights_
     ) Ownable(owner_) {
         if (
-            basketToken_ == address(0) || universalRouter_ == address(0) || owner_ == address(0)
+            stockifyToken_ == address(0) || universalRouter_ == address(0) || owner_ == address(0)
                 || platformRecipient_ == address(0) || poolManager_ == address(0)
         ) revert ZeroAddress();
-        if (basketToken_.code.length == 0 || universalRouter_.code.length == 0 || poolManager_.code.length == 0) {
-            revert InvalidBasket();
+        if (stockifyToken_.code.length == 0 || universalRouter_.code.length == 0 || poolManager_.code.length == 0) {
+            revert InvalidIndex();
         }
-        basketToken = IBasketToken(basketToken_);
+        stockifyToken = IStockifyToken(stockifyToken_);
         universalRouter = universalRouter_;
         platformRecipient = platformRecipient_;
-        _setBasket(stocks_, weights_);
+        _setIndex(stocks_, weights_);
 
         _setExcluded(poolManager_, true);
         _setExcluded(address(this), true);
@@ -146,11 +146,11 @@ contract DividendVault is Ownable, ReentrancyGuard {
     receive() external payable {}
 
     function stocksLength() external view returns (uint256) {
-        return _stocks.length;
+        return _index.length;
     }
 
     function stockAt(uint256 index) external view returns (address token, uint16 weightBps) {
-        Stock memory stock = _stocks[index];
+        Stock memory stock = _index[index];
         return (stock.token, stock.weightBps);
     }
 
@@ -167,7 +167,7 @@ contract DividendVault is Ownable, ReentrancyGuard {
     }
 
     function snapshotRemaining() external view returns (uint256) {
-        uint256 registrySize = basketToken.holderCount();
+        uint256 registrySize = stockifyToken.holderCount();
         uint256 captured = snapshotPending ? snapshotCursor : 0;
         return registrySize > captured ? registrySize - captured : 0;
     }
@@ -182,11 +182,11 @@ contract DividendVault is Ownable, ReentrancyGuard {
     }
 
     /// @notice Buys every configured stock through the immutable Base Universal Router.
-    /// @param minOuts Minimum token units received, ordered as the configured stock basket.
-    /// @param routerCalldatas Trading API calldata, ordered as the configured stock basket.
+    /// @param minOuts Minimum token units received, ordered as the configured stock index.
+    /// @param routerCalldatas Trading API calldata, ordered as the configured stock index.
     function buyStocks(uint256[] calldata minOuts, bytes[] calldata routerCalldatas) external nonReentrant onlyKeeper {
-        uint256 n = _stocks.length;
-        if (minOuts.length != n || routerCalldatas.length != n) revert InvalidBasket();
+        uint256 n = _index.length;
+        if (minOuts.length != n || routerCalldatas.length != n) revert InvalidIndex();
 
         uint256 gross = availableEth();
         uint256 cap = maxGrossSpendPerCycle;
@@ -199,10 +199,10 @@ contract DividendVault is Ownable, ReentrancyGuard {
 
         uint256 totalSpent;
         for (uint256 i; i < n; ++i) {
-            Stock memory stock = _stocks[i];
+            Stock memory stock = _index[i];
             uint256 spend = (stockBudget * stock.weightBps) / BPS;
             if (spend == 0) continue;
-            if (minOuts[i] == 0) revert InvalidBasket();
+            if (minOuts[i] == 0) revert InvalidIndex();
 
             uint256 beforeBalance = IERC20(stock.token).balanceOf(address(this));
             (bool ok,) = universalRouter.call{value: spend}(routerCalldatas[i]);
@@ -217,7 +217,7 @@ contract DividendVault is Ownable, ReentrancyGuard {
         emit StocksBought(gross, protocolFee, totalSpent);
     }
 
-    /// @notice Capture up to `count` addresses from BasketToken's on-chain registry for this cycle.
+    /// @notice Capture up to `count` addresses from StockifyToken's on-chain registry for this cycle.
     /// @dev The keeper is deliberately the only caller: it chooses a regular block for snapshotting,
     /// while payout additionally clamps the snapshot weight to the holder's live balance.
     function snapshotHolders(uint256 count) external nonReentrant onlyKeeper {
@@ -238,19 +238,19 @@ contract DividendVault is Ownable, ReentrancyGuard {
             }
         }
 
-        uint256 registrySize = basketToken.holderCount();
+        uint256 registrySize = stockifyToken.holderCount();
         uint256 end = snapshotCursor + count;
         if (end > registrySize) end = registrySize;
         uint256 eligible = eligibleSupply;
         uint256 epoch = _snapshotEpoch;
 
         for (uint256 i = snapshotCursor; i < end; ++i) {
-            address holder = basketToken.holderAt(i);
+            address holder = stockifyToken.holderAt(i);
             if (_seenEpoch[holder] == epoch) continue;
             _seenEpoch[holder] = epoch;
             if (excluded[holder]) continue;
 
-            uint256 balance = basketToken.balanceOf(holder);
+            uint256 balance = stockifyToken.balanceOf(holder);
             if (balance == 0) continue;
             _snapshot.push((balance << 160) | uint256(uint160(holder)));
             eligible += balance;
@@ -269,19 +269,19 @@ contract DividendVault is Ownable, ReentrancyGuard {
         if (block.timestamp < nextDistribution) revert TooSoon(nextDistribution);
 
         if (snapshotPending) {
-            if (snapshotCursor < basketToken.holderCount()) revert SnapshotIncomplete();
+            if (snapshotCursor < stockifyToken.holderCount()) revert SnapshotIncomplete();
             snapshotPending = false;
         } else {
             if (!_hasDistributionWork()) revert NoDistributionWork();
             delete _snapshot;
             delete _cycleStocks;
             delete _cyclePots;
-            uint256 registrySize = basketToken.holderCount();
+            uint256 registrySize = stockifyToken.holderCount();
             uint256 eligible;
             for (uint256 i; i < registrySize; ++i) {
-                address holder = basketToken.holderAt(i);
+                address holder = stockifyToken.holderAt(i);
                 if (excluded[holder]) continue;
-                uint256 balance = basketToken.balanceOf(holder);
+                uint256 balance = stockifyToken.balanceOf(holder);
                 if (balance == 0) continue;
                 _snapshot.push((balance << 160) | uint256(uint160(holder)));
                 eligible += balance;
@@ -327,7 +327,7 @@ contract DividendVault is Ownable, ReentrancyGuard {
             uint256 word = _snapshot[i];
             address holder = address(uint160(word));
             uint256 snapshotBalance = word >> 160;
-            uint256 liveBalance = basketToken.balanceOf(holder);
+            uint256 liveBalance = stockifyToken.balanceOf(holder);
             uint256 weight = liveBalance < snapshotBalance ? liveBalance : snapshotBalance;
             if (weight == 0) continue;
 
@@ -393,15 +393,15 @@ contract DividendVault is Ownable, ReentrancyGuard {
         emit KeeperSet(account, allowed);
     }
 
-    /// @notice Replace the buy basket and its weights atomically.
+    /// @notice Replace the buy index and its weights atomically.
     /// @dev Removed assets remain in the distribution set forever: this function cannot make B20
     /// dividends already held by the vault withdrawable or otherwise stranded.
-    function setBasket(address[] calldata stocks, uint16[] calldata weights) external onlyOwner {
+    function setIndex(address[] calldata stocks, uint16[] calldata weights) external onlyOwner {
         if (cycleActive || snapshotPending) revert ConfigDuringCycle();
-        _setBasket(stocks, weights);
+        _setIndex(stocks, weights);
     }
 
-    /// @dev Infrastructure-only backstop. Normal wallets are controlled through BasketToken's
+    /// @dev Infrastructure-only backstop. Normal wallets are controlled through StockifyToken's
     /// `rewardsExcluded`, which intentionally remains owner-configurable as requested.
     function setExcluded(address account, bool isExcluded) external onlyOwner {
         if (account == address(0) || account == 0x000000000000000000000000000000000000dEaD) {
@@ -464,37 +464,37 @@ contract DividendVault is Ownable, ReentrancyGuard {
         return ok && data.length >= 32;
     }
 
-    function _setBasket(address[] memory stocks, uint16[] memory weights) private {
-        if (stocks.length == 0 || stocks.length != weights.length) revert InvalidBasket();
+    function _setIndex(address[] memory stocks, uint16[] memory weights) private {
+        if (stocks.length == 0 || stocks.length != weights.length) revert InvalidIndex();
 
-        uint256 previousLength = _stocks.length;
+        uint256 previousLength = _index.length;
         for (uint256 i; i < previousLength; ++i) {
-            isStock[_stocks[i].token] = false;
+            isStock[_index[i].token] = false;
         }
-        delete _stocks;
+        delete _index;
 
         uint256 totalWeight;
         uint256 n = stocks.length;
         for (uint256 i; i < n; ++i) {
             address stock = stocks[i];
-            if (stock == address(0) || stock == address(basketToken) || isStock[stock] || weights[i] == 0) {
-                revert InvalidBasket();
+            if (stock == address(0) || stock == address(stockifyToken) || isStock[stock] || weights[i] == 0) {
+                revert InvalidIndex();
             }
             // B20 assets are Base Rust precompiles. ERC-20 read compatibility is the required
             // capability; normal EVM bytecode is not assumed.
             if (!isDistributionStock[stock]) {
-                if (!_isErc20(stock)) revert InvalidBasket();
+                if (!_isErc20(stock)) revert InvalidIndex();
                 isDistributionStock[stock] = true;
                 _distributionStocks.push(stock);
                 emit DistributionStockRegistered(stock);
             }
 
             isStock[stock] = true;
-            _stocks.push(Stock({token: stock, weightBps: weights[i]}));
+            _index.push(Stock({token: stock, weightBps: weights[i]}));
             totalWeight += weights[i];
         }
-        if (totalWeight != BPS) revert InvalidBasket();
-        emit BasketConfigured(n);
+        if (totalWeight != BPS) revert InvalidIndex();
+        emit IndexConfigured(n);
     }
 
     function _safeBalanceOf(address token) private view returns (uint256 result) {

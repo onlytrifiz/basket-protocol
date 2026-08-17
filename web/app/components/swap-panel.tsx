@@ -1,8 +1,8 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { stocks, type BasketStock } from "../../lib/stocks";
-import { BasketMark } from "./site-chrome";
+import { stocks, type IndexStock } from "../../lib/stocks";
+import { StockifyMark } from "./site-chrome";
 import { StockLogo } from "./stock-logo";
 
 type Eip1193Provider = {
@@ -18,7 +18,7 @@ declare global {
 type TradeTarget = {
   address: string;
   name: string;
-  stock?: BasketStock;
+  stock?: IndexStock;
   symbol: string;
 };
 
@@ -35,7 +35,7 @@ type SwapTransaction = {
 };
 
 const baseChainHex = "0x2105";
-const basketAddress = process.env.NEXT_PUBLIC_BASKET_TOKEN_ADDRESS ?? "";
+const stockifyAddress = process.env.NEXT_PUBLIC_STOCKIFY_TOKEN_ADDRESS ?? "";
 
 function isConfiguredAddress(value: string) {
   return /^0x[a-fA-F0-9]{40}$/.test(value);
@@ -73,7 +73,7 @@ async function postJson<T>(path: string, body: unknown) {
  */
 export function SwapPanel() {
   const targets = useMemo<TradeTarget[]>(() => [
-    { address: basketAddress, name: "Basket protocol token", symbol: "BASKET" },
+    { address: stockifyAddress, name: "Stockify protocol token", symbol: "STFY" },
     ...stocks.map((stock) => ({ address: stock.address, name: stock.name, stock, symbol: stock.symbol })),
   ], []);
   const [account, setAccount] = useState<string>();
@@ -82,11 +82,11 @@ export function SwapPanel() {
   const [notice, setNotice] = useState<string>();
   const [quote, setQuote] = useState<RouterQuote>();
   const [quoteAt, setQuoteAt] = useState(0);
-  const [targetSymbol, setTargetSymbol] = useState("BASKET");
+  const [targetSymbol, setTargetSymbol] = useState("STFY");
   const [kycUrl, setKycUrl] = useState<string>();
 
   const target = targets.find((entry) => entry.symbol === targetSymbol) ?? targets[0];
-  const needsBasketConfig = target.symbol === "BASKET" && !isConfiguredAddress(target.address);
+  const needsStockifyConfig = target.symbol === "STFY" && !isConfiguredAddress(target.address);
 
   async function ensureBase(provider: Eip1193Provider) {
     const currentChain = await provider.request({ method: "eth_chainId" });
@@ -129,8 +129,8 @@ export function SwapPanel() {
   }
 
   async function requestQuote() {
-    if (needsBasketConfig) {
-      setNotice("BASKET is awaiting its deployed token and pool address. Stock quotes are available to check now.");
+    if (needsStockifyConfig) {
+      setNotice("STFY is awaiting its deployed token and pool address. Stock quotes are available to check now.");
       return;
     }
 
@@ -204,8 +204,8 @@ export function SwapPanel() {
     }
   }
 
-  const actionLabel = needsBasketConfig
-    ? "BASKET pool pending"
+  const actionLabel = needsStockifyConfig
+    ? "STFY pool pending"
     : isBusy
     ? "Preparing route…"
     : quote
@@ -215,7 +215,7 @@ export function SwapPanel() {
         : "Connect wallet";
 
   return (
-    <aside className="swap-panel" aria-label="Buy Basket or a Base tokenized stock">
+    <aside className="swap-panel" aria-label="Buy Stockify or a Base tokenized stock">
       <div className="swap-panel-head"><div><span>BUY ON BASE</span><strong>Trade ETH for stocks</strong></div><b>UNISWAP v4</b></div>
       <div className="swap-leg">
         <label htmlFor="swap-amount">You pay</label>
@@ -225,17 +225,17 @@ export function SwapPanel() {
       <div className="swap-leg swap-leg-output">
         <label htmlFor="swap-target">You receive</label>
         <div className="swap-target-row">
-          {target.stock ? <StockLogo stock={target.stock} /> : <BasketMark />}
+          {target.stock ? <StockLogo stock={target.stock} /> : <StockifyMark />}
           <select id="swap-target" onChange={(event) => { setTargetSymbol(event.target.value); clearTradeState(); }} value={targetSymbol}>
             {targets.map((entry) => <option key={entry.symbol} value={entry.symbol}>{entry.symbol} · {entry.name}</option>)}
           </select>
         </div>
       </div>
-      <div className="swap-details"><span>Input</span><b>Native ETH</b><span>Target</span><b>{target.symbol === "BASKET" ? "Custom-hook pool" : "Base B20 token"}</b></div>
+      <div className="swap-details"><span>Input</span><b>Native ETH</b><span>Target</span><b>{target.symbol === "STFY" ? "Custom-hook pool" : "Base B20 token"}</b></div>
       {notice && <p className={`swap-notice${quote ? " is-ready" : ""}`}>{notice}</p>}
       {kycUrl && <a className="swap-kyc" href={kycUrl} rel="noreferrer" target="_blank">Verify wallet to trade ↗</a>}
-      <button className="swap-action" disabled={isBusy || Boolean(kycUrl) || needsBasketConfig} onClick={quote ? executeSwap : requestQuote} type="button">{actionLabel}</button>
-      <p className="swap-foot">{account ? `Connected ${truncateAddress(account)}` : "Wallet signs the transaction; Basket never takes custody."}</p>
+      <button className="swap-action" disabled={isBusy || Boolean(kycUrl) || needsStockifyConfig} onClick={quote ? executeSwap : requestQuote} type="button">{actionLabel}</button>
+      <p className="swap-foot">{account ? `Connected ${truncateAddress(account)}` : "Wallet signs the transaction; Stockify never takes custody."}</p>
     </aside>
   );
 }

@@ -1,4 +1,4 @@
-export type BasketStock = {
+export type IndexStock = {
   symbol: string;
   name: string;
   address: string;
@@ -6,7 +6,7 @@ export type BasketStock = {
   referencePrice?: string;
 };
 
-export const stocks: BasketStock[] = [
+export const stocks: IndexStock[] = [
   { symbol: "NVDAc", name: "NVIDIA", domain: "nvidia.com", address: "0xb20000000000000000000078ee7ce2fe4908108c", referencePrice: "479.490" },
   { symbol: "AAPLc", name: "Apple", domain: "apple.com", address: "0xb200000000000000000000c2e324d24d7eecd1fb", referencePrice: "333.730" },
   { symbol: "GOOGLc", name: "Alphabet", domain: "google.com", address: "0xb2000000000000000000002d0ba3164cc74f58b7", referencePrice: "294.914" },

@@ -17,7 +17,7 @@ const circumference = 2 * Math.PI * radius;
 
 /** Adapted from 21st's Sectors Donut (component 20086): hover/focus links the
  * SVG ring and the legend. Here it reports title count, never a fake allocation. */
-export function BasketUniverse() {
+export function IndexUniverse() {
   const [active, setActive] = useState<number | null>(null);
   let offset = 0;
 
@@ -29,7 +29,7 @@ export function BasketUniverse() {
   });
 
   return (
-    <aside className="basket-universe" aria-label="Initial B20 equity universe">
+    <aside className="index-universe" aria-label="Initial B20 equity universe">
       <div className="universe-head"><span>INITIAL UNIVERSE</span><b>13 B20</b></div>
       <div className="universe-body">
         <div className="universe-ring" aria-hidden="true">

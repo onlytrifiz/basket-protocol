@@ -14,7 +14,7 @@ export async function POST(request: Request) {
   const body = await request.json().catch(() => null) as { quote?: RouterQuote } | null;
   const quote = body?.quote;
   if (!quote || quote.input?.token?.toLowerCase() !== nativeEth || !isPositiveInteger(quote.input.amount) || !isSupportedOutput(quote.output?.token)) {
-    return apiError("This quote cannot be executed by Basket.", 400);
+    return apiError("This quote cannot be executed by Stockify.", 400);
   }
 
   const response = await fetch(`${uniswapApiBase}/swap`, {

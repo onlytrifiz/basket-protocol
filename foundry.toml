@@ -8,6 +8,9 @@ optimizer = true
 optimizer_runs = 200
 via_ir = true
 fs_permissions = [{ access = "read-write", path = "./" }]
+# GasBench replays a full Index-scale distribution cycle (13k holders x 17 assets) in a single
+# test, which exceeds Foundry's default 2^30 per-test limit. Test-only; no effect on deployments.
+gas_limit = 200_000_000_000
 
 remappings = [
     "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",

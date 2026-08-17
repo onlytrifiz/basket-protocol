@@ -10,11 +10,11 @@ import {BalanceDelta} from "v4-core/src/types/BalanceDelta.sol";
 import {BeforeSwapDelta, BeforeSwapDeltaLibrary, toBeforeSwapDelta} from "v4-core/src/types/BeforeSwapDelta.sol";
 import {SwapParams} from "v4-core/src/types/PoolOperation.sol";
 
-/// @title BasketFeeHook
-/// @notice Takes a 3% native-ETH fee on both directions of the single ETH/BASKET Uniswap v4 pool.
+/// @title StockifyFeeHook
+/// @notice Takes a 3% native-ETH fee on both directions of the single ETH/STFY Uniswap v4 pool.
 /// @dev ETH must be currency0. The hook forwards the fee to DividendVault, which retains 10% of
 /// each keeper-allocated buy as protocol revenue and deploys the other 90% into B20 stock tokens.
-contract BasketFeeHook is BaseHook {
+contract StockifyFeeHook is BaseHook {
     using SafeCast for uint256;
 
     uint256 public constant FEE_BPS = 300;

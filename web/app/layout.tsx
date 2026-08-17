@@ -15,9 +15,9 @@ const mono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://thebasket.tech"),
+  metadataBase: new URL("https://stockify.finance"),
   title: {
-    default: "Basket — Stock dividend protocol",
+    default: "Stockify — Stock dividend protocol",
     template: "%s",
   },
   description: "Stock dividend protocol for Coinbase L2’s tokenized stocks.",

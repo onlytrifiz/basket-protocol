@@ -3,8 +3,8 @@ import Link from "next/link";
 import { SiteFooter, SiteHeader } from "../components/site-chrome";
 
 export const metadata: Metadata = {
-  title: "Protocol documentation — Basket",
-  description: "Public protocol reference for Basket's token, v4 fee hook, dividend vault and dividend cycle on Base.",
+  title: "Protocol documentation — Stockify",
+  description: "Public protocol reference for Stockify's token, v4 fee hook, dividend vault and dividend cycle on Base.",
 };
 
 const contents = [
@@ -19,15 +19,15 @@ const contents = [
 
 const contractRows = [
   {
-    name: "BasketToken",
-    file: "src/BasketToken.sol",
-    description: "Fixed-supply BASKET ERC-20. Maintains the enumerable holder registry used by the vault; it does not ask an indexer or explorer for recipients.",
-    facts: ["1,000,000,000 BASKET fixed supply", "10,000–100,000 BASKET eligibility range", "O(1) holder removal with swap-and-pop"],
+    name: "StockifyToken",
+    file: "src/StockifyToken.sol",
+    description: "Fixed-supply STFY ERC-20. Maintains the enumerable holder registry used by the vault; it does not ask an indexer or explorer for recipients.",
+    facts: ["1,000,000,000 STFY fixed supply", "10,000–100,000 STFY eligibility range", "O(1) holder removal with swap-and-pop"],
   },
   {
-    name: "BasketFeeHook",
-    file: "src/BasketFeeHook.sol",
-    description: "The Uniswap v4 hook attached to the intended ETH/BASKET pool. It takes 300 bps in native ETH and settles it directly to the vault.",
+    name: "StockifyFeeHook",
+    file: "src/StockifyFeeHook.sol",
+    description: "The Uniswap v4 hook attached to the intended ETH/STFY pool. It takes 300 bps in native ETH and settles it directly to the vault.",
     facts: ["300 bps hook fee", "ETH must be currency0", "CREATE2 address mined for v4 flags"],
   },
   {
@@ -49,13 +49,13 @@ const cycleSteps = [
     number: "01",
     call: "buyStocks(minOuts, routerCalldatas)",
     actor: "Keeper",
-    copy: "Uses available native ETH, retains 10% in platformClaimable and divides the other 90% over the current active basket by weight. Every configured stock must have a complete route or the supplied keeper skips the buy.",
+    copy: "Uses available native ETH, retains 10% in platformClaimable and divides the other 90% over the current active index by weight. Every configured stock must have a complete route or the supplied keeper skips the buy.",
   },
   {
     number: "02",
     call: "snapshotHolders(count)",
     actor: "Keeper",
-    copy: "Reads BasketToken.holderAt(i) in pages, excludes infrastructure and reward-excluded accounts, records balance plus address in one word, and accumulates eligibleSupply.",
+    copy: "Reads StockifyToken.holderAt(i) in pages, excludes infrastructure and reward-excluded accounts, records balance plus address in one word, and accumulates eligibleSupply.",
   },
   {
     number: "03",
@@ -79,7 +79,7 @@ const cycleSteps = [
 
 const ownerControls = [
   ["Token eligibility", "setMinShareBalance(10k–100k) and setRewardsExcluded."],
-  ["Basket policy", "setBasket(stocks, weights) between cycles only; weights must total 10,000 bps."],
+  ["Index policy", "setIndex(stocks, weights) between cycles only; weights must total 10,000 bps."],
   ["Operators", "setKeeper, setPlatformRecipient and setMaxGrossSpendPerCycle."],
   ["Infrastructure", "setExcluded accepts contract addresses only, protecting ordinary wallet holders from this vault-level control."],
   ["Emergency path", "emergencyWithdrawERC20 can recover every ERC-20 in custody, including B20 stocks; it intentionally has no matching native-ETH path."],
@@ -106,7 +106,7 @@ export default function DocsPage() {
           <aside className="docs-nav" aria-label="Documentation sections">
             <span>ON THIS PAGE</span>
             {contents.map(([id, title], index) => <a href={`#${id}`} key={id}><b>{String(index + 1).padStart(2, "0")}</b>{title}</a>)}
-            <a className="docs-source-link" href="https://github.com/onlytrifiz/basket-protocol" target="_blank" rel="noreferrer">Repository ↗</a>
+            <a className="docs-source-link" href="https://github.com/onlytrifiz/stockify-protocol" target="_blank" rel="noreferrer">Repository ↗</a>
           </aside>
 
           <div className="docs-reference">
@@ -115,12 +115,12 @@ export default function DocsPage() {
               <div className="docs-section-body">
                 <h2>Fees become stock balances, then direct payouts.</h2>
                 <p>
-                  Basket has one intended ETH/BASKET Uniswap v4 market. Its hook collects a 3% native-ETH fee on
+                  Stockify has one intended ETH/STFY Uniswap v4 market. Its hook collects a 3% native-ETH fee on
                   both directions of trade and forwards it to <code>DividendVault</code>. The vault accounts for
                   10% of each allocation as protocol revenue and makes the remaining 90% available for B20 stock purchases.
                 </p>
-                <div className="docs-flow" aria-label="Basket fee and dividend flow">
-                  <div><b>ETH / BASKET</b><span>Uniswap v4 pool</span></div>
+                <div className="docs-flow" aria-label="Stockify fee and dividend flow">
+                  <div><b>ETH / STFY</b><span>Uniswap v4 pool</span></div>
                   <i aria-hidden="true">→</i>
                   <div><b>3.00% hook fee</b><span>Native ETH to vault</span></div>
                   <i aria-hidden="true">→</i>
@@ -130,12 +130,12 @@ export default function DocsPage() {
                 </div>
                 <div className="docs-table-wrap">
                   <table>
-                    <caption>Fee accounting per ETH/BASKET trade volume</caption>
+                    <caption>Fee accounting per ETH/STFY trade volume</caption>
                     <thead><tr><th>Destination</th><th>Rate</th><th>How it is accounted for</th></tr></thead>
                     <tbody>
                       <tr><td>LP fee</td><td>1.00%</td><td>Pool configuration; separate from the hook.</td></tr>
-                      <tr><td>Hook fee</td><td>3.00%</td><td>Collected in native ETH by <code>BasketFeeHook</code>.</td></tr>
-                      <tr><td>B20 purchase budget</td><td>2.70%</td><td>90% of the hook allocation, split by active basket weights.</td></tr>
+                      <tr><td>Hook fee</td><td>3.00%</td><td>Collected in native ETH by <code>StockifyFeeHook</code>.</td></tr>
+                      <tr><td>B20 purchase budget</td><td>2.70%</td><td>90% of the hook allocation, split by active index weights.</td></tr>
                       <tr><td>Protocol revenue</td><td>0.30%</td><td>10% of the hook allocation, tracked as <code>platformClaimable</code>.</td></tr>
                     </tbody>
                   </table>
@@ -148,7 +148,7 @@ export default function DocsPage() {
               <div className="docs-section-label"><span>02</span><p>Contract reference</p></div>
               <div className="docs-section-body">
                 <h2>The four implementation surfaces.</h2>
-                <p>These are the source modules that define the protocol today. There are no production Basket contract addresses yet.</p>
+                <p>These are the source modules that define the protocol today. There are no production Stockify contract addresses yet.</p>
                 <div className="docs-contracts">
                   {contractRows.map((contract) => <article key={contract.name}>
                     <div className="docs-contract-head"><h3>{contract.name}</h3><code>{contract.file}</code></div>
@@ -192,8 +192,8 @@ export default function DocsPage() {
               <div className="docs-section-body">
                 <h2>Holder discovery is on-chain.</h2>
                 <p>
-                  <code>BasketToken</code> maintains an array of eligible accounts every time a balance changes. Accounts qualify at
-                  the current threshold, initially 100,000 BASKET; governance can only set it between 10,000 and 100,000 BASKET.
+                  <code>StockifyToken</code> maintains an array of eligible accounts every time a balance changes. Accounts qualify at
+                  the current threshold, initially 100,000 STFY; governance can only set it between 10,000 and 100,000 STFY.
                 </p>
                 <div className="docs-split-grid">
                   <article><span>Registry</span><h3>No explorer dependency</h3><p>The vault calls <code>holderCount()</code> and <code>holderAt(i)</code>. Its keeper can therefore distribute without Blockscout, Etherscan or an off-chain holder database.</p></article>
@@ -212,7 +212,7 @@ export default function DocsPage() {
                 <h2>Explicit permissions, not implied automation.</h2>
                 <div className="docs-role-grid">
                   <article><span>Owner multisig</span><h3>Configuration and emergency custody</h3><p>Can change policy and use the ERC-20 emergency path. This is a material trust role and should be a multisig at deployment.</p></article>
-                  <article><span>Keeper</span><h3>Routes, buys and batches</h3><p>Can buy stocks and advance snapshots and payouts, but cannot change thresholds, basket weights, recipients or ownership.</p></article>
+                  <article><span>Keeper</span><h3>Routes, buys and batches</h3><p>Can buy stocks and advance snapshots and payouts, but cannot change thresholds, index weights, recipients or ownership.</p></article>
                   <article><span>Platform recipient</span><h3>Claims only accrued revenue</h3><p>Can claim <code>platformClaimable</code>. The owner can rotate this recipient; it has no direct access to the stock budget.</p></article>
                   <article><span>Anyone</span><h3>Retries an unpaid dividend</h3><p>Can call <code>flushUnpaidDividend</code>, but tokens can only be sent to the recorded rightful holder.</p></article>
                 </div>
@@ -228,18 +228,18 @@ export default function DocsPage() {
             <section className="docs-section" id="market">
               <div className="docs-section-label"><span>06</span><p>Trading &amp; liquidity</p></div>
               <div className="docs-section-body">
-                <h2>How BASKET and the dividend assets trade.</h2>
+                <h2>How STFY and the dividend assets trade.</h2>
                 <p>
-                  Basket is designed around one ETH/BASKET Uniswap v4 pool. Liquidity providers set the initial
+                  Stockify is designed around one ETH/STFY Uniswap v4 pool. Liquidity providers set the initial
                   price and add liquidity in a separate pool-initialization transaction; the hook does neither.
-                  Until that happens, BASKET has no live market or price.
+                  Until that happens, STFY has no live market or price.
                 </p>
                 <div className="docs-split-grid docs-market-grid">
-                  <article><span>BASKET market</span><h3>ETH / BASKET on Uniswap v4</h3><p>The intended pool uses a 1% LP fee plus Basket&apos;s 3% native-ETH hook fee on buys and sells. The hook fee is forwarded to the dividend vault.</p></article>
+                  <article><span>STFY market</span><h3>ETH / STFY on Uniswap v4</h3><p>The intended pool uses a 1% LP fee plus Stockify&apos;s 3% native-ETH hook fee on buys and sells. The hook fee is forwarded to the dividend vault.</p></article>
                   <article><span>Stock assets</span><h3>Base B20 tokenized stocks</h3><p>Dividends are paid in the B20 assets acquired by the vault. B20 assets can apply their own sender and receiver transfer policies.</p></article>
-                  <article><span>Route availability</span><h3>No route, no stock purchase</h3><p>The keeper buys the active basket only when every configured stock has a complete route. If one is unavailable, hook ETH remains in the vault for a later attempt.</p></article>
+                  <article><span>Route availability</span><h3>No route, no stock purchase</h3><p>The keeper buys the active index only when every configured stock has a complete route. If one is unavailable, hook ETH remains in the vault for a later attempt.</p></article>
                 </div>
-                <p className="docs-note"><strong>Pre-launch:</strong> the deployment script deliberately leaves the pool uninitialized. Pool price, liquidity and the first public BASKET route are launch decisions, not protocol constants.</p>
+                <p className="docs-note"><strong>Pre-launch:</strong> the deployment script deliberately leaves the pool uninitialized. Pool price, liquidity and the first public STFY route are launch decisions, not protocol constants.</p>
               </div>
             </section>
 
@@ -252,12 +252,12 @@ export default function DocsPage() {
                     <tr><th>Base chain</th><td>8453</td><td>Target network</td></tr>
                     <tr><th>v4 PoolManager</th><td><code>0x498581fF718922c3f8e6A244956aF099B2652b2b</code></td><td><a href="https://developers.uniswap.org/docs/protocols/v4/deployments#base-8453" target="_blank" rel="noreferrer">Uniswap deployment reference ↗</a></td></tr>
                     <tr><th>Universal Router</th><td><code>0x6fF5693b99212Da76ad316178A184AB56D299b43</code></td><td>Immutable vault dependency</td></tr>
-                    <tr><th>BASKET / vault / hook</th><td>Not deployed</td><td>Publish verified addresses here after deployment</td></tr>
+                    <tr><th>STFY / vault / hook</th><td>Not deployed</td><td>Publish verified addresses here after deployment</td></tr>
                   </tbody></table>
                 </div>
                 <div className="docs-launch-grid">
                   <article><span>01</span><h3>Deploy and verify</h3><p>Deploy the token, vault and CREATE2-mined hook; set the multisig owner, platform recipient, keeper and a reviewed spend cap.</p></article>
-                  <article><span>02</span><h3>Set market parameters</h3><p>Decide the initial ETH/BASKET price and liquidity separately. The deployment script deliberately does not initialize a v4 pool.</p></article>
+                  <article><span>02</span><h3>Set market parameters</h3><p>Decide the initial ETH/STFY price and liquidity separately. The deployment script deliberately does not initialize a v4 pool.</p></article>
                   <article><span>03</span><h3>Validate routes and policies</h3><p>Confirm each active B20 route and receiver policy. The supplied keeper skips a full buy when any active stock has no complete route.</p></article>
                   <article><span>04</span><h3>Publish operations</h3><p>Publish verified addresses, multisig and keeper policy, monitoring, and the first distribution transaction data before calling the market live.</p></article>
                 </div>

@@ -4,22 +4,23 @@ pragma solidity ^0.8.26;
 import {Ownable} from "@openzeppelin/contracts/access/Ownable.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
-/// @title Basket
-/// @notice Fixed-supply BASKET with an on-chain registry of dividend-eligible holders.
-/// @dev This is the same holder-registry model used by the deployed Index token: the dividend
-/// receiver can enumerate `holderAt(i)` without relying on an off-chain explorer. The registry is
-/// updated after every mint, burn, or transfer. It deliberately uses a minimum balance so dust does
-/// not turn every payout snapshot into an unbounded-gas operation.
-contract BasketToken is ERC20, Ownable {
+/// @title Stockify
+/// @notice Fixed-supply STFY with an on-chain registry of dividend-eligible holders.
+/// @dev This is the same holder-registry model used by the reference implementation this derives
+/// from (theindex.finance, on Robinhood Chain): the dividend receiver can enumerate `holderAt(i)`
+/// without relying on an off-chain explorer. The registry is updated after every mint, burn, or
+/// transfer. It deliberately uses a minimum balance so dust does not turn every payout snapshot
+/// into an unbounded-gas operation.
+contract StockifyToken is ERC20, Ownable {
     uint256 public constant TOTAL_SUPPLY = 1_000_000_000e18;
     uint256 public constant MIN_SHARE_BALANCE_FLOOR = 10_000e18;
     uint256 public constant MIN_SHARE_BALANCE_CEILING = 100_000e18;
 
-    /// @notice Minimum BASKET balance required to appear in the on-chain dividend registry.
-    /// @dev Starts at 100,000 BASKET and is configurable by owner only in the 10,000–100,000 range.
+    /// @notice Minimum STFY balance required to appear in the on-chain dividend registry.
+    /// @dev Starts at 100,000 STFY and is configurable by owner only in the 10,000–100,000 range.
     uint256 public minShareBalance = MIN_SHARE_BALANCE_CEILING;
 
-    /// @notice Owner-controlled exclusion from the dividend registry, matching the Index model.
+    /// @notice Owner-controlled exclusion from the dividend registry, as in the reference implementation.
     mapping(address => bool) public rewardsExcluded;
 
     address[] private _holders;
@@ -34,7 +35,7 @@ contract BasketToken is ERC20, Ownable {
     error ZeroAddress();
     error InvalidMinShareBalance(uint256 amount);
 
-    constructor(address initialHolder, address owner_) ERC20("Basket", "BASKET") Ownable(owner_) {
+    constructor(address initialHolder, address owner_) ERC20("Stockify", "STFY") Ownable(owner_) {
         if (initialHolder == address(0) || owner_ == address(0)) revert ZeroAddress();
         _mint(initialHolder, TOTAL_SUPPLY);
     }
@@ -64,7 +65,7 @@ contract BasketToken is ERC20, Ownable {
 
     /// @dev A threshold change cannot enumerate every historic ERC-20 owner. It is therefore
     /// reflected for an account when that account transfers, or when the owner explicitly changes
-    /// its reward-exclusion status — matching the operational model of the reference Index token.
+    /// its reward-exclusion status — matching the operational model of the reference implementation.
     function _update(address from, address to, uint256 value) internal override {
         super._update(from, to, value);
         _syncHolder(from);

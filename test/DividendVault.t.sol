@@ -2,7 +2,7 @@
 pragma solidity ^0.8.26;
 
 import {Test} from "forge-std/Test.sol";
-import {BasketToken} from "../src/BasketToken.sol";
+import {StockifyToken} from "../src/StockifyToken.sol";
 import {DividendVault} from "../src/DividendVault.sol";
 import {MockStock} from "./mocks/MockStock.sol";
 
@@ -22,12 +22,12 @@ contract DividendVaultTest is Test {
     address internal constant ALICE = address(0x100);
     address internal constant BOB = address(0x200);
 
-    BasketToken internal basket;
+    StockifyToken internal stfy;
     MockStock internal stock;
     DividendVault internal vault;
 
     function setUp() public {
-        basket = new BasketToken(address(this), address(this));
+        stfy = new StockifyToken(address(this), address(this));
         stock = new MockStock("NVIDIAc", "NVDAc");
         MockUniversalRouter router = new MockUniversalRouter(stock);
 
@@ -37,12 +37,12 @@ contract DividendVaultTest is Test {
         weights[0] = 10_000;
         // address(this) stands in for v4 PoolManager and is excluded from the dividend snapshot.
         vault = new DividendVault(
-            address(basket), address(router), address(this), address(this), address(this), stocks, weights
+            address(stfy), address(router), address(this), address(this), address(this), stocks, weights
         );
         vault.setKeeper(address(this), true);
 
-        basket.transfer(ALICE, 600_000_000e18);
-        basket.transfer(BOB, 300_000_000e18);
+        stfy.transfer(ALICE, 600_000_000e18);
+        stfy.transfer(BOB, 300_000_000e18);
     }
 
     function test_DistributesProRataFromOnchainHolderRegistry() public {
@@ -80,7 +80,7 @@ contract DividendVaultTest is Test {
         vault.snapshotHolders(10);
 
         vm.prank(BOB);
-        basket.transfer(ALICE, 300_000_000e18);
+        stfy.transfer(ALICE, 300_000_000e18);
 
         vault.startCycle();
         vault.distributeBatch(10);
@@ -90,15 +90,15 @@ contract DividendVaultTest is Test {
         assertEq(stock.balanceOf(address(vault)), 30e18, "unpaid snapshot share remains for a future cycle");
     }
 
-    function test_OwnerCanReplaceBuyBasketWithoutStrandingRemovedStock() public {
+    function test_OwnerCanReplaceIndexWithoutStrandingRemovedStock() public {
         MockStock secondStock = new MockStock("Applec", "AAPLc");
         stock.mint(address(vault), 90e18);
 
-        address[] memory newBasket = new address[](1);
-        newBasket[0] = address(secondStock);
+        address[] memory newIndex = new address[](1);
+        newIndex[0] = address(secondStock);
         uint16[] memory newWeights = new uint16[](1);
         newWeights[0] = 10_000;
-        vault.setBasket(newBasket, newWeights);
+        vault.setIndex(newIndex, newWeights);
 
         assertEq(vault.stocksLength(), 1);
         (address activeStock,) = vault.stockAt(0);
@@ -112,16 +112,16 @@ contract DividendVaultTest is Test {
         assertEq(stock.balanceOf(BOB), 30e18);
     }
 
-    function test_BasketCannotChangeDuringPendingSnapshotOrCycle() public {
+    function test_IndexCannotChangeDuringPendingSnapshotOrCycle() public {
         stock.mint(address(vault), 90e18);
         vault.snapshotHolders(1);
 
-        address[] memory newBasket = new address[](1);
-        newBasket[0] = address(stock);
+        address[] memory newIndex = new address[](1);
+        newIndex[0] = address(stock);
         uint16[] memory newWeights = new uint16[](1);
         newWeights[0] = 10_000;
         vm.expectRevert(DividendVault.ConfigDuringCycle.selector);
-        vault.setBasket(newBasket, newWeights);
+        vault.setIndex(newIndex, newWeights);
     }
 
     function test_B20RejectedRecipientDoesNotBlockOtherHolders() public {

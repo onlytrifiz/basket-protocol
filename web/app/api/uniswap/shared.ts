@@ -21,8 +21,8 @@ export function isPositiveInteger(value: unknown): value is string {
 export function isSupportedOutput(value: unknown): value is string {
   if (!isAddress(value)) return false;
 
-  const basketAddress = process.env.NEXT_PUBLIC_BASKET_TOKEN_ADDRESS ?? "";
-  return [...stocks.map((stock) => stock.address), basketAddress]
+  const stockifyAddress = process.env.NEXT_PUBLIC_STOCKIFY_TOKEN_ADDRESS ?? "";
+  return [...stocks.map((stock) => stock.address), stockifyAddress]
     .filter(isAddress)
     .some((address) => address.toLowerCase() === value.toLowerCase());
 }

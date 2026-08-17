@@ -1,9 +1,9 @@
 {
-  "name": "basket-keeper",
+  "name": "stockify-keeper",
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Base keeper for $BASKET: buys B20 stocks and pushes hourly stock dividends to holders",
+  "description": "Base keeper for $STFY: buys B20 stocks and pushes hourly stock dividends to holders",
   "scripts": {
     "start": "tsx src/keeper.ts",
     "once": "RUN_ONCE=1 tsx src/keeper.ts",

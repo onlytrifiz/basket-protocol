@@ -1,8 +1,8 @@
 /**
- * Basket keeper for Base.
+ * Stockify keeper for Base.
  *
  * The keeper discovers stock routes off-chain, but the dividend cap table is entirely on-chain:
- * BasketToken maintains it and DividendVault snapshots then pays it in batches. The keeper never
+ * StockifyToken maintains it and DividendVault snapshots then pays it in batches. The keeper never
  * submits a holder list and does not depend on a block explorer for distribution.
  */
 import "dotenv/config";
@@ -196,7 +196,7 @@ async function cycle(): Promise<void> {
 }
 
 async function main() {
-  console.log(`Basket keeper ${account.address} → ${vault}; poll interval ${intervalSeconds}s`);
+  console.log(`Stockify keeper ${account.address} → ${vault}; poll interval ${intervalSeconds}s`);
   do {
     try {
       await cycle();
