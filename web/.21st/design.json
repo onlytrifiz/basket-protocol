@@ -38,7 +38,8 @@
     "installed": [],
     "preferredPrimitives": [],
     "patterns": [
-      "21st Sectors Donut (catalog component 20086) adapted as a dependency-free interactive B20-universe count, with linked SVG arcs and legend rows."
+      "21st Sectors Donut (catalog component 20086) adapted as a dependency-free interactive B20-universe count, with linked SVG arcs and legend rows.",
+      "21st Currency Exchange Card (catalog component 8204) adapted as a native Base v4 buy panel backed by server-side Uniswap quote and swap routes."
     ]
   },
   "constraints": {
@@ -59,6 +60,10 @@
     {
       "choice": "Universe-led hero",
       "reason": "The selected 21st Sectors Donut interaction is adapted for the 13-title B20 universe; it reports title counts rather than suggesting an unapproved allocation or live market data."
+    },
+    {
+      "choice": "Action-led market home",
+      "reason": "The home now prioritizes the buy module and the active B20 universe, removing the editorial ownership panel. The swap component only exposes executable API states and clearly shows when the BASKET custom-hook pool has not been configured or routed."
     }
   ],
   "evidence": [
