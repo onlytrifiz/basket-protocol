@@ -2,7 +2,7 @@
 
 **Stock dividend protocol for Coinbase L2’s tokenized stocks.**
 
-Basket is a fixed-supply ERC-20 on Base. Its single `ETH/BASKET` Uniswap v4 pool charges a **3% ETH hook fee** on each buy and sell. A keeper uses **90%** of each allocated fee to buy the fixed B20 stock basket; the remaining **10% of the hook fee** is protocol revenue. Every stock balance is pushed directly to BASKET holders, pro-rata, no more frequently than once per hour.
+Basket is a fixed-supply ERC-20 on Base. Its intended `ETH/BASKET` Uniswap v4 pool charges a **3% ETH hook fee** on each buy and sell. A keeper uses **90%** of each allocated fee to buy the owner-configurable active B20 stock basket; the remaining **10% of the hook fee** is protocol revenue. Every stock balance is pushed directly to BASKET holders, pro-rata, with at least one hour between distribution-cycle starts.
 
 `1%` is the LP fee configured on the v4 pool. It is separate from the `3%` hook fee.
 
@@ -28,7 +28,7 @@ trade ETH / BASKET on Uniswap v4
                  ▼
           DividendVault
           ├─ 10% of allocated fee → platformClaimable
-          └─ 90% → official Base Universal Router → B20 stock basket
+          └─ 90% → official Base Universal Router → active B20 stock basket
                                                      │
                                                      │ hourly keeper payout
                                                      ▼
@@ -39,7 +39,7 @@ trade ETH / BASKET on Uniswap v4
 
 - `src/BasketToken.sol` — fixed `1,000,000,000 BASKET` ERC-20 supply with an on-chain eligible-holder registry. Its owner can set the registry threshold only from `10,000` to `100,000 BASKET` and can manage reward exclusions.
 - `src/BasketFeeHook.sol` — Uniswap v4 hook that takes exactly 3% in native ETH and forwards it to the vault. Its CREATE2 address is mined for the necessary v4 permission flags.
-- `src/DividendVault.sol` — fixed B20 basket, keeper-only buys through the **pinned** Base Universal Router, 10% platform fee accounting, on-chain holder snapshots, and batched hourly push payouts.
+- `src/DividendVault.sol` — owner-configurable B20 buy basket, keeper-only buys through the **pinned** Base Universal Router, 10% platform fee accounting, on-chain holder snapshots, and batched push payouts.
 
 There is no owner or keeper withdrawal path for ETH reserved to buy stocks. The owner multisig has an explicit emergency ERC-20 recovery path (including B20 stocks), while the platform recipient can claim only the accrued 10% fee.
 
@@ -73,7 +73,7 @@ Payouts are deliberately **push**, as opposed to a Merkle claim system:
 2. The keeper calls `snapshotHolders(count)` until the entire registry is captured, then calls `startCycle()`.
 3. The vault freezes the B20 pots and sends `pot × min(snapshotBalance, liveBalance) / eligibleSupply` in `distributeBatch(count)` calls.
 
-This makes the recipient set fully on-chain: the keeper proposes prices and submits transactions but never supplies, omits, or orders a holder list. Snapshotting is keeper-gated and payout clamps the snapshot weight to live balance, preventing a balance borrowed only for the snapshot from being paid after it has been returned.
+This makes the recipient set fully on-chain: the keeper proposes prices and submits transactions but never supplies a holder list. Snapshotting is keeper-gated and payout clamps the snapshot weight to live balance, preventing a balance borrowed only for the snapshot from being paid after it has been returned. A paginated snapshot is not a single-block atomic snapshot: transfers can mutate the swap-and-pop holder registry between keeper calls, so that window is an operationally sensitive period even though the vault deduplicates addresses seen in the current epoch.
 
 The token starts with a `100,000 BASKET` eligibility threshold; the owner multisig can change it only within `10,000–100,000 BASKET`. It can also use `setRewardsExcluded`, as in the reference Index token. Those controls are an explicit governance trust assumption: an excluded wallet is absent from subsequent snapshots. Infrastructure addresses are excluded during deployment. A threshold change is reflected when an account next transfers (or its exclusion status is changed), mirroring the reference token’s low-gas registry model.
 
@@ -119,8 +119,8 @@ The deploy script intentionally does **not** initialize a v4 pool. It configures
 
 ## Security notes
 
-- The Universal Router address is immutable. The keeper supplies only the Trading API calldata and minimum output floors.
-- The vault measures each stock balance delta and rejects an output below its `minOut`.
-- `maxGrossSpendPerCycle` limits a compromised keeper’s native ETH exposure per cycle; the deployment default is `0.25 ETH` and should be reviewed before launch.
-- The owner cannot withdraw hook ETH. It can emergency-withdraw ERC-20 custody — including stock dividends — to the owner multisig. It controls the dividend threshold and reward exclusions, and can rotate a keeper, platform recipient, spend cap, and contract-only exclusions.
+- The Universal Router address is immutable, but `buyStocks` forwards keeper-supplied raw router calldata and keeper-supplied minimum outputs. The balance-delta check enforces only the keeper-provided `minOut`; the keeper is therefore a material execution trust role.
+- `maxGrossSpendPerCycle` limits one `buyStocks` call, not all calls made during a calendar cycle. The deployment default is `0.25 ETH` and should be reviewed before launch.
+- The owner cannot use an emergency path to withdraw non-fee hook ETH. It can emergency-withdraw ERC-20 custody — including stock dividends — to the owner multisig. It controls the dividend threshold and reward exclusions, and can rotate a keeper, platform recipient, spend cap, and contract-only exclusions.
+- `abortCycle()` clears a snapshot and cycle state. Using it after a payout batch does not preserve a record of already-paid recipients, so it must not be used for a partially paid cycle under the current implementation.
 - This code has unit tests, but has **not** undergone a professional security audit or legal/compliance review. B20 transfer policy and jurisdictional eligibility need validation before launch.

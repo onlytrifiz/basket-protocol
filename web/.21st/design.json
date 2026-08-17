@@ -64,6 +64,10 @@
     {
       "choice": "Action-led market home",
       "reason": "The home now prioritizes the buy module and the active B20 universe, removing the editorial ownership panel. The swap component only exposes executable API states and clearly shows when the BASKET custom-hook pool has not been configured or routed."
+    },
+    {
+      "choice": "Source-led protocol reference",
+      "reason": "Documentation is a compact public protocol reference built from the actual Solidity and keeper implementation, with a static contents rail informed by the 21st Table of Content exploration (catalog component 22596). It favors contract functions, state transitions, market mechanics, controls and limitations over marketing copy or frontend configuration."
     }
   ],
   "evidence": [
