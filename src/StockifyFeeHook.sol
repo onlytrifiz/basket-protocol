@@ -22,7 +22,12 @@ contract StockifyFeeHook is BaseHook {
 
     address public immutable dividendVault;
 
+    error ZeroAddress();
+
+    /// @dev The recipient is immutable and baked into the CREATE2 initcode, so a wrong value here
+    /// cannot be corrected: address(0) would burn 3% of every trade for the life of the pool.
     constructor(IPoolManager poolManager_, address dividendVault_) BaseHook(poolManager_) {
+        if (dividendVault_ == address(0)) revert ZeroAddress();
         dividendVault = dividendVault_;
     }
 

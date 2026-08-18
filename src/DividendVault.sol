@@ -12,6 +12,11 @@ interface IStockifyToken is IERC20 {
     function holderAt(uint256 index) external view returns (address);
 }
 
+interface IWETH is IERC20 {
+    function deposit() external payable;
+    function withdraw(uint256) external;
+}
+
 /// @title DividendVault
 /// @notice Receives Stockify v4 hook fees, buys the owner-configurable B20 index, then directly pushes stocks to
 /// the StockifyToken on-chain holder registry once per hour.
@@ -26,8 +31,15 @@ contract DividendVault is Ownable, ReentrancyGuard {
     uint256 public constant HOOK_FEE_BPS = 300; // 3% of pool volume, for integrators.
     uint256 public constant DISTRIBUTION_INTERVAL = 1 hours;
 
-    /// @dev Official Base v4 Universal Router at deployment time. See Deploy.s.sol for its source.
-    address public immutable universalRouter;
+    /// @dev Wrapped native. Swap legs are settled in WETH, never native ETH, so a route's input is
+    /// a plain allowance the vault sizes itself and its consumption is measurable as a balance delta.
+    address public immutable weth;
+
+    /// @dev Venues the keeper may route a purchase through, curated by the owner. There is no single
+    /// hardcoded router: B20 equity depth lives on Aerodrome Slipstream today and nobody can promise
+    /// where it sits next year. Listing grants no custody — a target receives one leg's allowance,
+    /// revoked in the same call, and the leg still has to deliver `minOut`.
+    mapping(address => bool) public swapTargets;
     IStockifyToken public immutable stockifyToken;
 
     struct Stock {
@@ -74,6 +86,7 @@ contract DividendVault is Ownable, ReentrancyGuard {
     uint256 public maxGrossSpendPerCycle;
 
     event KeeperSet(address indexed account, bool allowed);
+    event SwapTargetSet(address indexed target, bool allowed);
     event ExcludedSet(address indexed account, bool excluded);
     event PlatformRecipientSet(address indexed previous, address indexed current);
     event MaxGrossSpendPerCycleSet(uint256 amount);
@@ -95,6 +108,8 @@ contract DividendVault is Ownable, ReentrancyGuard {
     error ZeroAddress();
     error InvalidIndex();
     error RouterCallFailed();
+    error SwapTargetNotAllowed(address target);
+    error BadAmountOffset();
     error InsufficientOutput(address stock, uint256 got, uint256 minimum);
     error InsufficientEth(uint256 wanted, uint256 available);
     error TooSoon(uint256 readyAt);
@@ -118,7 +133,7 @@ contract DividendVault is Ownable, ReentrancyGuard {
 
     constructor(
         address stockifyToken_,
-        address universalRouter_,
+        address weth_,
         address owner_,
         address platformRecipient_,
         address poolManager_,
@@ -126,14 +141,14 @@ contract DividendVault is Ownable, ReentrancyGuard {
         uint16[] memory weights_
     ) Ownable(owner_) {
         if (
-            stockifyToken_ == address(0) || universalRouter_ == address(0) || owner_ == address(0)
+            stockifyToken_ == address(0) || weth_ == address(0) || owner_ == address(0)
                 || platformRecipient_ == address(0) || poolManager_ == address(0)
         ) revert ZeroAddress();
-        if (stockifyToken_.code.length == 0 || universalRouter_.code.length == 0 || poolManager_.code.length == 0) {
+        if (stockifyToken_.code.length == 0 || weth_.code.length == 0 || poolManager_.code.length == 0) {
             revert InvalidIndex();
         }
         stockifyToken = IStockifyToken(stockifyToken_);
-        universalRouter = universalRouter_;
+        weth = weth_;
         platformRecipient = platformRecipient_;
         _setIndex(stocks_, weights_);
 
@@ -181,40 +196,88 @@ contract DividendVault is Ownable, ReentrancyGuard {
         return balance > platformClaimable ? balance - platformClaimable : 0;
     }
 
-    /// @notice Buys every configured stock through the immutable Base Universal Router.
-    /// @param minOuts Minimum token units received, ordered as the configured stock index.
-    /// @param routerCalldatas Trading API calldata, ordered as the configured stock index.
-    function buyStocks(uint256[] calldata minOuts, bytes[] calldata routerCalldatas) external nonReentrant onlyKeeper {
+    /// @notice Buys every configured stock through an owner-allowlisted venue.
+    /// @dev The vault does not parse routes. It sizes the input itself, hands a target exactly that
+    /// allowance, writes the real amount into the route's own calldata, and then judges the result
+    /// purely by balance deltas. A listed venue can therefore make a leg fail; it cannot take
+    /// custody. Settling in WETH rather than native ETH keeps the input a plain allowance and makes
+    /// consumption measurable, which is what lets the platform fee be charged on ETH actually spent.
+    /// @param targets Allowlisted venue per leg, ordered as the configured index.
+    /// @param routeCalldatas Venue calldata per leg. The input amount inside it is a placeholder.
+    /// @param amountInOffsets Byte offset of the 32-byte input-amount word inside each calldata.
+    /// Deriving the spend on-chain is the whole point: it cannot be known when the route is built,
+    /// because hook fees keep arriving until the transaction is included.
+    /// @param minOuts Minimum token units received per leg.
+    function buyStocks(
+        address[] calldata targets,
+        bytes[] calldata routeCalldatas,
+        uint256[] calldata amountInOffsets,
+        uint256[] calldata minOuts
+    ) external nonReentrant onlyKeeper {
         uint256 n = _index.length;
-        if (minOuts.length != n || routerCalldatas.length != n) revert InvalidIndex();
+        if (
+            targets.length != n || routeCalldatas.length != n || amountInOffsets.length != n
+                || minOuts.length != n
+        ) revert InvalidIndex();
 
         uint256 gross = availableEth();
         uint256 cap = maxGrossSpendPerCycle;
         if (cap != 0 && gross > cap) gross = cap;
         if (gross == 0) revert InsufficientEth(1, 0);
 
-        uint256 protocolFee = (gross * PLATFORM_FEE_BPS) / BPS;
-        uint256 stockBudget = gross - protocolFee;
-        platformClaimable += protocolFee;
+        uint256 stockBudget = gross - (gross * PLATFORM_FEE_BPS) / BPS;
+        IWETH(weth).deposit{value: stockBudget}();
 
         uint256 totalSpent;
         for (uint256 i; i < n; ++i) {
-            Stock memory stock = _index[i];
-            uint256 spend = (stockBudget * stock.weightBps) / BPS;
+            uint256 spend = (stockBudget * _index[i].weightBps) / BPS;
             if (spend == 0) continue;
-            if (minOuts[i] == 0) revert InvalidIndex();
-
-            uint256 beforeBalance = IERC20(stock.token).balanceOf(address(this));
-            (bool ok,) = universalRouter.call{value: spend}(routerCalldatas[i]);
-            if (!ok) revert RouterCallFailed();
-
-            uint256 received = IERC20(stock.token).balanceOf(address(this)) - beforeBalance;
-            if (received < minOuts[i]) revert InsufficientOutput(stock.token, received, minOuts[i]);
-            totalSpent += spend;
-            emit StockBought(stock.token, spend, received);
+            totalSpent += _buyLeg(_index[i].token, targets[i], routeCalldatas[i], amountInOffsets[i], minOuts[i], spend);
         }
 
-        emit StocksBought(gross, protocolFee, totalSpent);
+        // Unwrap anything the routes did not consume so it stays in the dividend budget untaxed.
+        uint256 leftover = IERC20(weth).balanceOf(address(this));
+        if (leftover != 0) IWETH(weth).withdraw(leftover);
+
+        // The platform keeps 10% of each allocation, i.e. one ninth of the 90% actually deployed.
+        uint256 protocolFee = (totalSpent * PLATFORM_FEE_BPS) / (BPS - PLATFORM_FEE_BPS);
+        platformClaimable += protocolFee;
+        emit StocksBought(totalSpent + protocolFee, protocolFee, totalSpent);
+    }
+
+    /// @dev One leg, isolated so the caller's stack stays shallow under via-ir.
+    function _buyLeg(
+        address stock,
+        address target,
+        bytes calldata routeCalldata,
+        uint256 amountInOffset,
+        uint256 minOut,
+        uint256 spend
+    ) private returns (uint256 ethSpent) {
+        if (minOut == 0) revert InvalidIndex();
+        if (!swapTargets[target]) revert SwapTargetNotAllowed(target);
+
+        // Patch past the selector and on a whole word: a partial overwrite could splice two
+        // numbers into a third nobody chose.
+        if (amountInOffset < 4 || amountInOffset + 32 > routeCalldata.length) revert BadAmountOffset();
+        bytes memory data = routeCalldata;
+        assembly ("memory-safe") {
+            mstore(add(add(data, 0x20), amountInOffset), spend)
+        }
+
+        uint256 wethBefore = IERC20(weth).balanceOf(address(this));
+        uint256 stockBefore = IERC20(stock).balanceOf(address(this));
+
+        IERC20(weth).forceApprove(target, spend);
+        (bool ok,) = target.call(data);
+        if (!ok) revert RouterCallFailed();
+        IERC20(weth).forceApprove(target, 0);
+
+        uint256 received = IERC20(stock).balanceOf(address(this)) - stockBefore;
+        if (received < minOut) revert InsufficientOutput(stock, received, minOut);
+
+        ethSpent = wethBefore - IERC20(weth).balanceOf(address(this));
+        emit StockBought(stock, ethSpent, received);
     }
 
     /// @notice Capture up to `count` addresses from StockifyToken's on-chain registry for this cycle.
@@ -247,8 +310,10 @@ contract DividendVault is Ownable, ReentrancyGuard {
         for (uint256 i = snapshotCursor; i < end; ++i) {
             address holder = stockifyToken.holderAt(i);
             if (_seenEpoch[holder] == epoch) continue;
-            _seenEpoch[holder] = epoch;
+            // Evaluate exclusion before marking the address seen: marking first meant an account
+            // un-excluded mid-capture stayed skipped for the rest of the epoch.
             if (excluded[holder]) continue;
+            _seenEpoch[holder] = epoch;
 
             uint256 balance = stockifyToken.balanceOf(holder);
             if (balance == 0) continue;
@@ -298,6 +363,10 @@ contract DividendVault is Ownable, ReentrancyGuard {
             uint256 onHand = _safeBalanceOf(stock);
             uint256 owed = unpaidTotal[stock];
             uint256 pot = onHand > owed ? onHand - owed : 0;
+            // An asset with nothing to hand out and nothing owed would still cost every holder a
+            // cold SLOAD per batch. `_distributionStocks` never shrinks, so skipping these keeps a
+            // long history of index rotations from taxing each payout forever.
+            if (pot == 0 && owed == 0) continue;
             _cycleStocks.push(stock);
             _cyclePots.push(pot);
         }
@@ -385,6 +454,14 @@ contract DividendVault is Ownable, ReentrancyGuard {
         snapshotPending = false;
         cycleActive = false;
         emit CycleAborted(previousCursor, previousHolders);
+    }
+
+    /// @notice Curate the venues a purchase may route through. Listing grants no approvals and no
+    /// standing rights: each leg approves exactly its own input, inside its own transaction.
+    function setSwapTarget(address target, bool allowed) external onlyOwner {
+        if (target == address(0) || target.code.length == 0) revert ZeroAddress();
+        swapTargets[target] = allowed;
+        emit SwapTargetSet(target, allowed);
     }
 
     function setKeeper(address account, bool allowed) external onlyOwner {

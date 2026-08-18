@@ -5,18 +5,8 @@ import {Test} from "forge-std/Test.sol";
 import {StockifyToken} from "../src/StockifyToken.sol";
 import {DividendVault} from "../src/DividendVault.sol";
 import {MockStock} from "./mocks/MockStock.sol";
-
-contract MockUniversalRouter {
-    MockStock internal immutable stock;
-
-    constructor(MockStock stock_) {
-        stock = stock_;
-    }
-
-    function buy() external payable {
-        stock.mint(msg.sender, msg.value * 10);
-    }
-}
+import {MockWETH} from "./mocks/MockWETH.sol";
+import {MockVenue} from "./mocks/MockVenue.sol";
 
 contract DividendVaultTest is Test {
     address internal constant ALICE = address(0x100);
@@ -25,11 +15,14 @@ contract DividendVaultTest is Test {
     StockifyToken internal stfy;
     MockStock internal stock;
     DividendVault internal vault;
+    MockWETH internal weth;
+    MockVenue internal venue;
 
     function setUp() public {
         stfy = new StockifyToken(address(this), address(this));
         stock = new MockStock("NVIDIAc", "NVDAc");
-        MockUniversalRouter router = new MockUniversalRouter(stock);
+        weth = new MockWETH();
+        venue = new MockVenue(weth);
 
         address[] memory stocks = new address[](1);
         stocks[0] = address(stock);
@@ -37,9 +30,10 @@ contract DividendVaultTest is Test {
         weights[0] = 10_000;
         // address(this) stands in for v4 PoolManager and is excluded from the dividend snapshot.
         vault = new DividendVault(
-            address(stfy), address(router), address(this), address(this), address(this), stocks, weights
+            address(stfy), address(weth), address(this), address(this), address(this), stocks, weights
         );
         vault.setKeeper(address(this), true);
+        vault.setSwapTarget(address(venue), true);
 
         stfy.transfer(ALICE, 600_000_000e18);
         stfy.transfer(BOB, 300_000_000e18);
@@ -155,12 +149,16 @@ contract DividendVaultTest is Test {
 
     function test_BuyKeepsTenPercentForPlatformAndNinetyPercentForStocks() public {
         vm.deal(address(vault), 10 ether);
+        address[] memory targets = new address[](1);
+        targets[0] = address(venue);
+        bytes[] memory calls = new bytes[](1);
+        calls[0] = abi.encodeCall(MockVenue.swapExactIn, (0, address(stock)));
+        uint256[] memory offsets = new uint256[](1);
+        offsets[0] = 4;
         uint256[] memory minOuts = new uint256[](1);
         minOuts[0] = 90 ether;
-        bytes[] memory calls = new bytes[](1);
-        calls[0] = abi.encodeCall(MockUniversalRouter.buy, ());
 
-        vault.buyStocks(minOuts, calls);
+        vault.buyStocks(targets, calls, offsets, minOuts);
 
         assertEq(vault.platformClaimable(), 1 ether);
         assertEq(stock.balanceOf(address(vault)), 90 ether);

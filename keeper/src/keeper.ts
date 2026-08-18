@@ -16,7 +16,7 @@ import {
   type Hex,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { quoteStock } from "./uniswap.js";
+import { buildLeg } from "./route.js";
 
 const BPS = 10_000n;
 const PLATFORM_FEE_BPS = 1_000n;
@@ -37,6 +37,7 @@ const slippageBps = Number(process.env.SLIPPAGE_BPS ?? "300");
 const snapshotBatchSize = positiveInteger(process.env.SNAPSHOT_BATCH_SIZE, 250);
 const payoutBatchSize = positiveInteger(process.env.PAYOUT_BATCH_SIZE, 25);
 const maxBatchTransactions = positiveInteger(process.env.MAX_BATCH_TRANSACTIONS, 100);
+const routeDeadlineSeconds = positiveInteger(process.env.ROUTE_DEADLINE_SEC, 900);
 const runOnce = process.env.RUN_ONCE === "1";
 const dryRun = process.env.DRY_RUN === "1";
 
@@ -63,7 +64,7 @@ const vaultAbi = [
     type: "function",
     name: "buyStocks",
     stateMutability: "nonpayable",
-    inputs: [{ type: "uint256[]" }, { type: "bytes[]" }],
+    inputs: [{ type: "address[]" }, { type: "bytes[]" }, { type: "uint256[]" }, { type: "uint256[]" }],
     outputs: [],
   },
   {
@@ -127,26 +128,36 @@ async function buy(stocks: Stock[]): Promise<void> {
     return;
   }
 
+  // Mirror the vault's own split so each leg is quoted against the amount it will actually be
+  // handed. The vault patches the real spend into the calldata, so a later arrival only makes the
+  // fill better than quoted; a smaller one reverts the leg instead of filling badly.
   const stockBudget = (gross * (BPS - PLATFORM_FEE_BPS)) / BPS;
-  const quotes = await Promise.all(
-    stocks.map(async (stock) => {
-      const amountIn = (stockBudget * stock.weightBps) / BPS;
-      return quoteStock({ tokenOut: stock.token, amountIn, recipient: vault, slippageBps });
-    }),
+  const nowSeconds = Math.floor(Date.now() / 1_000);
+  const legs = await Promise.all(
+    stocks.map((stock) =>
+      buildLeg({
+        client: publicClient,
+        equity: stock.token,
+        amountIn: (stockBudget * stock.weightBps) / BPS,
+        recipient: vault,
+        slippageBps,
+        deadlineSeconds: routeDeadlineSeconds,
+        nowSeconds,
+      }),
+    ),
   );
-  if (quotes.some((quote) => quote === null)) {
-    console.log("  buy skipped: at least one B20 stock still has no complete Uniswap route");
+  if (legs.some((leg) => leg === null)) {
+    console.log("  buy skipped: at least one B20 stock has no complete Slipstream route");
     return;
   }
   if (dryRun) return console.log("  dry run: all routes available");
 
-  await write(
-    "buyStocks",
-    [
-      quotes.map((quote) => quote!.minOut),
-      quotes.map((quote) => quote!.calldata),
-    ],
-  );
+  await write("buyStocks", [
+    legs.map((leg) => leg!.target),
+    legs.map((leg) => leg!.calldata),
+    legs.map((leg) => leg!.amountInOffset),
+    legs.map((leg) => leg!.minOut),
+  ]);
 }
 
 async function distributeFromOnchainRegistry(): Promise<void> {
