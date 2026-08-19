@@ -109,6 +109,16 @@ const sleep = (milliseconds: number) => new Promise((resolve) => setTimeout(reso
  * snapshot and sell straight after. The live-balance clamp already limits what that earns, but there
  * is no reason to hand out the timetable. Set to 0 to disable.
  */
+/**
+ * Unix seconds a deferred payout becomes possible, or undefined when nothing is waiting.
+ *
+ * The vault refuses to open a cycle until an hour after the last one started. A poll interval that
+ * is merely SHORTER than that hour is not enough: at 2900s the keeper arrives at minute 48, is
+ * refused, and the next look is minute 96 — so distributions land every 96 minutes instead of 60.
+ * Recording the deadline lets the loop wake for it rather than stumble past it.
+ */
+let payoutDueAt: number | undefined;
+
 function nextDelayMs(): number {
   if (intervalJitterPct === 0) return intervalSeconds * 1_000;
   const spread = intervalSeconds * (intervalJitterPct / 100);
@@ -339,6 +349,7 @@ async function hasDistributionWork(): Promise<boolean> {
 }
 
 async function distributeFromOnchainRegistry(): Promise<void> {
+  payoutDueAt = undefined;
   let active = await read<boolean>("cycleActive");
   // A cycle already open still has to be finished; only a fresh one needs stock to divide.
   if (!active && !(await hasDistributionWork())) {
@@ -354,7 +365,8 @@ async function distributeFromOnchainRegistry(): Promise<void> {
   if (!active) {
     const next = await read<bigint>("nextDistribution");
     if (next !== 0n && next > BigInt(Math.floor(Date.now() / 1_000))) {
-      console.log(`  payout not due until ${new Date(Number(next) * 1_000).toISOString()}`);
+      payoutDueAt = Number(next);
+      console.log(`  payout not due until ${new Date(payoutDueAt * 1_000).toISOString()}`);
       return;
     }
 
@@ -401,7 +413,20 @@ async function main() {
       console.error(`cycle failed: ${(error as Error).message}`);
     }
     if (runOnce) break;
-    const delay = nextDelayMs();
+
+    // Wake for the payout deadline when one is pending and it lands sooner than the next poll.
+    // Always a little AFTER it, never on it: arriving a second early just earns a TooSoon revert,
+    // and the scatter keeps the exact moment off a timetable anyone can read.
+    let delay = nextDelayMs();
+    if (payoutDueAt !== undefined) {
+      const untilDue = payoutDueAt * 1_000 - Date.now();
+      const scatter = Math.random() * intervalSeconds * (intervalJitterPct / 100) * 1_000;
+      const wakeForPayout = Math.max(1_000, untilDue + 2_000 + scatter);
+      if (wakeForPayout < delay) {
+        delay = wakeForPayout;
+        console.log(`  waking for the payout window rather than the full interval`);
+      }
+    }
     console.log(`  next cycle in ${Math.round(delay / 1_000)}s`);
     await sleep(delay);
   } while (true);
