@@ -33,7 +33,7 @@ export default function Home() {
             <div className="hero-swap"><SwapPanel /></div>
           </div>
           <div className="flow-strip">
-            <Image alt="" fill priority sizes="100vw" src="/header.png" />
+            <Image alt="" fill priority sizes="100vw" src="/header-transparent.png" />
             <div className="flow-strip-labels">
               <div><span>Fees in</span><strong>3.00% hook fee, in ETH</strong></div>
               <div className="flow-strip-out"><span>Stocks out</span><strong>B20 assets to holders</strong></div>
