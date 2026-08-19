@@ -213,9 +213,9 @@ h1 em, h2 em { font-style: normal; font-weight: 600; }
 .equity-symbol, .equity-tag, .equity-foot,
 .universe-head, .universe-legend b, .index-universe > p,
 .desk-head p, .desk-metrics strong, .table-head, .desk-cycle-meta,
-.viz-top, .split-bar-legend, .flow-strip span,
+.flow-strip span,
 .swap-panel-head span, .swap-panel-head > b, .swap-leg label,
-.swap-currency, .swap-details b, .swap-foot, .swap-meter span,
+.swap-currency, .swap-details b, .swap-foot,
 .footer-links span, .footer-meta,
 .docs-status-row span, .docs-nav > span, .docs-nav a b, .docs-source-link,
 .docs-section-label, .docs-contracts li, .docs-contract-head code,
@@ -361,11 +361,11 @@ code, kbd, samp, pre {
 .ring-seg { stroke: var(--blue); }
 .ring-seg-lit { stroke: var(--lime); }
 .desk-panel .ring-track, .index-universe .ring-track, .swap-panel .ring-track,
-.flow-strip .ring-track, .thesis-card .ring-track, .operation-card .ring-track {
+.flow-strip .ring-track, .operation-card .ring-track {
   stroke: rgba(255, 255, 255, .18);
 }
 .desk-panel .ring-seg, .index-universe .ring-seg, .swap-panel .ring-seg,
-.thesis-card .ring-seg, .operation-card .ring-seg { stroke: var(--sky); }
+.operation-card .ring-seg { stroke: var(--sky); }
 
 .ring-marker { align-items: center; display: inline-flex; gap: 11px; }
 .ring-marker > b {
@@ -1553,16 +1553,16 @@ code, kbd, samp, pre {
   to { opacity: 1; }
 }
 
-.hero-copy > * { animation: settle-up .5s var(--ease) backwards; }
-.hero-copy > *:nth-child(1) { animation-delay: .04s; }
-.hero-copy > *:nth-child(2) { animation-delay: .09s; }
-.hero-copy > *:nth-child(3) { animation-delay: .14s; }
-.hero-copy > *:nth-child(4) { animation-delay: .19s; }
-.hero-copy > *:nth-child(5) { animation-delay: .24s; }
-.hero-swap { animation: settle-up .58s var(--ease) .14s backwards; }
-.hero-render { animation: settle-render .6s var(--ease) .06s backwards; }
-.flow-strip { animation: settle-fade .6s var(--ease) .26s backwards; }
-.page-intro-render { animation: settle-render .6s var(--ease) .06s backwards; }
+.hero-copy > * { animation: settle-up .45s var(--ease) backwards; }
+.hero-copy > *:nth-child(1) { animation-delay: .03s; }
+.hero-copy > *:nth-child(2) { animation-delay: .07s; }
+.hero-copy > *:nth-child(3) { animation-delay: .11s; }
+.hero-copy > *:nth-child(4) { animation-delay: .15s; }
+.hero-copy > *:nth-child(5) { animation-delay: .19s; }
+.hero-swap { animation: settle-up .52s var(--ease) .1s backwards; }
+.hero-render { animation: settle-render .56s var(--ease) .04s backwards; }
+.flow-strip { animation: settle-fade .5s var(--ease) .22s backwards; }
+.page-intro-render { animation: settle-render .56s var(--ease) .04s backwards; }
 
 /* ---------- 20. Responsive ------------------------------------------------ */
 
