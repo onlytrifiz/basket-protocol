@@ -170,10 +170,18 @@ export default async function DividendPage() {
                 <strong>{ledger.available ? ledger.cycles.length : "—"}</strong>
                 <small>{ledger.available ? `last ${(ledger.windowBlocks / 1000).toFixed(0)}k blocks` : "ledger unavailable"}</small>
               </div>
+              {/* In dollars, not shares. A share count sums four different equities into one
+                  number that means nothing — 0.17 of what? Value is the only unit in which a slice
+                  of NVDA and a slice of META can be added together. The share count moves to the
+                  caption, where it reads as detail rather than as the headline figure. */}
               <div>
                 <span>Assets distributed</span>
-                <strong>{distributedShares > 0 ? fmtShares(distributedShares) : "—"}</strong>
-                <small>{distributedShares > 0 ? "shares pushed to holders" : "no payouts yet"}</small>
+                <strong>{anyDistributed && distributedValue > 0 ? usd(distributedValue) : "—"}</strong>
+                <small>
+                  {anyDistributed && distributedValue > 0
+                    ? `${fmtShares(distributedShares)} shares to holders`
+                    : "no payouts yet"}
+                </small>
               </div>
               <div>
                 <span>Current threshold</span>
