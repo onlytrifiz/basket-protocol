@@ -16,7 +16,8 @@ import {
   type Hex,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { buildLeg } from "./route.js";
+import { buildLeg, WETH } from "./route.js";
+import { buildVeloraLeg } from "./velora.js";
 
 const BPS = 10_000n;
 const PLATFORM_FEE_BPS = 1_000n;
@@ -131,23 +132,49 @@ async function buy(stocks: Stock[]): Promise<void> {
   // Mirror the vault's own split so each leg is quoted against the amount it will actually be
   // handed. The vault patches the real spend into the calldata, so a later arrival only makes the
   // fill better than quoted; a smaller one reverts the leg instead of filling badly.
+  // Only buy once the cap binds. Above it `gross` is pinned to the cap, so the per-leg spend is
+  // fixed and can be quoted exactly — which is what lets an aggregator route be used at all: the
+  // vault patches one word, while Augustus encodes srcAmount twice, so the quoted amount and the
+  // forwarded amount have to be identical for the patch to be a harmless no-op.
+  if (cap !== 0n && gross < cap) {
+    console.log(`  buy deferred: ${formatEther(gross)} ETH of ${formatEther(cap)} cap`);
+    return;
+  }
+
   const stockBudget = (gross * (BPS - PLATFORM_FEE_BPS)) / BPS;
   const nowSeconds = Math.floor(Date.now() / 1_000);
   const legs = await Promise.all(
-    stocks.map((stock) =>
-      buildLeg({
+    stocks.map(async (stock) => {
+      const amountIn = (stockBudget * stock.weightBps) / BPS;
+      const velora = await buildVeloraLeg({
+        srcToken: WETH,
+        srcDecimals: 18,
+        destToken: stock.token,
+        destDecimals: 8,
+        amountIn,
+        vault,
+        slippageBps,
+      });
+      if (velora) {
+        console.log(`  ${stock.token} via ${velora.venues.join("+") || "velora"}`);
+        return velora;
+      }
+      // Fall back to the two-hop Slipstream route we build ourselves, so an aggregator outage
+      // cannot stop the protocol buying.
+      console.log(`  ${stock.token}: velora unavailable, using the direct Slipstream route`);
+      return buildLeg({
         client: publicClient,
         equity: stock.token,
-        amountIn: (stockBudget * stock.weightBps) / BPS,
+        amountIn,
         recipient: vault,
         slippageBps,
         deadlineSeconds: routeDeadlineSeconds,
         nowSeconds,
-      }),
-    ),
+      });
+    }),
   );
   if (legs.some((leg) => leg === null)) {
-    console.log("  buy skipped: at least one B20 stock has no complete Slipstream route");
+    console.log("  buy skipped: at least one B20 stock has no route");
     return;
   }
   if (dryRun) return console.log("  dry run: all routes available");
