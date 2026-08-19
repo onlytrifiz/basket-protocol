@@ -39,6 +39,7 @@ const snapshotBatchSize = positiveInteger(process.env.SNAPSHOT_BATCH_SIZE, 250);
 const payoutBatchSize = positiveInteger(process.env.PAYOUT_BATCH_SIZE, 25);
 const maxBatchTransactions = positiveInteger(process.env.MAX_BATCH_TRANSACTIONS, 100);
 const routeDeadlineSeconds = positiveInteger(process.env.ROUTE_DEADLINE_SEC, 900);
+const intervalJitterPct = Math.min(90, Math.max(0, Number(process.env.INTERVAL_JITTER_PCT ?? 10)));
 const runOnce = process.env.RUN_ONCE === "1";
 const dryRun = process.env.DRY_RUN === "1";
 
@@ -89,6 +90,21 @@ type Stock = { token: Address; weightBps: bigint };
 type WriteFunction = "buyStocks" | "snapshotHolders" | "startCycle" | "distributeBatch";
 
 const sleep = (milliseconds: number) => new Promise((resolve) => setTimeout(resolve, milliseconds));
+
+/**
+ * The poll interval, scattered by +/- INTERVAL_JITTER_PCT.
+ *
+ * A fixed cadence publishes the one moment that matters: `snapshotHolders` decides who is counted
+ * for a distribution, so a clock anyone can read is an invitation to hold STFY only across the
+ * snapshot and sell straight after. The live-balance clamp already limits what that earns, but there
+ * is no reason to hand out the timetable. Set to 0 to disable.
+ */
+function nextDelayMs(): number {
+  if (intervalJitterPct === 0) return intervalSeconds * 1_000;
+  const spread = intervalSeconds * (intervalJitterPct / 100);
+  const seconds = intervalSeconds + (Math.random() * 2 - 1) * spread;
+  return Math.max(1, Math.round(seconds)) * 1_000;
+}
 
 /**
  * The block of our most recent transaction, or undefined before the first one in a cycle.
@@ -262,15 +278,20 @@ async function cycle(): Promise<void> {
 }
 
 async function main() {
-  console.log(`Stockify keeper ${account.address} → ${vault}; poll interval ${intervalSeconds}s`);
+  console.log(
+    `Stockify keeper ${account.address} → ${vault}; poll ~${intervalSeconds}s ±${intervalJitterPct}%`,
+  );
   do {
     try {
       await cycle();
     } catch (error) {
       console.error(`cycle failed: ${(error as Error).message}`);
     }
-    if (!runOnce) await sleep(intervalSeconds * 1_000);
-  } while (!runOnce);
+    if (runOnce) break;
+    const delay = nextDelayMs();
+    console.log(`  next cycle in ${Math.round(delay / 1_000)}s`);
+    await sleep(delay);
+  } while (true);
 }
 
 function must(name: string): string {
