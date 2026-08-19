@@ -225,11 +225,47 @@ async function buy(stocks: Stock[]): Promise<void> {
   }
   if (dryRun) return console.log("  dry run: all routes available");
 
+  try {
+    await submitBuy(legs as Leg[]);
+    return;
+  } catch (error) {
+    // Velora routes through RFQ venues whose calldata carries a market maker's SIGNED order, valid
+    // for seconds. Quoting, estimating and broadcasting takes longer than that, so the order can be
+    // dead before the transaction lands and the whole buy reverts with RouterCallFailed. The
+    // self-built Slipstream route has no signature and no expiry but our own deadline, so it is
+    // what the protocol falls back to rather than skipping a cycle.
+    console.log(`  aggregator route failed (${(error as Error).message.split("\n")[0]}); rebuilding direct`);
+  }
+
+  const nowRetry = Math.floor(Date.now() / 1_000);
+  const direct = await Promise.all(
+    stocks.map((stock) =>
+      buildLeg({
+        client: publicClient,
+        equity: stock.token,
+        amountIn: (stockBudget * stock.weightBps) / BPS,
+        recipient: vault,
+        slippageBps,
+        deadlineSeconds: routeDeadlineSeconds,
+        nowSeconds: nowRetry,
+      }),
+    ),
+  );
+  if (direct.some((leg) => leg === null)) {
+    console.log("  buy skipped: the direct Slipstream route is unavailable too");
+    return;
+  }
+  await submitBuy(direct as Leg[]);
+}
+
+type Leg = { target: Address; calldata: `0x${string}`; amountInOffset: bigint; minOut: bigint };
+
+async function submitBuy(legs: Leg[]): Promise<void> {
   await write("buyStocks", [
-    legs.map((leg) => leg!.target),
-    legs.map((leg) => leg!.calldata),
-    legs.map((leg) => leg!.amountInOffset),
-    legs.map((leg) => leg!.minOut),
+    legs.map((leg) => leg.target),
+    legs.map((leg) => leg.calldata),
+    legs.map((leg) => leg.amountInOffset),
+    legs.map((leg) => leg.minOut),
   ]);
 }
 
