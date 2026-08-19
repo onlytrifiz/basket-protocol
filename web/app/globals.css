@@ -327,6 +327,36 @@ code, kbd, samp, pre {
 
 /* Chips ------------------------------------------------------------------ */
 
+.wallet-pill {
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  box-shadow: var(--shadow-1);
+  color: var(--ink);
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: 0.78rem;
+  gap: 0.4rem;
+  letter-spacing: 0.02em;
+  padding: 0.42rem 0.85rem;
+  transition: border-color 0.18s ease, transform 0.18s ease;
+  white-space: nowrap;
+}
+
+.wallet-pill:hover:not(:disabled) { border-color: var(--accent); transform: translateY(-1px); }
+.wallet-pill:disabled { cursor: progress; opacity: 0.6; }
+
+/* Connected reads as state, not as an action: no pointer, and the live dot carries the meaning. */
+.wallet-pill.is-connected { cursor: default; font-variant-numeric: tabular-nums; }
+.wallet-pill.is-connected i {
+  background: var(--accent);
+  border-radius: 50%;
+  height: 0.42rem;
+  width: 0.42rem;
+}
+
 .base-pill, .waiting-chip {
   align-items: center;
   background: var(--surface);

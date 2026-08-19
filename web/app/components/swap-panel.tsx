@@ -5,16 +5,7 @@ import { stocks, type IndexStock } from "../../lib/stocks";
 import { SegmentRing } from "./segment-ring";
 import { StockifyMark } from "./site-chrome";
 import { StockLogo } from "./stock-logo";
-
-type Eip1193Provider = {
-  request: (request: { method: string; params?: unknown[] }) => Promise<unknown>;
-};
-
-declare global {
-  interface Window {
-    ethereum?: Eip1193Provider;
-  }
-}
+import { truncateAddress, useWallet, type Eip1193Provider } from "./wallet";
 
 type TradeTarget = {
   address: string;
@@ -23,9 +14,10 @@ type TradeTarget = {
   symbol: string;
 };
 
-type RouterQuote = {
-  quote: { output?: { amount?: string; minimumAmount?: string } };
-  routing?: string;
+type VeloraQuote = {
+  destAmount: string;
+  tx: { to: string; data: string; value: string };
+  venues: string[];
 };
 
 type SwapTransaction = {
@@ -51,10 +43,6 @@ function toWei(value: string) {
   return normalized;
 }
 
-function truncateAddress(value: string) {
-  return `${value.slice(0, 6)}…${value.slice(-4)}`;
-}
-
 async function postJson<T>(path: string, body: unknown) {
   const response = await fetch(path, {
     body: JSON.stringify(body),
@@ -75,52 +63,22 @@ async function postJson<T>(path: string, body: unknown) {
 export function SwapPanel() {
   const targets = useMemo<TradeTarget[]>(() => [
     { address: stockifyAddress, name: "Stockify protocol token", symbol: "STFY" },
-    ...stocks.map((stock) => ({ address: stock.address, name: stock.name, stock, symbol: stock.symbol })),
+    ...stocks.filter((stock) => stock.inIndex)
+      .map((stock) => ({ address: stock.address, name: stock.name, stock, symbol: stock.symbol })),
   ], []);
-  const [account, setAccount] = useState<string>();
+  const { account, connect, provider } = useWallet();
   const [amount, setAmount] = useState("0.10");
   const [isBusy, setIsBusy] = useState(false);
   const [notice, setNotice] = useState<string>();
-  const [quote, setQuote] = useState<RouterQuote>();
+  const [quote, setQuote] = useState<VeloraQuote>();
   const [quoteAt, setQuoteAt] = useState(0);
   const [targetSymbol, setTargetSymbol] = useState("STFY");
   const [kycUrl, setKycUrl] = useState<string>();
 
   const target = targets.find((entry) => entry.symbol === targetSymbol) ?? targets[0];
-  const needsStockifyConfig = target.symbol === "STFY" && !isConfiguredAddress(target.address);
-
-  async function ensureBase(provider: Eip1193Provider) {
-    const currentChain = await provider.request({ method: "eth_chainId" });
-    if (currentChain === baseChainHex) return;
-
-    try {
-      await provider.request({ method: "wallet_switchEthereumChain", params: [{ chainId: baseChainHex }] });
-    } catch (error) {
-      const walletError = error as { code?: number };
-      if (walletError.code !== 4902) throw error;
-      await provider.request({
-        method: "wallet_addEthereumChain",
-        params: [{
-          blockExplorerUrls: ["https://basescan.org"],
-          chainId: baseChainHex,
-          chainName: "Base Mainnet",
-          nativeCurrency: { decimals: 18, name: "Ether", symbol: "ETH" },
-          rpcUrls: ["https://mainnet.base.org"],
-        }],
-      });
-    }
-  }
-
-  async function connectWallet() {
-    const provider = window.ethereum;
-    if (!provider) throw new Error("Install a wallet such as Coinbase Wallet or MetaMask to trade.");
-    await ensureBase(provider);
-    const accounts = await provider.request({ method: "eth_requestAccounts" }) as string[];
-    const nextAccount = accounts[0];
-    if (!nextAccount) throw new Error("No wallet account was selected.");
-    setAccount(nextAccount);
-    return nextAccount;
-  }
+  // An address is not a market: the ETH/STFY pool is not initialised yet, so quoting it would ask
+  // Velora for a route that cannot exist. Gated on the pool id, which only exists once it does.
+  const needsStockifyConfig = target.symbol === "STFY" && !process.env.NEXT_PUBLIC_STOCKIFY_POOL_ID;
 
   function clearTradeState() {
     setKycUrl(undefined);
@@ -138,7 +96,7 @@ export function SwapPanel() {
     setIsBusy(true);
     clearTradeState();
     try {
-      const swapper = account ?? await connectWallet();
+      const swapper = account ?? await connect();
       const permission = await postJson<{ results?: Array<{ isAllowlisted?: boolean; isPermissioned?: boolean; kycUrl?: string }> }>("/api/uniswap/permissions", {
         token: target.address,
         walletAddress: swapper,
@@ -150,14 +108,17 @@ export function SwapPanel() {
         return;
       }
 
-      const nextQuote = await postJson<RouterQuote>("/api/uniswap/quote", {
+      const nextQuote = await postJson<VeloraQuote>("/api/velora/swap", {
         amount: toWei(amount),
+        decimals: target.stock ? 8 : 18,
         swapper,
         tokenOut: target.address,
       });
       setQuote(nextQuote);
       setQuoteAt(Date.now());
-      setNotice(`Route ready via Uniswap ${nextQuote.routing === "CLASSIC" ? "v4" : "router"}. Review and confirm within 30 seconds.`);
+      // Naming the venues is the point of routing through Velora: this depth is split across
+      // Aerodrome and Uniswap, and the trader should see which ones filled the order.
+      setNotice(`Route ready via ${nextQuote.venues.join(" + ") || "Velora"}. Review and confirm within 30 seconds.`);
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "Unable to prepare this trade.");
     } finally {
@@ -172,28 +133,15 @@ export function SwapPanel() {
       setNotice("This quote has expired. Request a fresh quote before confirming.");
       return;
     }
-    if (quote.routing !== "CLASSIC") {
-      setQuote(undefined);
-      setNotice("This route needs a different Uniswap execution method. Request a new quote shortly.");
-      return;
-    }
-
-    const provider = window.ethereum;
-    if (!provider) {
-      setNotice("Wallet connection was lost. Connect again before confirming.");
-      return;
-    }
-
     setIsBusy(true);
     try {
-      const { swap } = await postJson<{ swap: SwapTransaction }>("/api/uniswap/swap", { quote: quote.quote });
-      const transactionHash = await provider.request({
+      const transactionHash = await provider().request({
         method: "eth_sendTransaction",
         params: [{
-          data: swap.data,
+          data: quote.tx.data,
           from: account,
-          to: swap.to,
-          value: `0x${BigInt(swap.value).toString(16)}`,
+          to: quote.tx.to,
+          value: `0x${BigInt(quote.tx.value).toString(16)}`,
         }],
       });
       setNotice(`Transaction submitted: ${typeof transactionHash === "string" ? truncateAddress(transactionHash) : "view in wallet"}.`);

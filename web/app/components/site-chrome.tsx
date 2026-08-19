@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { ConnectWalletButton } from "./wallet";
 import { ThemeToggle } from "./theme-toggle";
 
 type ActivePage = "overview" | "distributions" | "protocol" | "docs";
@@ -26,6 +27,7 @@ export function SiteHeader({ active }: { active: ActivePage }) {
           <Link className={active === "docs" ? "active" : ""} href="/docs">Docs</Link>
         </div>
         <span className="base-pill"><i /> Base</span>
+        <ConnectWalletButton />
         <ThemeToggle />
       </div>
     </nav>
