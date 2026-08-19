@@ -1695,7 +1695,7 @@ code, kbd, samp, pre {
   align-items: center;
   display: grid;
   gap: 40px;
-  grid-template-columns: minmax(0, 1fr) 292px;
+  grid-template-columns: minmax(0, 1fr) 340px;
   /* `.section` opens with 88px, the rhythm for marketing sections that need air above a headline.
      This page is a data surface whose job is the table below, so the heading sits close to the nav
      instead — the same call `.detail-top` already makes.
@@ -1705,9 +1705,31 @@ code, kbd, samp, pre {
      title down 50px on its own. Trimming the render lifts the heading as much as trimming padding
      does, which is why both moved together. */
   padding-bottom: 26px;
-  padding-top: 14px;
+  padding-top: 8px;
 }
 .hub-head-copy { min-width: 0; }
+
+.updates-pill {
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-pill);
+  box-shadow: var(--shadow-1);
+  color: var(--ink-2);
+  display: inline-flex;
+  font-size: .78rem;
+  gap: 9px;
+  margin-bottom: 18px;
+  max-width: 100%;
+  padding: 6px 14px 6px 7px;
+  text-decoration: none;
+  transition: border-color .16s var(--ease), color .16s var(--ease), transform .16s var(--ease);
+}
+.updates-pill:hover { border-color: #229ED9; color: var(--ink); transform: translateY(-1px); }
+.updates-pill svg { flex: none; height: 20px; width: 20px; }
+.updates-pill span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.updates-pill b { color: var(--ink-3); font-weight: 500; transition: transform .16s var(--ease); }
+.updates-pill:hover b { color: #229ED9; transform: translateX(2px); }
 /* CONTAIN, and a box that is NOT square. `BrandRender` hands <Image> one `size` for both axes, so
    the intrinsic ratio it declares is always 1:1 — fine for the round coin, wrong for these two,
    which arrived as 874x551 and 1216x896 and were being squashed into squares. Constraining the box
@@ -1715,11 +1737,11 @@ code, kbd, samp, pre {
    gets swapped in at a ratio nobody told this stylesheet about. */
 .hub-render {
   filter: drop-shadow(var(--shadow-render));
-  height: 212px;
+  height: 248px;
   justify-self: end;
   pointer-events: none;
   position: relative;
-  width: 292px;
+  width: 340px;
   transform: translate3d(0, var(--parallax, 0px), 0);
 }
 .hub-render img { display: block; height: 100%; object-fit: contain; width: 100%; }

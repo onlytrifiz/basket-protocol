@@ -73,7 +73,7 @@ export default async function DistributionsPage() {
               is a projection, and there is no yield counter.
             </p>
           </div>
-          <BrandRender className="hub-render" priority size={292} src="/distributions.png" />
+          <BrandRender className="hub-render" priority size={340} src="/distributions.png" />
         </header>
 
         <section className="stats-band" aria-label="Vault state">

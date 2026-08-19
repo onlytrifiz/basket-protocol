@@ -7,6 +7,7 @@ import { poolsForAll } from "../../lib/pools";
 import { percent, premium, shares, usd, usdCompact } from "../../lib/format";
 import { BrandRender } from "../components/brand-render";
 import { Sparkline } from "../components/sparkline";
+import { UpdatesPill } from "../components/updates-pill";
 import { SiteFooter, SiteHeader } from "../components/site-chrome";
 import { StockLogo } from "../components/stock-logo";
 
@@ -59,6 +60,7 @@ export default async function StocksPage() {
       <main>
         <header className="section wrap hub-head">
           <div className="hub-head-copy">
+            <UpdatesPill />
             <p className="eyebrow">BASE · B20 UNIVERSE</p>
             <h1>Every tokenized stock on Base.</h1>
             <p className="hub-lede">
@@ -70,7 +72,7 @@ export default async function StocksPage() {
           </div>
           {/* The same coins the table lists, which is the point: the render is the universe and the
               rows are its numbers. Decorative — everything it depicts is named below it in text. */}
-          <BrandRender className="hub-render" priority size={292} src="/stocks.png" />
+          <BrandRender className="hub-render" priority size={340} src="/stocks.png" />
         </header>
 
         <section className="stats-band" aria-label="Universe at a glance">
