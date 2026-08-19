@@ -1,4 +1,4 @@
-import { apiError, isAddress, isPositiveInteger, isRateLimited, isSupportedOutput } from "../../uniswap/shared";
+import { apiError, isAddress, isPositiveInteger, isRateLimited, isSupportedOutput } from "../../shared";
 
 /**
  * Server-side proxy for Velora's Market API.

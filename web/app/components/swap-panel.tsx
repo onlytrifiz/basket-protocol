@@ -1,10 +1,16 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { stocks, type IndexStock } from "../../lib/stocks";
 import { SegmentRing } from "./segment-ring";
 import { StockifyMark } from "./site-chrome";
 import { StockLogo } from "./stock-logo";
+
+/** Raw units to a short human string, without pulling in a formatting dependency. */
+function formatUnits(raw: string, decimals: number) {
+  const value = Number(BigInt(raw)) / 10 ** decimals;
+  return value.toLocaleString("en-US", { maximumFractionDigits: 6 });
+}
 import { truncateAddress, useWallet, type Eip1193Provider } from "./wallet";
 
 type TradeTarget = {
@@ -14,8 +20,15 @@ type TradeTarget = {
   symbol: string;
 };
 
+/** Prices the panel without prompting for a wallet. Velora rejects placeholder-looking addresses,
+ *  so the protocol's own vault stands in: a real address we control, whose preview calldata is
+ *  never sent. A genuine quote is fetched the moment a wallet connects. */
+const PREVIEW_ADDRESS = process.env.NEXT_PUBLIC_DIVIDEND_VAULT_ADDRESS
+  ?? "0x4Ee35c658b8032a7577096B60bd51Ae9909E4f98";
+
 type VeloraQuote = {
   destAmount: string;
+  executable?: boolean;
   tx: { to: string; data: string; value: string };
   venues: string[];
 };
@@ -74,6 +87,7 @@ export function SwapPanel() {
   const [quoteAt, setQuoteAt] = useState(0);
   const [targetSymbol, setTargetSymbol] = useState("STFY");
   const [kycUrl, setKycUrl] = useState<string>();
+  const quoteToken = useRef(0);
 
   const target = targets.find((entry) => entry.symbol === targetSymbol) ?? targets[0];
   // An address is not a market: the ETH/STFY pool is not initialised yet, so quoting it would ask
@@ -87,47 +101,69 @@ export function SwapPanel() {
     setQuoteAt(0);
   }
 
-  async function requestQuote() {
-    if (needsStockifyConfig) {
-      setNotice("STFY is awaiting its deployed token and pool address. Stock quotes are available to check now.");
-      return;
-    }
+  const requestQuote = useCallback(async (swapper?: string) => {
+    if (needsStockifyConfig) return;
+    const wei = toWei(amount);
+    if (!wei || wei === "0") { clearTradeState(); return; }
 
+    // Only the newest request may write state: typing fires several, and they can land out of order.
+    const token = ++quoteToken.current;
+    const forWallet = swapper ?? account;
     setIsBusy(true);
-    clearTradeState();
     try {
-      const swapper = account ?? await connect();
-      const permission = await postJson<{ results?: Array<{ isAllowlisted?: boolean; isPermissioned?: boolean; kycUrl?: string }> }>("/api/uniswap/permissions", {
-        token: target.address,
-        walletAddress: swapper,
-      });
-      const result = permission.results?.[0];
-      if (result?.isPermissioned && !result.isAllowlisted) {
-        setKycUrl(result.kycUrl);
-        setNotice("This tokenized market requires wallet verification before it can be traded.");
-        return;
+      if (forWallet) {
+        const permission = await postJson<{ allowed?: boolean }>("/api/b20/policy", {
+          token: target.address,
+          walletAddress: forWallet,
+        });
+        if (token !== quoteToken.current) return;
+        if (permission.allowed === false) {
+          setKycUrl(`https://basescan.org/address/${target.address}`);
+          setNotice("This tokenized market requires wallet verification before it can be traded.");
+          return;
+        }
       }
 
       const nextQuote = await postJson<VeloraQuote>("/api/velora/swap", {
-        amount: toWei(amount),
+        amount: wei,
         decimals: target.stock ? 8 : 18,
-        swapper,
+        swapper: forWallet ?? PREVIEW_ADDRESS,
         tokenOut: target.address,
       });
-      setQuote(nextQuote);
+      if (token !== quoteToken.current) return;
+      setKycUrl(undefined);
+      setQuote({ ...nextQuote, executable: Boolean(forWallet) });
       setQuoteAt(Date.now());
       // Naming the venues is the point of routing through Velora: this depth is split across
       // Aerodrome and Uniswap, and the trader should see which ones filled the order.
-      setNotice(`Route ready via ${nextQuote.venues.join(" + ") || "Velora"}. Review and confirm within 30 seconds.`);
+      setNotice(`Route via ${nextQuote.venues.join(" + ") || "Velora"}.`);
     } catch (error) {
-      setNotice(error instanceof Error ? error.message : "Unable to prepare this trade.");
+      if (token !== quoteToken.current) return;
+      setQuote(undefined);
+      setNotice(error instanceof Error ? error.message : "Unable to price this trade.");
     } finally {
-      setIsBusy(false);
+      if (token === quoteToken.current) setIsBusy(false);
+    }
+  }, [account, amount, needsStockifyConfig, target]);
+
+  // Quote as the amount is typed, settled by a short pause. Without a wallet this prices only —
+  // asking someone to connect before they can see a number is the wrong order.
+  useEffect(() => {
+    const timer = setTimeout(() => { void requestQuote(); }, 450);
+    return () => clearTimeout(timer);
+  }, [requestQuote]);
+
+  async function connectThenQuote() {
+    try {
+      const next = await connect();
+      await requestQuote(next);
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "Wallet connection failed.");
     }
   }
 
   async function executeSwap() {
-    if (!quote || !account) return;
+    if (!quote?.executable || !account) return;
     if (Date.now() - quoteAt > 30_000) {
       setQuote(undefined);
       setNotice("This quote has expired. Request a fresh quote before confirming.");
@@ -175,6 +211,7 @@ export function SwapPanel() {
         <label htmlFor="swap-target">You receive</label>
         <div className="swap-target-row">
           {target.stock ? <StockLogo stock={target.stock} /> : <StockifyMark />}
+          <output className="swap-output" htmlFor="swap-amount">{quote ? formatUnits(quote.destAmount, target.stock ? 8 : 18) : "—"}</output>
           <select id="swap-target" onChange={(event) => { setTargetSymbol(event.target.value); clearTradeState(); }} value={targetSymbol}>
             {targets.map((entry) => <option key={entry.symbol} value={entry.symbol}>{entry.symbol} · {entry.name}</option>)}
           </select>
@@ -183,7 +220,7 @@ export function SwapPanel() {
       <div className="swap-details"><span>Input</span><b>Native ETH</b><span>Target</span><b>{target.symbol === "STFY" ? "Custom-hook pool" : "Base B20 token"}</b></div>
       {notice && <p className={`swap-notice${quote ? " is-ready" : ""}`}>{notice}</p>}
       {kycUrl && <a className="swap-kyc" href={kycUrl} rel="noreferrer" target="_blank">Verify wallet to trade ↗</a>}
-      <button className="swap-action" disabled={isBusy || Boolean(kycUrl) || needsStockifyConfig} onClick={quote ? executeSwap : requestQuote} type="button">{isBusy ? <SegmentRing filled={2} motion="spin" size={15} stroke={16} /> : null}{actionLabel}</button>
+      <button className="swap-action" disabled={isBusy || Boolean(kycUrl) || needsStockifyConfig} onClick={quote?.executable ? executeSwap : connectThenQuote} type="button">{isBusy ? <SegmentRing filled={2} motion="spin" size={15} stroke={16} /> : null}{actionLabel}</button>
       <p className="swap-foot">{account ? `Connected ${truncateAddress(account)}` : "Wallet signs the transaction; Stockify never takes custody."}</p>
     </aside>
   );
