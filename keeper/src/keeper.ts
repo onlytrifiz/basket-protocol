@@ -178,13 +178,19 @@ async function buy(stocks: Stock[]): Promise<void> {
   // Mirror the vault's own split so each leg is quoted against the amount it will actually be
   // handed. The vault patches the real spend into the calldata, so a later arrival only makes the
   // fill better than quoted; a smaller one reverts the leg instead of filling badly.
-  // Only buy once the cap binds. Above it `gross` is pinned to the cap, so the per-leg spend is
-  // fixed and can be quoted exactly — which is what lets an aggregator route be used at all: the
-  // vault patches one word, while Augustus encodes srcAmount twice, so the quoted amount and the
-  // forwarded amount have to be identical for the patch to be a harmless no-op.
-  if (cap !== 0n && gross < cap) {
-    console.log(`  buy deferred: ${formatEther(gross)} ETH of ${formatEther(cap)} cap`);
-    return;
+  // An aggregator route may only be used when the cap BINDS. Above it `gross` is pinned to the cap
+  // and the per-leg spend is fixed, so the quote and the forwarded amount are identical and the
+  // vault's patch is a harmless no-op — necessary because Augustus encodes srcAmount twice while the
+  // vault rewrites one word. Below the cap `gross` tracks a balance that keeps growing, so the two
+  // would disagree.
+  //
+  // That is a reason to skip VELORA, not to skip the purchase. The self-built Slipstream route
+  // encodes the amount once, which is exactly what patching is for: the vault writes the real spend
+  // and the leg follows. Deferring anyway left hook fees idle for as long as volume stayed thin —
+  // potentially forever, if it never reached the cap again.
+  const capBinds = cap !== 0n && gross >= cap;
+  if (!capBinds) {
+    console.log(`  ${formatEther(gross)} ETH below the ${formatEther(cap)} cap: direct route only`);
   }
 
   const stockBudget = (gross * (BPS - PLATFORM_FEE_BPS)) / BPS;
@@ -192,22 +198,24 @@ async function buy(stocks: Stock[]): Promise<void> {
   const legs = await Promise.all(
     stocks.map(async (stock) => {
       const amountIn = (stockBudget * stock.weightBps) / BPS;
-      const velora = await buildVeloraLeg({
+      const velora = capBinds
+        ? await buildVeloraLeg({
         srcToken: WETH,
         srcDecimals: 18,
         destToken: stock.token,
         destDecimals: 8,
         amountIn,
-        vault,
-        slippageBps,
-      });
+            vault,
+            slippageBps,
+          })
+        : null;
       if (velora) {
         console.log(`  ${stock.token} via ${velora.venues.join("+") || "velora"}`);
         return velora;
       }
-      // Fall back to the two-hop Slipstream route we build ourselves, so an aggregator outage
-      // cannot stop the protocol buying.
-      console.log(`  ${stock.token}: velora unavailable, using the direct Slipstream route`);
+      // The self-built two-hop Slipstream route: used below the cap by design, and above it
+      // whenever the aggregator has nothing to offer.
+      if (capBinds) console.log(`  ${stock.token}: velora unavailable, using the direct route`);
       return buildLeg({
         client: publicClient,
         equity: stock.token,
