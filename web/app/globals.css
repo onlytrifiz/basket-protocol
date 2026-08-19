@@ -584,8 +584,11 @@ code, kbd, samp, pre {
 .hero-swap { position: relative; z-index: 1; }
 
 /* Banner render: fees flowing through the ring, leaving as stock coins. */
+/* NO BAND. The render is a transparent PNG, so it sits on the hero card's own surface and the strip
+   reads as the bottom of that card rather than as a separate dark slab pasted under it. Which means
+   the labels can no longer use the desk palette: white-on-navy becomes white-on-near-white. They
+   take the theme-aware tokens below, which resolve correctly in both palettes. */
 .flow-strip {
-  background: var(--desk);
   border-top: 1px solid var(--line);
   height: 224px;
   overflow: hidden;
@@ -617,7 +620,7 @@ code, kbd, samp, pre {
 }
 .flow-strip-labels > div { max-width: 15ch; }
 .flow-strip span {
-  color: var(--sky);
+  color: var(--link);
   display: block;
   font-size: .62rem;
   font-weight: 600;
@@ -625,7 +628,7 @@ code, kbd, samp, pre {
   text-transform: uppercase;
 }
 .flow-strip strong {
-  color: var(--desk-fg);
+  color: var(--ink);
   display: block;
   font-size: .95rem;
   letter-spacing: -.03em;
@@ -633,7 +636,7 @@ code, kbd, samp, pre {
   margin-top: 8px;
 }
 .flow-strip-out { text-align: right; }
-.flow-strip-out span { color: var(--lime); }
+.flow-strip-out span { color: var(--payout-fg); }
 
 /* ---------- 8. Stats band ------------------------------------------------ */
 
@@ -1680,17 +1683,26 @@ code, kbd, samp, pre {
   align-items: center;
   display: grid;
   gap: 40px;
-  grid-template-columns: minmax(0, 1fr) 300px;
-  padding-bottom: 34px;
+  grid-template-columns: minmax(0, 1fr) 258px;
+  /* `.section` opens with 88px, the rhythm for marketing sections that need air above a headline.
+     This page is a data surface whose job is the table below, so the heading sits close to the nav
+     instead — the same call `.detail-top` already makes.
+
+     The render's HEIGHT is the other half of that gap and the less obvious half: a grid row is as
+     tall as its taller column, so centring a ~200px block of copy inside a 300px row pushed the
+     title down 50px on its own. Trimming the render lifts the heading as much as trimming padding
+     does, which is why both moved together. */
+  padding-bottom: 26px;
+  padding-top: 14px;
 }
 .hub-head-copy { min-width: 0; }
 .hub-render {
   filter: drop-shadow(var(--shadow-render));
-  height: 300px;
+  height: 258px;
   justify-self: end;
   pointer-events: none;
   position: relative;
-  width: 300px;
+  width: 258px;
   transform: translate3d(0, var(--parallax, 0px), 0);
 }
 .hub-render img { display: block; height: 100%; width: 100%; }
@@ -2333,7 +2345,7 @@ a.pool-row:hover { background: var(--surface-2); }
      the viewport, because the artwork's left edge moves with both viewport AND band height — a
      percentage that clears it at 1440 dims it at 900. Wide screens never load this rule at all. */
   .flow-strip::after {
-    background: linear-gradient(90deg, var(--desk) 0%, color-mix(in srgb, var(--desk) 72%, transparent) 48%, transparent 100%);
+    background: linear-gradient(90deg, var(--surface-2) 0%, color-mix(in srgb, var(--surface-2) 72%, transparent) 48%, transparent 100%);
     content: "";
     inset: 0 auto 0 0;
     pointer-events: none;

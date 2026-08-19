@@ -70,7 +70,7 @@ export default async function StocksPage() {
           </div>
           {/* The same coins the table lists, which is the point: the render is the universe and the
               rows are its numbers. Decorative — everything it depicts is named below it in text. */}
-          <BrandRender className="hub-render" priority size={300} src="/stocks.png" />
+          <BrandRender className="hub-render" priority size={258} src="/stocks.png" />
         </header>
 
         <section className="stats-band" aria-label="Universe at a glance">
