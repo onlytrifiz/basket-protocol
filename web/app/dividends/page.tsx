@@ -4,7 +4,7 @@ import Link from "next/link";
 import { readAssets } from "../../lib/b20";
 import { marketBoard } from "../../lib/market";
 import { readCycles, readVault } from "../../lib/vault";
-import { shares as fmtShares, since, usd, usdCompact } from "../../lib/format";
+import { shares as fmtShares, since, until, usd, usdCompact } from "../../lib/format";
 import { BrandRender } from "../components/brand-render";
 import { RingMarker, SegmentRing } from "../components/segment-ring";
 import { SiteFooter, SiteHeader } from "../components/site-chrome";
@@ -100,13 +100,21 @@ export default async function DividendPage() {
 
         <section className="stats-band" aria-label="Vault state">
           <div className="stats-inner">
+            {/* What the vault is sitting on right now. "Idle" was true but empty: the cycle state
+                is a label, while the stock waiting to be pushed is the thing a holder is owed. The
+                cadence moves into the caption, where it explains WHEN this clears rather than
+                occupying the number. */}
             <div>
-              <span>Cycle</span>
-              <strong>{vault.cycleActive ? "Active" : "Idle"}</strong>
+              <span>In the vault</span>
+              <strong>{anyHeld ? usdCompact(acquired) : "—"}</strong>
               <small>
-                {vault.nextDistribution > 0
-                  ? `next from ${since(vault.nextDistribution)}`
-                  : "no cycle has run yet"}
+                {vault.cycleActive
+                  ? "distributing now"
+                  : anyHeld
+                    ? vault.nextDistribution > 0
+                      ? `pushes out ${until(vault.nextDistribution)}`
+                      : "awaiting the first cycle"
+                    : "nothing acquired yet"}
               </small>
             </div>
             {/* Distributed first. The vault is drained every cycle, so its balance is a number that
@@ -174,7 +182,7 @@ export default async function DividendPage() {
               </div>
               <div>
                 <span>Next cycle</span>
-                <strong>{vault.nextDistribution > 0 ? since(vault.nextDistribution) : "—"}</strong>
+                <strong>{vault.nextDistribution > 0 ? until(vault.nextDistribution) : "—"}</strong>
                 <small>{vault.nextDistribution > 0 ? "earliest start" : "no cycle has run"}</small>
               </div>
             </div>

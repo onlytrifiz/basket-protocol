@@ -66,6 +66,23 @@ export function premium(onChain: number | null | undefined, reference: number | 
 }
 
 /** Relative time, for "quoted 4m ago" stamps. Seconds in, because that is what both APIs emit. */
+/**
+ * The mirror of `since`, for a timestamp that has not happened yet.
+ *
+ * `since` computes now - t, so on a future time it goes negative and lands on "just now" — which
+ * read as "any moment" for something the contract will refuse for another hour. The distribution
+ * cadence is the one clock a holder actually watches, so it needs a formatter that counts down.
+ */
+export function until(seconds: number | null | undefined): string {
+  if (!seconds) return "";
+  const minutes = Math.round((seconds - Date.now() / 1000) / 60);
+  if (minutes <= 0) return "now";
+  if (minutes < 60) return `in ${minutes}m`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `in ${hours}h`;
+  return `in ${Math.round(hours / 24)}d`;
+}
+
 export function since(seconds: number | null | undefined): string {
   if (!seconds) return "";
   const minutes = Math.round((Date.now() / 1000 - seconds) / 60);
