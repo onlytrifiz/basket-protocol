@@ -99,8 +99,13 @@
 }
 
 /* Dark: applied when the OS asks for it and the user has not pinned light… */
+/* PARKED, NOT DELETED. The site ships light: this block used to fire on the OS preference alone, so
+   half of all visitors got a dark palette nobody had chosen for them and every screenshot depended
+   on the machine that took it. Gated behind `data-theme="auto"`, which nothing sets today, so the
+   palette below stays maintained and one word — back to `:not([data-theme="light"])` — restores the
+   automatic behaviour when the toggle returns. `:root[data-theme="dark"]` below still works. */
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
+  :root[data-theme="auto"] {
     color-scheme: dark;
     --paper: var(--dk-paper);
     --paper-2: var(--dk-paper-2);
@@ -340,9 +345,61 @@ h1 em, h2 em { font-style: normal; font-weight: 600; }
 
 .wallet-pill:hover:not(:disabled) { border-color: var(--accent); transform: translateY(-1px); }
 .wallet-pill:disabled { cursor: progress; opacity: 0.6; }
+/* The pill's left edge used to be padding around a 6px dot. The glyph gives it something to be. */
+.wallet-glyph { color: var(--ink-3); flex: none; height: 15px; width: 15px; }
+.wallet-pill:hover .wallet-glyph, .wallet-pill[aria-expanded="true"] .wallet-glyph { color: var(--link); }
+.wallet-caret { color: var(--ink-3); flex: none; height: 5px; margin-left: 1px; width: 8px; transition: transform .16s var(--ease); }
+.wallet-pill[aria-expanded="true"] .wallet-caret { transform: rotate(180deg); }
 
-/* Connected reads as state, not as an action: no pointer, and the live dot carries the meaning. */
-.wallet-pill.is-connected { cursor: default; font-variant-numeric: tabular-nums; }
+.wallet-menu { position: relative; }
+.wallet-drop {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  box-shadow: var(--shadow-3);
+  display: grid;
+  min-width: 208px;
+  overflow: hidden;
+  padding: 5px;
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 40;
+}
+.wallet-drop-head {
+  align-items: baseline;
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 4px;
+  padding: 8px 10px 10px;
+}
+.wallet-drop-head span {
+  color: var(--ink-3);
+  font-family: var(--mono-stack);
+  font-size: .58rem;
+  letter-spacing: .11em;
+  text-transform: uppercase;
+}
+.wallet-drop-head b { font-family: var(--mono-stack); font-size: .84rem; font-variant-numeric: tabular-nums; }
+.wallet-drop button, .wallet-drop a {
+  background: none;
+  border: 0;
+  border-radius: var(--r-sm);
+  color: var(--ink-2);
+  cursor: pointer;
+  font: inherit;
+  font-size: .8rem;
+  padding: 8px 10px;
+  text-align: left;
+  text-decoration: none;
+  transition: background .14s var(--ease), color .14s var(--ease);
+}
+.wallet-drop button:hover, .wallet-drop a:hover { background: var(--surface-sunken); color: var(--ink); }
+.wallet-drop .is-danger:hover { background: #fdeceb; color: #b4342b; }
+
+/* Connected is an ACTION now, not just state — it opens the menu — so it keeps its pointer. */
+.wallet-pill.is-connected { font-variant-numeric: tabular-nums; }
 .wallet-pill.is-connected i {
   background: var(--accent);
   border-radius: 50%;

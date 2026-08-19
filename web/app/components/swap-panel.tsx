@@ -282,7 +282,6 @@ export function SwapPanel() {
       ) : null}
       {kycUrl && <a className="swap-kyc" href={kycUrl} rel="noreferrer" target="_blank">Verify wallet to trade ↗</a>}
       <button className="swap-action" disabled={isBusy || Boolean(kycUrl) || needsStockifyConfig} onClick={quote?.executable ? executeSwap : connectThenQuote} type="button">{isBusy ? <SegmentRing filled={2} motion="spin" size={15} stroke={16} /> : null}{actionLabel}</button>
-      {account && <p className="swap-foot">Connected {truncateAddress(account)}</p>}
     </aside>
   );
 }

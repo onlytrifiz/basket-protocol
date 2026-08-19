@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { ConnectWalletButton } from "./wallet";
-import { ThemeToggle } from "./theme-toggle";
+
 
 type ActivePage = "overview" | "stocks" | "distributions" | "docs";
 
@@ -15,6 +15,8 @@ export function StockifyMark({ small = false }: { small?: boolean }) {
   );
 }
 
+/* `ThemeToggle` is deliberately still in the tree and deliberately not rendered: the site ships
+   light for now, and the component plus its whole dark palette are kept for when it comes back. */
 export function SiteHeader({ active }: { active: ActivePage }) {
   return (
     <nav aria-label="Primary navigation" className="site-nav">
@@ -27,7 +29,6 @@ export function SiteHeader({ active }: { active: ActivePage }) {
           <Link className={active === "docs" ? "active" : ""} href="/docs">Docs</Link>
         </div>
         <ConnectWalletButton />
-        <ThemeToggle />
       </div>
     </nav>
   );

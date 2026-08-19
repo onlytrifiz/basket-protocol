@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 
 /**
  * One wallet connection, shared by the header and the swap card.
@@ -28,6 +28,7 @@ type WalletState = {
   account?: string;
   isConnecting: boolean;
   connect: () => Promise<string>;
+  disconnect: () => Promise<void>;
   provider: () => Eip1193Provider;
 };
 
@@ -99,27 +100,151 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     }
   }, [provider]);
 
-  const value = useMemo(() => ({ account, connect, isConnecting, provider }), [account, connect, isConnecting, provider]);
+  /**
+   * EIP-1193 HAS NO DISCONNECT. A dapp cannot revoke its own access; the closest thing is
+   * `wallet_revokePermissions`, which MetaMask supports and most wallets do not. So this asks, and
+   * clears local state either way — from the site's point of view the session is over, and a
+   * "Disconnect" that silently did nothing would be worse than one that only forgets.
+   */
+  const disconnect = useCallback(async () => {
+    try {
+      await provider().request({
+        method: "wallet_revokePermissions",
+        params: [{ eth_accounts: {} }],
+      });
+    } catch {
+      // Unsupported or refused: local state is still cleared below.
+    }
+    setAccount(undefined);
+  }, [provider]);
+
+  const value = useMemo(
+    () => ({ account, connect, disconnect, isConnecting, provider }),
+    [account, connect, disconnect, isConnecting, provider],
+  );
   return <WalletContext.Provider value={value}>{children}</WalletContext.Provider>;
 }
 
-/** Header affordance: connects, then shows the connected address. */
-export function ConnectWalletButton() {
-  const { account, connect, isConnecting } = useWallet();
-  const [error, setError] = useState<string>();
-
-  if (account) {
-    return <span className="wallet-pill is-connected" title={account}><i />{truncateAddress(account)}</span>;
-  }
+function WalletGlyph() {
   return (
-    <button
-      className="wallet-pill"
-      disabled={isConnecting}
-      onClick={() => { setError(undefined); connect().catch((e) => setError(e instanceof Error ? e.message : "Connection failed")); }}
-      title={error}
-      type="button"
-    >
-      {isConnecting ? "Connecting…" : "Connect wallet"}
-    </button>
+    <svg aria-hidden="true" className="wallet-glyph" viewBox="0 0 20 20" focusable="false">
+      <path
+        d="M3 6.2A2.2 2.2 0 0 1 5.2 4h9.1a1.7 1.7 0 0 1 1.7 1.7V7"
+        fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"
+      />
+      <rect x="3" y="6.2" width="14" height="9.8" rx="2.2" fill="none" stroke="currentColor" strokeWidth="1.5" />
+      <circle cx="13.6" cy="11.1" r="1.15" fill="currentColor" />
+    </svg>
+  );
+}
+
+/**
+ * Header affordance: connects, then becomes a menu.
+ *
+ * Connected, it used to be an inert `<span>` — an address and a status dot with nothing to do. The
+ * two things a connected visitor actually wants from it are the balance they are about to spend and
+ * a way out, so it is a button now, and the balance is read only while the menu is open rather than
+ * polled by every page.
+ */
+export function ConnectWalletButton() {
+  const { account, connect, disconnect, isConnecting, provider } = useWallet();
+  const [error, setError] = useState<string>();
+  const [open, setOpen] = useState(false);
+  const [balance, setBalance] = useState<string>();
+  const [copied, setCopied] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+
+  // A menu that survives a click elsewhere, or Escape, is a menu people get stuck in.
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (event: MouseEvent) => {
+      if (box.current && !box.current.contains(event.target as Node)) setOpen(false);
+    };
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape") setOpen(false); };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  useEffect(() => {
+    if (!open || !account) return;
+    let cancelled = false;
+    provider()
+      .request({ method: "eth_getBalance", params: [account, "latest"] })
+      .then((raw) => {
+        if (cancelled || typeof raw !== "string") return;
+        setBalance((Number(BigInt(raw)) / 1e18).toLocaleString("en-US", { maximumFractionDigits: 4 }));
+      })
+      .catch(() => { if (!cancelled) setBalance(undefined); });
+    return () => { cancelled = true; };
+  }, [open, account, provider]);
+
+  if (!account) {
+    return (
+      <button
+        className="wallet-pill"
+        disabled={isConnecting}
+        onClick={() => { setError(undefined); connect().catch((e) => setError(e instanceof Error ? e.message : "Connection failed")); }}
+        title={error}
+        type="button"
+      >
+        <WalletGlyph />
+        {isConnecting ? "Connecting…" : "Connect wallet"}
+      </button>
+    );
+  }
+
+  return (
+    <div className="wallet-menu" ref={box}>
+      <button
+        aria-expanded={open}
+        aria-haspopup="menu"
+        className="wallet-pill is-connected"
+        onClick={() => setOpen((value) => !value)}
+        title={account}
+        type="button"
+      >
+        <WalletGlyph />
+        {truncateAddress(account)}
+        <svg aria-hidden="true" className="wallet-caret" viewBox="0 0 10 6" focusable="false">
+          <path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="1.6" />
+        </svg>
+      </button>
+
+      {open && (
+        <div className="wallet-drop" role="menu">
+          <div className="wallet-drop-head">
+            <span>Balance</span>
+            <b>{balance === undefined ? "…" : `${balance} ETH`}</b>
+          </div>
+          <button
+            onClick={() => {
+              void navigator.clipboard?.writeText(account).then(() => {
+                setCopied(true);
+                setTimeout(() => setCopied(false), 1600);
+              }).catch(() => undefined);
+            }}
+            role="menuitem"
+            type="button"
+          >
+            {copied ? "Address copied" : "Copy address"}
+          </button>
+          <a href={`https://basescan.org/address/${account}`} rel="noreferrer" role="menuitem" target="_blank">
+            View on Basescan ↗
+          </a>
+          <button
+            className="is-danger"
+            onClick={() => { setOpen(false); void disconnect(); }}
+            role="menuitem"
+            type="button"
+          >
+            Disconnect
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
