@@ -162,7 +162,17 @@ export function SwapPanel() {
    * indexes with real depth. `StockifyRouter` calls the manager directly instead.
    */
   const isDirect = source.symbol === "STFY" || target.symbol === "STFY";
-  const needsStockifyConfig = isDirect && !hasRouter;
+  /**
+   * Two separate ways STFY can be unconfigured, and they used to fail identically.
+   *
+   * `NEXT_PUBLIC_*` values are inlined at BUILD time, so setting one in a host's dashboard does
+   * nothing until the next deploy — and the two variables can easily end up in different states.
+   * That happened in production: the router address made it into the bundle and the token address
+   * did not, so the panel silently skipped the price fetch and blamed the pool for having no price.
+   * Each missing piece now says which one it is.
+   */
+  const hasToken = isConfiguredAddress(stockifyAddress);
+  const needsStockifyConfig = isDirect && (!hasRouter || !hasToken);
 
   /** Swap the legs. Picking the asset already on the other side flips rather than duplicating it. */
   function flip() {
@@ -366,7 +376,7 @@ export function SwapPanel() {
   }
 
   const actionLabel = needsStockifyConfig
-    ? "STFY router pending"
+    ? (!hasToken ? "STFY token not configured" : "STFY router pending")
     : isBusy
     ? "Working…"
     : needsApproval
@@ -444,7 +454,13 @@ export function SwapPanel() {
           {picker("target")}
         </div>
       </div>
-      {notice ? (
+      {needsStockifyConfig ? (
+        <p className="swap-notice">
+          {!hasToken
+            ? "The STFY token address is missing from this build. NEXT_PUBLIC_STOCKIFY_TOKEN_ADDRESS is read at build time, so it needs a redeploy after being set."
+            : "The STFY router address is missing from this build. It is read at build time, so it needs a redeploy after being set."}
+        </p>
+      ) : notice ? (
         <p className={`swap-notice${quote ? " is-ready" : ""}`}>{notice}</p>
       ) : quote ? (
         <p className="trade-route">

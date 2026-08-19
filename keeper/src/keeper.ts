@@ -39,6 +39,13 @@ const snapshotBatchSize = positiveInteger(process.env.SNAPSHOT_BATCH_SIZE, 250);
 const payoutBatchSize = positiveInteger(process.env.PAYOUT_BATCH_SIZE, 25);
 const maxBatchTransactions = positiveInteger(process.env.MAX_BATCH_TRANSACTIONS, 100);
 const routeDeadlineSeconds = positiveInteger(process.env.ROUTE_DEADLINE_SEC, 900);
+/**
+ * Gas a single payout transaction may occupy. Base rejects a transaction whose limit is too high,
+ * and the estimate scales with holders TIMES assets in the index — plus much more on a holder's
+ * first ever payout, when every B20 transfer writes a fresh balance slot instead of updating one.
+ * A fixed holder count cannot express that, which is why 250 estimated 15.2M and was refused.
+ */
+const payoutGasTarget = BigInt(process.env.PAYOUT_GAS_TARGET ?? "10000000");
 const intervalJitterPct = Math.min(90, Math.max(0, Number(process.env.INTERVAL_JITTER_PCT ?? 10)));
 const runOnce = process.env.RUN_ONCE === "1";
 const dryRun = process.env.DRY_RUN === "1";
@@ -154,6 +161,35 @@ async function write(functionName: WriteFunction, args: readonly unknown[]) {
   if (receipt.status !== "success") throw new Error(`${functionName} reverted: ${hash}`);
   lastWriteBlock = receipt.blockNumber;
   console.log(`  ${functionName}: ${hash}`);
+}
+
+/**
+ * Pay as many holders as fit under `payoutGasTarget`, measuring rather than guessing.
+ *
+ * Starts from PAYOUT_BATCH_SIZE and scales down by whatever the estimate overshot by, so it
+ * converges in a couple of probes instead of halving blindly. Estimation is free; discovering the
+ * limit by having Base refuse the transaction is not.
+ */
+async function distributeSized(remaining: bigint): Promise<void> {
+  let count = BigInt(payoutBatchSize);
+  if (count > remaining) count = remaining;
+
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    const request = { address: vault, abi: vaultAbi, functionName: "distributeBatch", args: [count], account } as const;
+    const gas = await publicClient.estimateContractGas(request as any);
+    if (gas <= payoutGasTarget || count === 1n) {
+      const hash = await walletClient.writeContract({ ...request, gas: (gas * 12n) / 10n } as any);
+      const receipt = await publicClient.waitForTransactionReceipt({ hash });
+      if (receipt.status !== "success") throw new Error(`distributeBatch reverted: ${hash}`);
+      lastWriteBlock = receipt.blockNumber;
+      console.log(`  distributeBatch(${count}): ${hash}`);
+      return;
+    }
+    const scaled = (count * payoutGasTarget) / gas;
+    count = scaled < 1n ? 1n : scaled;
+    console.log(`  ${gas} gas over target, retrying with ${count} holders`);
+  }
+  throw new Error("distributeBatch: could not fit a batch under the gas target");
 }
 
 async function readStocks(): Promise<Stock[]> {
@@ -340,7 +376,7 @@ async function distributeFromOnchainRegistry(): Promise<void> {
     if (remaining === 0n) return;
     if (transactions >= maxBatchTransactions) return console.log("  payout paused: distribution transaction cap reached");
     console.log(`  paying ${remaining} snapshotted holders`);
-    await write("distributeBatch", [BigInt(payoutBatchSize)]);
+    await distributeSized(remaining);
     transactions += 1;
     active = await read<boolean>("cycleActive");
   }
