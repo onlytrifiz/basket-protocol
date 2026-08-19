@@ -58,6 +58,9 @@ const vaultAbi = [
     outputs: [{ name: "token", type: "address" }, { name: "weightBps", type: "uint16" }],
   },
   { type: "function", name: "cycleActive", stateMutability: "view", inputs: [], outputs: [{ type: "bool" }] },
+  { type: "function", name: "distributionStocksLength", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
+  { type: "function", name: "distributionStockAt", stateMutability: "view", inputs: [{ type: "uint256" }], outputs: [{ type: "address" }] },
+  { type: "function", name: "unpaidTotal", stateMutability: "view", inputs: [{ type: "address" }], outputs: [{ type: "uint256" }] },
   { type: "function", name: "snapshotPending", stateMutability: "view", inputs: [], outputs: [{ type: "bool" }] },
   { type: "function", name: "nextDistribution", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
   { type: "function", name: "snapshotRemaining", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
@@ -230,8 +233,38 @@ async function buy(stocks: Stock[]): Promise<void> {
   ]);
 }
 
+const erc20Abi = [
+  { type: "function", name: "balanceOf", stateMutability: "view", inputs: [{ type: "address" }], outputs: [{ type: "uint256" }] },
+] as const;
+
+/**
+ * Is there anything to hand out? Mirrors the vault's own `_hasDistributionWork`, which is private.
+ *
+ * Without this the keeper opens a snapshot for a cycle the vault will refuse with
+ * NoDistributionWork, which is the contract being right: once a distribution has emptied the vault
+ * of every B20, there is nothing to divide until the next purchase lands. It costs no gas — the
+ * revert surfaces during estimation — but a recurring error in the logs is where a real one hides.
+ */
+async function hasDistributionWork(): Promise<boolean> {
+  const count = await read<bigint>("distributionStocksLength");
+  for (let index = 0n; index < count; index += 1n) {
+    const stock = await read<Address>("distributionStockAt", [index]);
+    const [held, owed] = await Promise.all([
+      publicClient.readContract({ address: stock, abi: erc20Abi, functionName: "balanceOf", args: [vault] }) as Promise<bigint>,
+      read<bigint>("unpaidTotal", [stock]),
+    ]);
+    if (held > owed || owed !== 0n) return true;
+  }
+  return false;
+}
+
 async function distributeFromOnchainRegistry(): Promise<void> {
   let active = await read<boolean>("cycleActive");
+  // A cycle already open still has to be finished; only a fresh one needs stock to divide.
+  if (!active && !(await hasDistributionWork())) {
+    console.log("  nothing to distribute: the vault holds no stock yet");
+    return;
+  }
   if (dryRun) {
     console.log(`  dry run: on-chain payout cycle is ${active ? "active" : "idle"}`);
     return;
