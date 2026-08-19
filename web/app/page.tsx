@@ -8,6 +8,16 @@ import { SiteFooter, SiteHeader } from "./components/site-chrome";
 import { StockGrid } from "./components/stock-grid";
 import { SwapPanel } from "./components/swap-panel";
 
+/**
+ * The index donut is a LIVE read, so this page cannot be a build-time snapshot.
+ *
+ * Without this it prerendered as static: whatever the vault answered during `next build` was frozen
+ * into the HTML for the life of the deploy, and a build that happened to run while the public RPC
+ * was throttled shipped "the index could not be read" permanently. Sixty seconds matches the pages
+ * that already read the chain, and means a bad read heals itself instead of needing a redeploy.
+ */
+export const revalidate = 60;
+
 /* `filled` advances the ring across the loop; only the final step is a payout,
    so it is the only one allowed to light a segment lime. */
 const mechanics = [

@@ -846,8 +846,11 @@ code, kbd, samp, pre {
 }
 .index-universe > p { color: var(--desk-fg-3); font-size: .59rem; margin: 14px 0 0; }
 
-.index-head { align-items: end; display: grid; gap: 36px; grid-template-columns: 1.2fr .8fr; max-width: none; }
-.index-head > p { margin: 0 !important; max-width: 380px; }
+/* Stacked, NOT two columns. Side by side the paragraph competes with the headline for the same
+   glance and squeezes it into a measure that breaks "Thirteen listed. Four in the index." across
+   four lines. (Re-applied: this reverted to the grid once already.) */
+.index-head { max-width: 640px; }
+.index-head > p { margin: 15px 0 0 !important; max-width: none; }
 
 /* Compact rows, not 160px panels. This section is something the page passes through on its way to
    /stocks, and thirteen tall cards were taking more attention than a signpost deserves. */
