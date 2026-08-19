@@ -1040,7 +1040,7 @@ code, kbd, samp, pre {
   margin-top: 22px;
   overflow: hidden;
 }
-.table-head, .table-empty, .table-row { display: grid; grid-template-columns: .55fr 1.45fr 1fr .7fr; }
+.table-head, .table-empty, .table-row { align-items: center; display: grid; grid-template-columns: .5fr 1.6fr .9fr .8fr 14px; }
 .table-head {
   background: rgba(255, 255, 255, .04);
   color: var(--desk-fg-3);
@@ -1062,6 +1062,32 @@ code, kbd, samp, pre {
 .table-row + .table-row { border-top: 1px solid var(--desk-line); }
 .table-row:hover { background: var(--desk-glass); }
 .table-row span:first-child { color: var(--sky); font-family: var(--mono-stack); }
+
+/* Each acquisition as mark + size, wrapping when a cycle buys more than a row's width. */
+.cycle-assets { display: flex; flex-wrap: wrap; gap: 6px 12px; }
+.cycle-asset { align-items: center; display: inline-flex; gap: 5px; white-space: nowrap; }
+/* `.stock-logo-small` also carries a size, and it lands later in the file than a plain descendant
+   selector can beat on order alone — so this one matches both classes to win outright. */
+/* The mark is drawn here rather than through `StockLogo`: nested in two flex containers that
+   component's percentage sizing resolved to zero width, so every icon rendered as a blank chip.
+   Fixed pixels, and no white plate — these sit on the dark desk. */
+.cycle-mark {
+  border-radius: 4px;
+  display: block;
+  flex: 0 0 auto;
+  height: 18px;
+  object-fit: contain;
+  width: 18px;
+}
+.cycle-mark-blank { background: var(--desk-glass-2); }
+.cycle-go {
+  color: var(--desk-fg-3);
+  height: 10px;
+  justify-self: end;
+  transition: color .16s var(--ease), transform .16s var(--ease);
+  width: 6px;
+}
+.table-row:hover .cycle-go { color: var(--sky); transform: translateX(2px); }
 .table-empty { color: var(--desk-fg-2); font-size: .77rem; min-height: 64px; }
 .desk-note { color: var(--desk-fg-3); font-size: .7rem; line-height: 1.55; margin: 14px 0 0; }
 

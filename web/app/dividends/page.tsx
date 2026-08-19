@@ -181,7 +181,7 @@ export default async function DividendPage() {
 
             <div className="distribution-table">
               <div className="table-head">
-                <span>Cycle</span><span>Assets acquired</span><span>Holders paid</span><span>Stock budget</span>
+                <span>Cycle</span><span>Assets acquired</span><span>Holders paid</span><span>Stock budget</span><span aria-hidden="true" />
               </div>
               {ledger.cycles.length === 0 ? (
                 <div className="table-empty">
@@ -191,7 +191,7 @@ export default async function DividendPage() {
                       ? "No cycle has settled in the scanned window. Rows appear here as soon as one does."
                       : "No endpoint would serve the log window, so the ledger cannot be read right now."}
                   </span>
-                  <span>—</span><span>—</span>
+                  <span>—</span><span>—</span><span aria-hidden="true" />
                 </div>
               ) : (
                 ledger.cycles.map((cycle, i) => (
@@ -203,12 +203,23 @@ export default async function DividendPage() {
                     target="_blank"
                   >
                     <span>#{ledger.cycles.length - i}</span>
-                    <span>
-                      {cycle.bought.length
-                        ? cycle.bought
-                            .map((b) => byAddress.get(b.address.toLowerCase())?.symbol ?? "asset")
-                            .join(", ")
-                        : "—"}
+                    {/* A comma list of tickers made four near-identical rows impossible to scan.
+                        The mark carries the identity and the figure carries the size. */}
+                    <span className="cycle-assets">
+                      {cycle.bought.length ? cycle.bought.map((b) => {
+                        const asset = byAddress.get(b.address.toLowerCase());
+                        return (
+                          // A bare <img>, not <StockLogo>: nested in two flex containers the shared
+                          // component's percentage sizing collapsed the mark to zero width, and its
+                          // white chip is wrong on this dark panel anyway.
+                          <span className="cycle-asset" key={b.address} title={asset?.symbol ?? b.address}>
+                            {asset?.logo
+                              ? <img alt="" className="cycle-mark" loading="lazy" src={asset.logo} />
+                              : <span className="cycle-mark cycle-mark-blank" />}
+                            {fmtShares(Number(BigInt(b.receivedRaw)) / 1e8)}
+                          </span>
+                        );
+                      }) : "—"}
                     </span>
                     <span>{cycle.holderCount.toLocaleString("en-US")}</span>
                     <span>
@@ -216,6 +227,10 @@ export default async function DividendPage() {
                         ? `${(Number(BigInt(cycle.stockEthWei)) / 1e18).toFixed(4)} ETH`
                         : "—"}
                     </span>
+                    {/* Every row opens its settlement transaction, which nothing else here says. */}
+                    <svg aria-hidden="true" className="cycle-go" viewBox="0 0 6 10" focusable="false">
+                      <path d="M1 1l4 4-4 4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6" />
+                    </svg>
                   </a>
                 ))
               )}

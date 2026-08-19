@@ -15,7 +15,26 @@ import { stockByAddress } from "./stocks";
  */
 
 const VAULT = process.env.NEXT_PUBLIC_DIVIDEND_VAULT_ADDRESS ?? "";
-const TOKEN = process.env.NEXT_PUBLIC_STOCKIFY_TOKEN_ADDRESS ?? "";
+
+/**
+ * The share token is read FROM THE VAULT, not from the environment.
+ *
+ * `NEXT_PUBLIC_STOCKIFY_TOKEN_ADDRESS` answers "what does the swap card trade", and those are the
+ * same token in production but not today: the card points at a plain test ERC-20 while the real
+ * StockifyToken stays deployed and keeps the holder registry. Reading the env var here meant asking
+ * a token with no registry for its holder count, which reverts — and the page had no way to tell
+ * that apart from a protocol with no holders.
+ *
+ * `stockifyToken()` is immutable on the vault, so this cannot drift from what the vault accounts
+ * against, whatever the front end happens to be trading.
+ */
+async function shareToken(): Promise<string | null> {
+  const [result] = await batchCall([{ to: VAULT, data: SIG.stockifyToken }]);
+  const word = result.state === "ok" ? (result.data ?? "").replace(/^0x/, "") : "";
+  if (word.length < 64) return null;
+  const address = `0x${word.slice(24, 64)}`;
+  return isAddress(address) && BigInt(address) !== 0n ? address : null;
+}
 
 /** Generated with `cast sig`; this module stays dependency-free like the rest of the chain layer. */
 const SIG = {
@@ -30,6 +49,7 @@ const SIG = {
   balanceOf: "0x70a08231",
   holderCount: "0x1aab9a9f",
   minShareBalance: "0xf4e15ee7",
+  stockifyToken: "0xa0c75e32",
 } as const;
 
 const isAddress = (value: string) => /^0x[a-fA-F0-9]{40}$/.test(value);
@@ -92,12 +112,13 @@ async function loadVault(): Promise<VaultState> {
     to: VAULT,
     data: SIG.stockAt + pad(i.toString(16)),
   }));
+  const token = await shareToken();
   const stateCalls: RpcCall[] = [
     { to: VAULT, data: SIG.cycleActive },
     { to: VAULT, data: SIG.nextDistribution },
     { to: VAULT, data: SIG.availableEth },
     { to: VAULT, data: SIG.eligibleSupply },
-    ...(isAddress(TOKEN) ? [{ to: TOKEN, data: SIG.holderCount }, { to: TOKEN, data: SIG.minShareBalance }] : []),
+    ...(token ? [{ to: token, data: SIG.holderCount }, { to: token, data: SIG.minShareBalance }] : []),
   ];
 
   const results = await batchCall([...indexCalls, ...stateCalls]);
@@ -154,11 +175,10 @@ async function loadVault(): Promise<VaultState> {
     nextDistribution: Number(toBigInt(stateAt(1)) ?? 0n),
     availableEthWei: asString(2),
     eligibleSupplyRaw: asString(3),
-    // `?? 0n` here turned a reverted read into a confident zero — which is exactly what happens
-    // when STFY points at a plain ERC-20 with no holder registry, as it does while the real token
-    // is unbuilt. Null means unread, and the page prints a dash for it.
-    holderCount: isAddress(TOKEN) ? (toBigInt(stateAt(4)) === null ? null : Number(toBigInt(stateAt(4)))) : null,
-    minShareBalanceRaw: isAddress(TOKEN) ? asString(5) : null,
+    // Null means UNREAD, never zero: `?? 0n` here once turned a reverted registry read into a
+    // confident "0 eligible holders".
+    holderCount: token ? (toBigInt(stateAt(4)) === null ? null : Number(toBigInt(stateAt(4)))) : null,
+    minShareBalanceRaw: token ? asString(5) : null,
   };
 }
 
