@@ -11,14 +11,21 @@ import { StockGrid } from "./components/stock-grid";
 import { SwapPanel } from "./components/swap-panel";
 
 /**
- * The index donut is a LIVE read, so this page cannot be a build-time snapshot.
+ * The index donut is a LIVE read, so this page is rendered per request.
  *
- * Without this it prerendered as static: whatever the vault answered during `next build` was frozen
- * into the HTML for the life of the deploy, and a build that happened to run while the public RPC
- * was throttled shipped "the index could not be read" permanently. Sixty seconds matches the pages
- * that already read the chain, and means a bad read heals itself instead of needing a redeploy.
+ * `revalidate = 60` alone was not enough, and the reason is a trap worth naming. `lib/cache` wraps
+ * every chain read, and when its in-process cache is warm no `fetch` runs during render — so Next's
+ * static analysis sees no dynamic API and prerenders the page. Whether `/` came out static or
+ * dynamic therefore depended on whether the cache happened to be warm in that build worker.
+ *
+ * When it came out static, the vault's answer at build time was frozen into the HTML: a build that
+ * ran while the public RPC was throttled shipped "the index could not be read" for the life of the
+ * deploy. /stocks and /distributions escaped only because they also call the market API directly.
+ *
+ * Forced, so it is a decision rather than an accident. The reads are still cached for 30-60s each,
+ * so per-request rendering costs no extra RPC traffic.
  */
-export const revalidate = 60;
+export const dynamic = "force-dynamic";
 
 /* `filled` advances the ring across the loop; only the final step is a payout,
    so it is the only one allowed to light a segment lime. */
