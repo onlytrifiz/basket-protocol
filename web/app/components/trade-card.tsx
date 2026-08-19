@@ -382,9 +382,9 @@ export function TradeCard({
         {action}
       </button>
 
-      <p className="trade-foot">
-        {account ? `Connected ${truncateAddress(account)}` : "Your wallet signs the transaction; Stockify never takes custody."}
-      </p>
+      {/* Only the connected address earns this line. The custody reassurance that used to sit here
+          told a visitor nothing they could act on and pushed the action button further from it. */}
+      {account && <p className="trade-foot">Connected {truncateAddress(account)}</p>}
     </aside>
   );
 }

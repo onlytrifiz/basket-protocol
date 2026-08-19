@@ -70,13 +70,13 @@ export default async function StocksPage() {
           </div>
           {/* The same coins the table lists, which is the point: the render is the universe and the
               rows are its numbers. Decorative — everything it depicts is named below it in text. */}
-          <BrandRender className="hub-render" priority size={258} src="/stocks.png" />
+          <BrandRender className="hub-render" priority size={292} src="/stocks.png" />
         </header>
 
         <section className="stats-band" aria-label="Universe at a glance">
           <div className="stats-inner">
-            <div><span>Listed</span><strong>{assets.length}</strong><small>B20 equities on Base</small></div>
-            <div><span>Issued</span><strong>{issued}</strong><small>with supply on-chain</small></div>
+            <div><span>Issued</span><strong>{assets.length}</strong><small>B20 equities on Base</small></div>
+            <div><span>Minted</span><strong>{issued}</strong><small>with supply on-chain</small></div>
             {/* Volume earns the tile and liquidity keeps its own: one is how much trades, the other
                 how much is standing there to trade against, and neither substitutes for the other.
                 The market and pool counts ride along as sub-labels rather than costing two more

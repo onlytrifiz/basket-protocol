@@ -206,7 +206,7 @@ h1 em, h2 em { font-style: normal; font-weight: 600; }
 /* Every data surface is mono + tabular in one place: tickers, addresses,
    fee splits, thresholds, labels. Quiet by construction. */
 .eyebrow,
-.base-pill, .waiting-chip, .theme-toggle,
+.waiting-chip, .theme-toggle,
 .stats-inner strong, .stats-inner span,
 .step-card > span, .roles-grid > article > span, .launch-rows > div > span,
 .launch-rows small, .payout-list article > span,
@@ -367,7 +367,7 @@ code, kbd, samp, pre {
   width: 0.42rem;
 }
 
-.base-pill, .waiting-chip {
+.waiting-chip {
   align-items: center;
   background: var(--surface);
   border: 1px solid var(--line);
@@ -382,7 +382,7 @@ code, kbd, samp, pre {
   letter-spacing: .04em;
   padding: 7px 12px;
 }
-.base-pill i, .waiting-chip i {
+.waiting-chip i {
   background: var(--blue);
   border-radius: 50%;
   box-shadow: 0 0 0 3px rgba(0, 82, 255, .16);
@@ -987,7 +987,7 @@ code, kbd, samp, pre {
   margin-top: 22px;
   overflow: hidden;
 }
-.table-head, .table-empty { display: grid; grid-template-columns: .55fr 1.45fr 1fr .7fr; }
+.table-head, .table-empty, .table-row { display: grid; grid-template-columns: .55fr 1.45fr 1fr .7fr; }
 .table-head {
   background: rgba(255, 255, 255, .04);
   color: var(--desk-fg-3);
@@ -995,7 +995,20 @@ code, kbd, samp, pre {
   letter-spacing: .1em;
   text-transform: uppercase;
 }
-.table-head span, .table-empty span { padding: 13px 15px; }
+.table-head span, .table-empty span, .table-row span { padding: 13px 15px; }
+
+/* A settled cycle. Each row is its settlement transaction, which is the only citation a ledger
+   entry can honestly offer. */
+.table-row {
+  color: var(--desk-fg);
+  font-size: .78rem;
+  font-variant-numeric: tabular-nums;
+  text-decoration: none;
+  transition: background .16s var(--ease);
+}
+.table-row + .table-row { border-top: 1px solid var(--desk-line); }
+.table-row:hover { background: var(--desk-glass); }
+.table-row span:first-child { color: var(--sky); font-family: var(--mono-stack); }
 .table-empty { color: var(--desk-fg-2); font-size: .77rem; min-height: 64px; }
 .desk-note { color: var(--desk-fg-3); font-size: .7rem; line-height: 1.55; margin: 14px 0 0; }
 
@@ -1683,7 +1696,7 @@ code, kbd, samp, pre {
   align-items: center;
   display: grid;
   gap: 40px;
-  grid-template-columns: minmax(0, 1fr) 258px;
+  grid-template-columns: minmax(0, 1fr) 292px;
   /* `.section` opens with 88px, the rhythm for marketing sections that need air above a headline.
      This page is a data surface whose job is the table below, so the heading sits close to the nav
      instead — the same call `.detail-top` already makes.
@@ -1696,16 +1709,21 @@ code, kbd, samp, pre {
   padding-top: 14px;
 }
 .hub-head-copy { min-width: 0; }
+/* CONTAIN, and a box that is NOT square. `BrandRender` hands <Image> one `size` for both axes, so
+   the intrinsic ratio it declares is always 1:1 — fine for the round coin, wrong for these two,
+   which arrived as 874x551 and 1216x896 and were being squashed into squares. Constraining the box
+   and letting the image fit inside it keeps any artwork undistorted, including the next one that
+   gets swapped in at a ratio nobody told this stylesheet about. */
 .hub-render {
   filter: drop-shadow(var(--shadow-render));
-  height: 258px;
+  height: 212px;
   justify-self: end;
   pointer-events: none;
   position: relative;
-  width: 258px;
+  width: 292px;
   transform: translate3d(0, var(--parallax, 0px), 0);
 }
-.hub-render img { display: block; height: 100%; width: 100%; }
+.hub-render img { display: block; height: 100%; object-fit: contain; width: 100%; }
 .hub-head h1 { font-size: clamp(2rem, 3.7vw, 3.05rem); line-height: 1.03; margin: 14px 0 0; }
 .hub-lede {
   color: var(--ink-2);
@@ -1803,6 +1821,11 @@ a.hub-row:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; 
 
 /* The premium is the reason the page exists, so it is the one column allowed extra weight. */
 .hub-premium b { font-size: .92rem; font-weight: 600; }
+
+.hub-section .section-head + .hub-table { margin-top: 30px; }
+
+/* The distributions ledger shares the hub's row, minus the sparkline and premium columns. */
+.dist-row { grid-template-columns: minmax(190px, 2fr) 1fr 1fr 1.1fr 1.1fr 14px; }
 
 .hub-spark { display: flex; justify-content: flex-end; }
 
@@ -2248,6 +2271,7 @@ a.pool-row:hover { background: var(--surface-2); }
 
 @media (max-width: 1080px) {
   .hub-row { grid-template-columns: minmax(150px, 1.9fr) 1fr 1fr 1fr 1fr 1fr 14px; }
+  .dist-row { grid-template-columns: minmax(150px, 1.8fr) 1fr 1fr 1fr 1fr 14px; }
   /* The sparkline is the first thing to go: it carries shape, and every other column carries a
      number someone might act on. */
   .hub-spark, .hub-row-head > span:nth-child(4) { display: none; }
@@ -2267,7 +2291,7 @@ a.pool-row:hover { background: var(--surface-2); }
      one line and lays its figures out underneath, each one labelled, so nothing is a bare number. */
   .hub-table { background: transparent; border: 0; box-shadow: none; }
   .hub-row-head { display: none; }
-  .hub-row {
+  .hub-row, .dist-row {
     background: var(--surface);
     border: 1px solid var(--line);
     border-radius: var(--r-md);
@@ -2309,7 +2333,7 @@ a.pool-row:hover { background: var(--surface-2); }
 }
 
 @media (max-width: 560px) {
-  .hub-row { grid-template-columns: repeat(2, 1fr); }
+  .hub-row, .dist-row { grid-template-columns: repeat(2, 1fr); }
   .fact-grid, .fact-grid-tight { grid-template-columns: repeat(2, 1fr); }
   .chart-svg { height: 190px; }
 }
@@ -2359,7 +2383,6 @@ a.pool-row:hover { background: var(--surface-2); }
   .site-nav-inner { border-radius: 22px; flex-wrap: wrap; gap: 8px 10px; min-height: 0; padding: 10px 10px 8px 12px; }
   .brandmark { font-size: 1.1rem; }
   .stockify-mark { height: 30px; width: 30px; }
-  .base-pill { margin-left: auto; }
   .site-links { justify-content: space-between; margin: 0; order: 3; width: 100%; }
   .site-links a { font-size: .76rem; padding: 7px 10px; }
 
