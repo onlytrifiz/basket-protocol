@@ -219,6 +219,17 @@ h1 em, h2 em { font-style: normal; font-weight: 600; }
 .universe-head, .universe-legend b, .index-universe > p,
 .desk-head p, .desk-metrics strong, .table-head, .desk-cycle-meta,
 .flow-strip span,
+.swap-leg label, .swap-currency, .swap-foot,
+.swap-slippage > span, .swap-slippage button,
+.footer-links span, .footer-meta,
+.docs-status-row span, .docs-nav > span, .docs-nav a b, .docs-source-link,
+.docs-section-label, .docs-contracts li, .docs-contract-head code,
+.docs-cycle > li > span, .docs-cycle-head small, .docs-formula span,
+.docs-split-grid span, .docs-role-grid span, .docs-launch-grid article > span,
+code, kbd, samp, pre {
+  font-family: var(--mono-stack);
+  font-variant-numeric: tabular-nums;
+}
 
 .eyebrow {
   color: var(--ink-3);
@@ -1922,7 +1933,7 @@ a.hub-row:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; 
 
 .hub-section .section-head + .hub-table { margin-top: 30px; }
 
-/* The distributions ledger shares the hub's row, minus the sparkline and premium columns. */
+/* The dividend ledger shares the hub's row, minus the sparkline and premium columns. */
 .dist-row { grid-template-columns: minmax(190px, 2fr) 1fr 1fr 1.1fr 1.1fr 14px; }
 
 .hub-spark { display: flex; justify-content: flex-end; }

@@ -11,7 +11,7 @@ import { SiteFooter, SiteHeader } from "../components/site-chrome";
 import { StockLogo } from "../components/stock-logo";
 
 export const metadata: Metadata = {
-  title: "Distributions — Stockify",
+  title: "Dividend — Stockify",
   description: "The live dividend index, vault holdings and payout mechanics for Stockify on Base.",
 };
 
@@ -29,7 +29,7 @@ const phases = [
 const toUnits = (raw: string | null, decimals: number) =>
   raw === null ? null : Number(BigInt(raw)) / 10 ** decimals;
 
-export default async function DistributionsPage() {
+export default async function DividendPage() {
   const [vault, assets, ledger] = await Promise.all([readVault(), readAssets(), readCycles()]);
 
   const byAddress = new Map(assets.map((a) => [a.address.toLowerCase(), a]));
@@ -61,7 +61,7 @@ export default async function DistributionsPage() {
 
   return (
     <div className="site-shell">
-      <SiteHeader active="distributions" />
+      <SiteHeader active="dividend" />
       <main>
         <header className="section wrap hub-head">
           <div className="hub-head-copy">
@@ -115,7 +115,7 @@ export default async function DistributionsPage() {
           <div className="desk-inner">
             <div className="desk-head">
               <div>
-                <p>SETTLED DISTRIBUTIONS</p>
+                <p>SETTLED DIVIDENDS</p>
                 <h2>{ledger.cycles.length === 0 ? "No cycles yet." : `${ledger.cycles.length} recent ${ledger.cycles.length === 1 ? "cycle" : "cycles"}.`}</h2>
               </div>
               <div className="desk-cycle">

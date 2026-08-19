@@ -7,7 +7,7 @@ import { stockByAddress } from "./stocks";
  *
  * THE INDEX IS NOT A CONSTANT IN THIS REPO. `stocksLength()` / `stockAt()` are the source of truth
  * for which equities the vault buys and in what proportion, and ownership can change both between
- * cycles. Reading them means the distributions page cannot drift from what the contract will
+ * cycles. Reading them means the dividend page cannot drift from what the contract will
  * actually do — a hardcoded list would keep rendering last month's index with total conviction.
  *
  * Every figure here is a live read. The page it feeds is a ledger, and a ledger that shows a

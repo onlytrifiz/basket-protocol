@@ -20,7 +20,7 @@ import { SwapPanel } from "./components/swap-panel";
  *
  * When it came out static, the vault's answer at build time was frozen into the HTML: a build that
  * ran while the public RPC was throttled shipped "the index could not be read" for the life of the
- * deploy. /stocks and /distributions escaped only because they also call the market API directly.
+ * deploy. /stocks and /dividend escaped only because they also call the market API directly.
  *
  * Forced, so it is a decision rather than an accident. The reads are still cached for 30-60s each,
  * so per-request rendering costs no extra RPC traffic.
@@ -36,7 +36,7 @@ const mechanics = [
 ];
 
 export default async function Home() {
-  // The same read /distributions makes. A homepage claiming a different index from the page that
+  // The same read /dividend makes. A homepage claiming a different index from the page that
   // shows the vault would be two answers to one question.
   // Weights from the vault, marks from the tokens themselves — the same `contractURI()` icons the
   // hub uses, so a ticker Base lists tomorrow arrives correctly branded here too.
@@ -67,7 +67,7 @@ export default async function Home() {
               <p className="eyebrow">BASE · B20 EQUITY DIVIDENDS</p>
               <h1>Hold Stockify.<br /><span>Receive stocks.</span></h1>
               <p className="hero-lede">Stockify routes trading fees into Base-native tokenized equities, then distributes the acquired assets to qualifying STFY holders.</p>
-              <div className="hero-actions"><Link className="button button-ink" href="/distributions">View distributions <span>→</span></Link><Link className="button button-ghost" href="/docs">Read the docs</Link></div>
+              <div className="hero-actions"><Link className="button button-ink" href="/dividend">View the dividend <span>→</span></Link><Link className="button button-ghost" href="/docs">Read the docs</Link></div>
               <p className="hero-note"><i /> 3% trading fee · 90% allocated to stocks · push payouts</p>
             </div>
             <div className="hero-swap"><SwapPanel /></div>
@@ -97,7 +97,7 @@ export default async function Home() {
             <Link className="equity-card is-action" href="/stocks">
               <span className="equity-name"><strong>All stocks</strong><span>Every B20 on Base</span></span>
             </Link>
-            <Link className="equity-card is-action" href="/distributions">
+            <Link className="equity-card is-action" href="/dividend">
               <span className="equity-name"><strong>The vault</strong><span>What it buys</span></span>
             </Link>
           </StockGrid></section>

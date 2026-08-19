@@ -261,7 +261,7 @@ export default function DocsPage() {
                   <article><span>03</span><h3>Validate routes and policies</h3><p>Confirm each active B20 route and receiver policy. The supplied keeper skips a full buy when any active stock has no complete route.</p></article>
                   <article><span>04</span><h3>Publish operations</h3><p>Publish verified addresses, multisig and keeper policy, monitoring, and the first distribution transaction data before calling the market live.</p></article>
                 </div>
-                <div className="docs-callout"><p className="eyebrow">RELATED</p><h2>See the empty distribution ledger.</h2><p>Until the protocol is live, the dashboard intentionally shows no estimated APY or simulated payout history.</p><Link className="button button-ink" href="/distributions">Distribution desk <span>→</span></Link></div>
+                <div className="docs-callout"><p className="eyebrow">RELATED</p><h2>See the empty distribution ledger.</h2><p>Until the protocol is live, the dashboard intentionally shows no estimated APY or simulated payout history.</p><Link className="button button-ink" href="/dividend">Distribution desk <span>→</span></Link></div>
               </div>
             </section>
           </div>
