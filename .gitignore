@@ -2,6 +2,7 @@ out/
 cache/
 /lib/
 .env
+.env*.local
 node_modules/
 
 # Frontend build and browser-test artifacts
