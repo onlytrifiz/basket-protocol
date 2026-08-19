@@ -249,29 +249,43 @@ async function loadCycles(): Promise<CycleLedger> {
   }
 
   const cycles: Cycle[] = [];
-  let pendingBought: Cycle["bought"] = [];
-  let pendingStockEth: string | null = null;
+  // Keyed by asset, because a cycle spans every purchase made since the previous one settled — the
+  // keeper buys on its own poll interval while a cycle can only START hourly, so an hour of trading
+  // is a dozen StockBought events per asset. Listing them raw drew twelve near-identical rows for
+  // one cycle; what a reader wants is what that cycle acquired, once per asset.
+  let pendingBought = new Map<string, { address: string; ethSpentWei: bigint; receivedRaw: bigint }>();
+  let pendingStockEth = 0n;
+  let sawStockEth = false;
 
   for (const log of logs.sort((a, b) => a.blockNumber - b.blockNumber)) {
     const topic = log.topics[0];
     if (topic === TOPIC.stockBought) {
-      pendingBought.push({
-        address: `0x${(log.topics[1] ?? "").slice(-40)}`,
-        ethSpentWei: wordInt(log.data, 0).toString(),
-        receivedRaw: wordInt(log.data, 1).toString(),
-      });
+      const address = `0x${(log.topics[1] ?? "").slice(-40)}`;
+      const key = address.toLowerCase();
+      const running = pendingBought.get(key) ?? { address, ethSpentWei: 0n, receivedRaw: 0n };
+      running.ethSpentWei += wordInt(log.data, 0);
+      running.receivedRaw += wordInt(log.data, 1);
+      pendingBought.set(key, running);
     } else if (topic === TOPIC.stocksBought) {
-      pendingStockEth = wordInt(log.data, 2).toString();
+      // Summed, not assigned. Overwriting reported only the LAST purchase before settlement, so a
+      // cycle that had deployed several ETH claimed the few hundredths of its final top-up.
+      pendingStockEth += wordInt(log.data, 2);
+      sawStockEth = true;
     } else if (topic === TOPIC.cycleCompleted) {
       cycles.push({
         blockNumber: log.blockNumber,
         txHash: log.transactionHash,
         holderCount: Number(wordInt(log.data, 0)),
-        stockEthWei: pendingStockEth,
-        bought: pendingBought,
+        stockEthWei: sawStockEth ? pendingStockEth.toString() : null,
+        bought: [...pendingBought.values()].map((b) => ({
+          address: b.address,
+          ethSpentWei: b.ethSpentWei.toString(),
+          receivedRaw: b.receivedRaw.toString(),
+        })),
       });
-      pendingBought = [];
-      pendingStockEth = null;
+      pendingBought = new Map();
+      pendingStockEth = 0n;
+      sawStockEth = false;
     }
   }
 
