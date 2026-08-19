@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { stocks, type IndexStock } from "../../lib/stocks";
+import { SegmentRing } from "./segment-ring";
 import { StockifyMark } from "./site-chrome";
 import { StockLogo } from "./stock-logo";
 
@@ -234,7 +235,7 @@ export function SwapPanel() {
       <div className="swap-details"><span>Input</span><b>Native ETH</b><span>Target</span><b>{target.symbol === "STFY" ? "Custom-hook pool" : "Base B20 token"}</b></div>
       {notice && <p className={`swap-notice${quote ? " is-ready" : ""}`}>{notice}</p>}
       {kycUrl && <a className="swap-kyc" href={kycUrl} rel="noreferrer" target="_blank">Verify wallet to trade ↗</a>}
-      <button className="swap-action" disabled={isBusy || Boolean(kycUrl) || needsStockifyConfig} onClick={quote ? executeSwap : requestQuote} type="button">{actionLabel}</button>
+      <button className="swap-action" disabled={isBusy || Boolean(kycUrl) || needsStockifyConfig} onClick={quote ? executeSwap : requestQuote} type="button">{isBusy ? <SegmentRing filled={2} motion="spin" size={15} stroke={16} /> : null}{actionLabel}</button>
       <p className="swap-foot">{account ? `Connected ${truncateAddress(account)}` : "Wallet signs the transaction; Stockify never takes custody."}</p>
     </aside>
   );

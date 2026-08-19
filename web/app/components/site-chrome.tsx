@@ -1,14 +1,22 @@
+import Image from "next/image";
 import Link from "next/link";
+import { ThemeToggle } from "./theme-toggle";
 
 type ActivePage = "overview" | "distributions" | "protocol" | "docs";
 
+/** The 3D coin render at UI scale — the brand's material world in miniature. */
 export function StockifyMark({ small = false }: { small?: boolean }) {
-  return <span className={`stockify-mark${small ? " stockify-mark-small" : ""}`} aria-hidden="true"><i />S</span>;
+  const size = small ? 26 : 34;
+  return (
+    <span aria-hidden="true" className={`stockify-mark${small ? " stockify-mark-small" : ""}`}>
+      <Image alt="" height={size} priority src="/logo.png" width={size} />
+    </span>
+  );
 }
 
 export function SiteHeader({ active }: { active: ActivePage }) {
   return (
-    <nav className="site-nav" aria-label="Primary navigation">
+    <nav aria-label="Primary navigation" className="site-nav">
       <div className="site-nav-inner">
         <Link className="brandmark" href="/"><StockifyMark /><span>Stockify</span></Link>
         <div className="site-links">
@@ -18,6 +26,7 @@ export function SiteHeader({ active }: { active: ActivePage }) {
           <Link className={active === "docs" ? "active" : ""} href="/docs">Docs</Link>
         </div>
         <span className="base-pill"><i /> Base</span>
+        <ThemeToggle />
       </div>
     </nav>
   );
