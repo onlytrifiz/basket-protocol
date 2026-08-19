@@ -53,14 +53,15 @@ type SwapTransaction = {
 const baseChainHex = "0x2105";
 
 /**
- * Slippage, in basis points, starting at 5%.
+ * Slippage, in basis points. Fixed, and generous.
  *
- * NOT the 0.5% an AMM front-end would default to. STFY trades through a custom v4 hook that takes
- * 300 bps in ETH on the way through, so anything under about 3% rejects the trade this card exists
- * to make — and the pool is new enough that depth moves the rest. The presets start where a fill is
- * plausible and go up from there.
+ * NO PICKER, because there is nothing here for a user to tune against: Base has no public mempool,
+ * so the sandwich this setting exists to prevent elsewhere cannot be built. What is left is ordinary
+ * price movement between quote and signature, and 5% simply absorbs it — well clear of the 300 bps
+ * the STFY hook takes on the way through, which is itself why an AMM front-end's 0.5% would reject
+ * the trade outright.
  */
-const SLIPPAGE_PRESETS = [500, 1000, 1500] as const;
+const SLIPPAGE_BPS = 500;
 /** Velora's native-asset sentinel. Paying in ETH needs no wrap and no approval. */
 const NATIVE_ETH = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 const stockifyAddress = process.env.NEXT_PUBLIC_STOCKIFY_TOKEN_ADDRESS ?? "";
@@ -115,7 +116,6 @@ export function SwapPanel() {
   const [sourceSymbol, setSourceSymbol] = useState("ETH");
   const [targetSymbol, setTargetSymbol] = useState("STFY");
   const [needsApproval, setNeedsApproval] = useState(false);
-  const [slippageBps, setSlippageBps] = useState<number>(SLIPPAGE_PRESETS[0]);
   const [kycUrl, setKycUrl] = useState<string>();
   const quoteToken = useRef(0);
   const pickerRef = useRef<HTMLDivElement>(null);
@@ -194,7 +194,7 @@ export function SwapPanel() {
         // client-supplied `destDecimals` was one typo away from quoting a trade 10^10 too large.
         srcToken: source.address,
         destToken: target.address,
-        slippageBps,
+        slippageBps: SLIPPAGE_BPS,
         swapper: forWallet ?? PREVIEW_ADDRESS,
       });
       if (token !== quoteToken.current) return;
@@ -226,7 +226,7 @@ export function SwapPanel() {
     } finally {
       if (token === quoteToken.current) setIsBusy(false);
     }
-  }, [account, amount, needsStockifyConfig, policyLeg, provider, source, target, slippageBps]);
+  }, [account, amount, needsStockifyConfig, policyLeg, provider, source, target]);
 
   // Quote as the amount is typed, settled by a short pause. Without a wallet this prices only —
   // asking someone to connect before they can see a number is the wrong order.
@@ -365,24 +365,6 @@ export function SwapPanel() {
         <div className="swap-target-row">
           <output className="swap-output" htmlFor="swap-amount">{quote ? formatUnits(quote.destAmount, quote.destDecimals) : "—"}</output>
           {picker("target")}
-        </div>
-      </div>
-      {/* "Input: Native ETH / Target: Custom-hook pool" restated the two rows above it. Slippage is
-          the one setting a trader here actually needs: STFY's pool carries a 3% hook fee, so a
-          default tuned for ordinary AMMs rejects the trade this card exists to make. */}
-      <div className="swap-slippage">
-        <span>Max slippage</span>
-        <div>
-          {SLIPPAGE_PRESETS.map((bps) => (
-            <button
-              className={bps === slippageBps ? "is-active" : undefined}
-              key={bps}
-              onClick={() => { setSlippageBps(bps); clearTradeState(); }}
-              type="button"
-            >
-              {bps / 100}%
-            </button>
-          ))}
         </div>
       </div>
       {notice ? (

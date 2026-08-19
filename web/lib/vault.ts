@@ -154,7 +154,10 @@ async function loadVault(): Promise<VaultState> {
     nextDistribution: Number(toBigInt(stateAt(1)) ?? 0n),
     availableEthWei: asString(2),
     eligibleSupplyRaw: asString(3),
-    holderCount: isAddress(TOKEN) ? Number(toBigInt(stateAt(4)) ?? 0n) : null,
+    // `?? 0n` here turned a reverted read into a confident zero — which is exactly what happens
+    // when STFY points at a plain ERC-20 with no holder registry, as it does while the real token
+    // is unbuilt. Null means unread, and the page prints a dash for it.
+    holderCount: isAddress(TOKEN) ? (toBigInt(stateAt(4)) === null ? null : Number(toBigInt(stateAt(4)))) : null,
     minShareBalanceRaw: isAddress(TOKEN) ? asString(5) : null,
   };
 }

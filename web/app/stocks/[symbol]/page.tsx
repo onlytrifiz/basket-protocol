@@ -200,7 +200,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
                     <div><dt>P/E</dt><dd>{profile.peRatio ? profile.peRatio.toFixed(1) : "—"}</dd></div>
                     <div><dt>Shares out</dt><dd>{compactNumber(profile.sharesOutstanding)}</dd></div>
                     <div><dt>Beta</dt><dd>{profile.beta ? profile.beta.toFixed(2) : "—"}</dd></div>
-                    <div><dt>Dividend</dt><dd>{profile.dividendYield ? `${profile.dividendYield.toFixed(2)}%` : "none"}</dd></div>
+                    <div><dt>Dividends</dt><dd>{profile.dividendYield ? `${profile.dividendYield.toFixed(2)}%` : "none"}</dd></div>
                     <div><dt>Listed</dt><dd>{profile.ipo ? profile.ipo.slice(0, 4) : "—"}</dd></div>
                     <div className="fact-wide">
                       <dt>52-week range</dt>

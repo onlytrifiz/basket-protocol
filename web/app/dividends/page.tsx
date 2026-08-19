@@ -11,7 +11,7 @@ import { SiteFooter, SiteHeader } from "../components/site-chrome";
 import { StockLogo } from "../components/stock-logo";
 
 export const metadata: Metadata = {
-  title: "Dividend — Stockify",
+  title: "Dividends — Stockify",
   description: "The live dividend index, vault holdings and payout mechanics for Stockify on Base.",
 };
 
@@ -38,13 +38,31 @@ export default async function DividendPage() {
     .filter(Boolean) as string[];
   const market = tickers.length ? await marketBoard(tickers) : { quotes: {}, series: {}, degraded: true };
 
+  /**
+   * What has actually LEFT the vault, per asset.
+   *
+   * The vault is emptied every cycle, so "what it holds" is near zero almost all the time and says
+   * nothing about whether the protocol is working — the number that does is what reached holders.
+   * Summed from the `StockBought` logs of every settled cycle in the window; each cycle buys and
+   * then pushes, so acquired and distributed are one quantity seen at two moments.
+   */
+  const distributedByAsset = new Map<string, number>();
+  for (const cycle of ledger.cycles) {
+    for (const bought of cycle.bought) {
+      const key = bought.address.toLowerCase();
+      distributedByAsset.set(key, (distributedByAsset.get(key) ?? 0) + Number(BigInt(bought.receivedRaw)) / 1e8);
+    }
+  }
+
   const rows = vault.holdings.map((holding) => {
     const asset = byAddress.get(holding.address.toLowerCase());
     const quote = asset?.ticker ? market.quotes[asset.ticker] : undefined;
     const held = toUnits(holding.heldRaw, holding.decimals);
     const unpaid = toUnits(holding.unpaidRaw, holding.decimals);
+    const distributed = distributedByAsset.get(holding.address.toLowerCase()) ?? 0;
     return {
-      holding, asset, quote, held, unpaid,
+      holding, asset, quote, held, unpaid, distributed,
+      distributedValue: quote?.price ? distributed * quote.price : null,
       value: held !== null && quote?.price ? held * quote.price : null,
     };
   });
@@ -56,21 +74,25 @@ export default async function DividendPage() {
     0,
   );
   const anyHeld = rows.some((r) => (r.held ?? 0) > 0);
+  const distributedValue = rows.reduce((sum, r) => sum + (r.distributedValue ?? 0), 0);
+  const anyDistributed = rows.some((r) => r.distributed > 0);
+  const windowHours = Math.round((ledger.windowBlocks * 2) / 3600);
   const eth = vault.availableEthWei === null ? null : Number(BigInt(vault.availableEthWei)) / 1e18;
   const threshold = vault.minShareBalanceRaw === null ? null : Number(BigInt(vault.minShareBalanceRaw)) / 1e18;
 
   return (
     <div className="site-shell">
-      <SiteHeader active="dividend" />
+      <SiteHeader active="dividends" />
       <main>
         <header className="section wrap hub-head">
           <div className="hub-head-copy">
             <p className="eyebrow">DIVIDEND DESK</p>
             <h1>See the assets leave the vault.</h1>
             <p className="hub-lede">
-              The index below is read from the dividend vault itself — which equities it buys, in what
-              proportion, what it is holding right now and what it already owes. Nothing on this page
-              is a projection, and there is no yield counter.
+              What has actually reached holders, read from the vault&apos;s own events — which equities
+              it bought, in what proportion, and how much of each has been pushed out. The vault is
+              drained every cycle, so its balance is not the story; what left it is. Nothing here is a
+              projection, and there is no yield counter.
             </p>
           </div>
           <BrandRender className="hub-render" priority size={340} src="/distributions.png" />
@@ -87,21 +109,25 @@ export default async function DividendPage() {
                   : "no cycle has run yet"}
               </small>
             </div>
+            {/* Distributed first. The vault is drained every cycle, so its balance is a number that
+                spends most of its life at zero — what reached holders is the one that accumulates. */}
             <div>
-              <span>Awaiting deployment</span>
-              <strong>{eth === null ? "—" : `${eth.toFixed(4)} ETH`}</strong>
-              <small>hook fees held for the next buy</small>
+              <span>Distributed</span>
+              <strong>{anyDistributed ? usdCompact(distributedValue) : "—"}</strong>
+              <small>{anyDistributed ? `to holders, last ${windowHours}h` : "no cycle has settled yet"}</small>
             </div>
             <div>
-              <span>Stocks acquired</span>
-              <strong>{anyHeld ? usdCompact(acquired) : "—"}</strong>
-              <small>{anyHeld ? "at current share prices" : "nothing bought yet"}</small>
+              <span>Awaiting the next buy</span>
+              <strong>{eth === null ? "—" : `${eth.toFixed(4)} ETH`}</strong>
+              <small>{anyHeld ? `plus ${usdCompact(acquired)} in stock` : "hook fees, not yet deployed"}</small>
             </div>
             <div>
               <span>Eligible holders</span>
               <strong>{vault.holderCount === null ? "—" : vault.holderCount}</strong>
               <small>
-                {threshold === null ? "threshold unread" : `holding ${fmtShares(threshold)}+ STFY`}
+                {vault.holderCount === null
+                  ? "registry unreadable"
+                  : threshold === null ? "threshold unread" : `holding ${fmtShares(threshold)}+ STFY`}
               </small>
             </div>
           </div>
@@ -221,12 +247,12 @@ export default async function DividendPage() {
                 <span role="columnheader">Asset</span>
                 <span role="columnheader">Target weight</span>
                 <span role="columnheader">Share price</span>
-                <span role="columnheader">Vault holds</span>
+                <span role="columnheader">Distributed</span>
                 <span role="columnheader">Owed to holders</span>
                 <span aria-hidden="true" />
               </div>
 
-              {rows.map(({ holding, asset, quote, held, unpaid, value }) => (
+              {rows.map(({ holding, asset, quote, held, unpaid, distributed, distributedValue }) => (
                 <Link
                   className="hub-row dist-row"
                   href={asset ? `/stocks/${asset.symbol.toLowerCase()}` : `/stocks`}
@@ -251,11 +277,15 @@ export default async function DividendPage() {
                     <small>{quote ? "Nasdaq" : "unavailable"}</small>
                   </span>
 
-                  {/* Held and owed are different claims on the same balance: the first is what the
-                      vault has bought, the second what it has already credited and not yet pushed. */}
-                  <span className="hub-num" data-label="Vault holds" role="cell">
-                    <b>{fmtShares(held)}</b>
-                    <small>{held === null ? "unread" : value !== null && held > 0 ? usdCompact(value) : "none acquired"}</small>
+                  {/* Distributed is the cumulative figure; what the vault currently holds rides
+                      along underneath it, because between cycles that is almost always nothing. */}
+                  <span className="hub-num" data-label="Distributed" role="cell">
+                    <b>{distributed > 0 ? fmtShares(distributed) : "—"}</b>
+                    <small>
+                      {distributed > 0
+                        ? distributedValue !== null ? usdCompact(distributedValue) : "shares"
+                        : held !== null && held > 0 ? `${fmtShares(held)} held` : "none yet"}
+                    </small>
                   </span>
 
                   <span className="hub-num" data-label="Owed to holders" role="cell">
@@ -276,11 +306,11 @@ export default async function DividendPage() {
             </p>
           )}
 
-          {!anyHeld && vault.live && (
+          {!anyDistributed && vault.live && (
             <p className="hub-note-degraded">
-              The vault holds none of these yet. It is accruing hook fees
-              {eth !== null && eth > 0 ? ` — ${eth.toFixed(4)} ETH so far` : ""}, and the first
-              acquisition happens when a cycle runs.
+              Nothing has been distributed in the last {windowHours} hours. The vault is accruing hook
+              fees{eth !== null && eth > 0 ? ` — ${eth.toFixed(4)} ETH so far` : ""}, and the first
+              push happens when a cycle runs.
             </p>
           )}
         </section>
