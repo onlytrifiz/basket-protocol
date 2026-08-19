@@ -67,7 +67,7 @@ contract LaunchPool is Script {
 
         // An existing token for the real launch; a throwaway one when probing the hook.
         address tokenAddress = vm.envOr("TOKEN", address(0));
-        if (tokenAddress == address(0)) tokenAddress = address(new TestToken(deployer));
+        if (tokenAddress == address(0)) tokenAddress = address(new TestToken(deployer, vm.envOr("NAME", string("Stockify Test")), vm.envOr("SYMBOL", string("TEST"))));
         IERC20 token = IERC20(tokenAddress);
 
         // Everything, unless deliberately overridden.

@@ -9,7 +9,7 @@ import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 /// has a live pool with real liquidity that Uniswap can review, and so the fee path can be observed
 /// end to end before the real ETH/STFY market is opened.
 contract TestToken is ERC20 {
-    constructor(address initialHolder) ERC20("Stockify Test", "TEST") {
+    constructor(address initialHolder, string memory name_, string memory symbol_) ERC20(name_, symbol_) {
         _mint(initialHolder, 1_000_000_000e18);
     }
 }
