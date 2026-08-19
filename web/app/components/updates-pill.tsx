@@ -19,10 +19,11 @@ export function UpdatesPill() {
 
   return (
     <Link className="updates-pill" href={href} rel="noreferrer" target="_blank">
+      {/* On a filled Telegram-blue pill the mark is knocked out white rather than drawn on its own
+          disc — a blue circle on a blue field reads as a smudge. */}
       <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false">
-        <circle cx="12" cy="12" r="12" fill="#229ED9" />
         <path
-          d="M5.5 11.7l11-4.24c.51-.19.96.12.79.9l-1.87 8.82c-.14.63-.52.79-1.05.49l-2.9-2.14-1.4 1.35c-.16.15-.29.29-.58.29l.2-2.95 5.38-4.86c.23-.2-.05-.32-.36-.12l-6.65 4.19-2.87-.9c-.62-.2-.63-.62.13-.92z"
+          d="M3.6 11.4l16.2-6.24c.75-.28 1.41.18 1.16 1.33l-2.75 12.98c-.21.93-.77 1.16-1.55.72l-4.27-3.15-2.06 1.99c-.23.23-.43.43-.86.43l.3-4.35 7.92-7.15c.34-.3-.08-.47-.53-.18l-9.79 6.17-4.22-1.32c-.92-.29-.94-.92.2-1.36z"
           fill="#fff"
         />
       </svg>

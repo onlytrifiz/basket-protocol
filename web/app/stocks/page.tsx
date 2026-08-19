@@ -58,9 +58,9 @@ export default async function StocksPage() {
     <div className="site-shell">
       <SiteHeader active="stocks" />
       <main>
+        <div className="updates-row wrap"><UpdatesPill /></div>
         <header className="section wrap hub-head">
           <div className="hub-head-copy">
-            <UpdatesPill />
             <p className="eyebrow">BASE · B20 UNIVERSE</p>
             <h1>Every tokenized stock on Base.</h1>
             <p className="hub-lede">

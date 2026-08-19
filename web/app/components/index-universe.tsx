@@ -1,36 +1,43 @@
 "use client";
 
 import { useState } from "react";
-import { stocks } from "../../lib/stocks";
-import { StockLogo } from "./stock-logo";
 
-const groups = [
-  { label: "Mega-cap technology", symbols: ["AAPLc", "GOOGLc", "METAc", "MSFTc"], color: "#7aa8ff" },
-  { label: "Semiconductors", symbols: ["NVDAc", "INTCc", "SNDKc"], color: "#ffffff" },
-  { label: "Market infrastructure", symbols: ["COINc", "CRCLc", "MSTRc"], color: "#5b88ec" },
-  { label: "Consumer", symbols: ["AMZNc", "TSLAc"], color: "#a9c6ff" },
-  { label: "Space", symbols: ["SPCXc"], color: "#274f9f" },
-];
+export type IndexSlice = { symbol: string; name: string; weightBps: number };
 
-const radius = 58;
-const circumference = 2 * Math.PI * radius;
+/**
+ * The dividend index as a donut — the four equities the vault actually buys, at their on-chain
+ * weights.
+ *
+ * It used to draw all thirteen listed assets grouped by sector, sized by TITLE COUNT, with a
+ * footnote admitting that was "not a target allocation". That is a chart of nothing: the segments
+ * answered a question — how many names are in each sector — that no reader of a dividend page has.
+ * The weights are real and on-chain, so the ring can mean what a ring normally means.
+ *
+ * Slices come from the server, which reads `stockAt()`. Ownership can change them between cycles.
+ */
+const COLORS = ["#7aa8ff", "#ffffff", "#5b88ec", "#a9c6ff", "#274f9f", "#3f6fd8"];
 
-/** Adapted from 21st's Sectors Donut (component 20086): hover/focus links the
- * SVG ring and the legend. Here it reports title count, never a fake allocation. */
-export function IndexUniverse() {
+const RADIUS = 58;
+const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
+
+export function IndexUniverse({ slices }: { slices: IndexSlice[] }) {
   const [active, setActive] = useState<number | null>(null);
-  let offset = 0;
 
-  const arcs = groups.map((group) => {
-    const percentage = (group.symbols.length / stocks.length) * 100;
-    const arc = { ...group, percentage, offset };
+  const total = slices.reduce((sum, slice) => sum + slice.weightBps, 0) || 1;
+  let offset = 0;
+  const arcs = slices.map((slice, index) => {
+    const percentage = (slice.weightBps / total) * 100;
+    const arc = { ...slice, percentage, offset, color: COLORS[index % COLORS.length] };
     offset += percentage;
     return arc;
   });
 
   return (
-    <aside className="index-universe" aria-label="Initial B20 equity universe">
-      <div className="universe-head"><span>INITIAL UNIVERSE</span><b>13 B20</b></div>
+    <aside className="index-universe" aria-label="Dividend index weights">
+      <div className="universe-head">
+        <span>DIVIDEND INDEX</span>
+        <b>{slices.length} B20</b>
+      </div>
       <div className="universe-body">
         <div className="universe-ring" aria-hidden="true">
           <svg viewBox="0 0 144 144">
@@ -40,24 +47,27 @@ export function IndexUniverse() {
                 cx="72"
                 cy="72"
                 fill="none"
-                key={arc.label}
+                key={arc.symbol}
                 onMouseEnter={() => setActive(index)}
                 onMouseLeave={() => setActive(null)}
-                r={radius}
+                r={RADIUS}
                 stroke={arc.color}
-                strokeDasharray={`${(arc.percentage / 100) * circumference - 3} ${circumference}`}
-                strokeDashoffset={-((arc.offset / 100) * circumference)}
+                strokeDasharray={`${(arc.percentage / 100) * CIRCUMFERENCE - 3} ${CIRCUMFERENCE}`}
+                strokeDashoffset={-((arc.offset / 100) * CIRCUMFERENCE)}
                 strokeWidth="14"
               />
             ))}
           </svg>
-          <div><strong>13</strong><span>titles</span></div>
+          <div>
+            <strong>{active === null ? slices.length : `${(arcs[active].percentage).toFixed(0)}%`}</strong>
+            <span>{active === null ? "assets" : arcs[active].symbol}</span>
+          </div>
         </div>
         <div className="universe-legend">
           {arcs.map((arc, index) => (
             <button
               className={active !== null && active !== index ? "is-dimmed" : ""}
-              key={arc.label}
+              key={arc.symbol}
               onBlur={() => setActive(null)}
               onFocus={() => setActive(index)}
               onMouseEnter={() => setActive(index)}
@@ -65,16 +75,13 @@ export function IndexUniverse() {
               type="button"
             >
               <i style={{ background: arc.color }} />
-              <span>{arc.label}</span>
-              <b>{arc.symbols.length}</b>
+              <span>{arc.name}</span>
+              <b>{(arc.weightBps / 100).toFixed(0)}%</b>
             </button>
           ))}
         </div>
       </div>
-      <div className="universe-tickers">
-        {stocks.map((stock) => <StockLogo key={stock.symbol} size="small" stock={stock} />)}
-      </div>
-      <p>Universe by title count — not a target allocation.</p>
+      <p>Target weights read from the vault — the index can change between cycles.</p>
     </aside>
   );
 }

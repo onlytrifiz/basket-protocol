@@ -208,24 +208,7 @@ h1 em, h2 em { font-style: normal; font-weight: 600; }
 .eyebrow,
 .waiting-chip, .theme-toggle,
 .stats-inner strong, .stats-inner span,
-.step-card > span, .roles-grid > article > span, .launch-rows > div > span,
-.launch-rows small, .payout-list article > span,
-.equity-symbol, .equity-tag, .equity-foot,
-.universe-head, .universe-legend b, .index-universe > p,
-.desk-head p, .desk-metrics strong, .table-head, .desk-cycle-meta,
-.flow-strip span,
-.swap-panel-head span, .swap-panel-head > b, .swap-leg label,
-.swap-currency, .swap-details b, .swap-foot,
-.footer-links span, .footer-meta,
-.docs-status-row span, .docs-nav > span, .docs-nav a b, .docs-source-link,
-.docs-section-label, .docs-contracts li, .docs-contract-head code,
-.docs-cycle > li > span, .docs-cycle-head small, .docs-formula span,
-.docs-split-grid span, .docs-role-grid span, .docs-launch-grid article > span,
-code, kbd, samp, pre {
-  font-family: var(--mono-stack);
-  font-variant-numeric: tabular-nums;
-}
-
+.step-card > span, .roles-grid > article > span, 
 .eyebrow {
   color: var(--ink-3);
   font-size: .68rem;
@@ -783,56 +766,39 @@ code, kbd, samp, pre {
 .index-head { align-items: end; display: grid; gap: 36px; grid-template-columns: 1.2fr .8fr; max-width: none; }
 .index-head > p { margin: 0 !important; max-width: 380px; }
 
-.equity-grid { display: grid; gap: 13px; grid-template-columns: repeat(4, 1fr); margin-top: 40px; }
+/* Compact rows, not 160px panels. This section is something the page passes through on its way to
+   /stocks, and thirteen tall cards were taking more attention than a signpost deserves. */
+.equity-grid { display: grid; gap: 8px; grid-template-columns: repeat(5, 1fr); margin-top: 32px; }
 .equity-card {
+  align-items: center;
   background: var(--surface);
   border: 1px solid var(--line);
-  border-radius: var(--r-md);
-  box-shadow: var(--shadow-1);
-  min-height: 160px;
-  padding: 16px;
-  transition: box-shadow .22s var(--ease), transform .22s var(--ease), border-color .22s var(--ease);
+  border-radius: var(--r-sm);
+  color: inherit;
+  display: flex;
+  gap: 9px;
+  min-width: 0;
+  padding: 9px 11px;
+  text-decoration: none;
+  transition: border-color .18s var(--ease), transform .18s var(--ease), box-shadow .18s var(--ease);
 }
 .equity-card:hover {
   border-color: var(--chip-line);
-  box-shadow: var(--shadow-2);
-  transform: translateY(-2px);
+  box-shadow: var(--shadow-1);
+  transform: translateY(-1px);
 }
-.equity-top, .equity-foot { align-items: center; display: flex; justify-content: space-between; }
-.equity-symbol {
-  align-items: center;
-  background: var(--chip);
-  border: 1px solid var(--chip-line);
-  border-radius: 8px;
-  color: var(--chip-fg);
-  display: inline-flex;
-  font-size: .57rem;
-  font-weight: 600;
-  height: 26px;
-  justify-content: center;
-  width: 26px;
-}
-.equity-tag { color: var(--link); font-size: .59rem; font-weight: 600; letter-spacing: .06em; }
-.equity-name { margin-top: 30px; }
+.equity-card .stock-logo { flex: none; }
+.equity-name { min-width: 0; }
 .equity-name strong, .equity-name span { display: block; }
-.equity-name strong { font-size: 1rem; letter-spacing: -.03em; }
+.equity-name strong { font-family: var(--mono-stack); font-size: .76rem; letter-spacing: -.01em; }
 .equity-name span {
   color: var(--ink-3);
-  font-size: .72rem;
-  margin-top: 3px;
+  font-size: .66rem;
+  margin-top: 1px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.equity-foot {
-  border-top: 1px solid var(--line);
-  color: var(--ink-3);
-  font-size: .59rem;
-  margin-top: 15px;
-  padding-top: 9px;
-}
-.equity-foot a:hover { color: var(--link); }
-.equity-foot > span { color: var(--ink); font-weight: 500; text-align: right; }
 
 .section-end { align-items: center; display: flex; justify-content: space-between; margin-top: 26px; }
 .section-end p { color: var(--ink-3); font-size: .76rem; margin: 0; }
@@ -863,32 +829,7 @@ code, kbd, samp, pre {
 .stock-logo-small img { height: 72%; width: 72%; }
 .stock-logo-large { height: 38px; width: 38px; }
 
-/* ---------- 11. Launch note ---------------------------------------------- */
 
-.launch-note {
-  align-items: start;
-  border-top: 1px solid var(--line);
-  display: grid;
-  gap: 75px;
-  grid-template-columns: .9fr 1.1fr;
-  padding-bottom: 96px;
-}
-.launch-note h2 { font-size: clamp(2rem, 3.4vw, 2.8rem); line-height: 1.05; }
-.launch-rows { border-top: 1px solid var(--line); }
-.launch-rows > div {
-  align-items: start;
-  border-bottom: 1px solid var(--line);
-  display: grid;
-  gap: 16px;
-  grid-template-columns: 28px 1fr auto;
-  min-height: 96px;
-  padding: 19px 0;
-}
-.launch-rows > div > span { color: var(--link); font-size: .66rem; font-weight: 600; }
-.launch-rows p { color: var(--ink-2); font-size: .79rem; line-height: 1.5; margin: 0; max-width: 340px; }
-.launch-rows p strong { color: var(--ink); display: block; font-size: .89rem; margin-bottom: 4px; }
-.launch-rows small { color: var(--ink-3); font-size: .62rem; padding-top: 2px; }
-.launch-rows a { color: var(--link); font-size: .76rem; font-weight: 600; padding-top: 2px; }
 
 /* ---------- 12. Information page intro ------------------------------------ */
 
@@ -1709,27 +1650,36 @@ code, kbd, samp, pre {
 }
 .hub-head-copy { min-width: 0; }
 
+/* Centred over the whole page rather than tucked into the copy column, and filled rather than
+   outlined: it is an invitation to leave for another channel, which has to out-shout a heading it
+   sits directly above or it reads as a caption. Telegram's own blue, since it is Telegram's link. */
+.updates-row { display: flex; justify-content: center; padding: 22px 24px 0; }
 .updates-pill {
   align-items: center;
-  background: var(--surface);
-  border: 1px solid var(--line-2);
+  background: #229ED9;
+  border: 0;
   border-radius: var(--r-pill);
-  box-shadow: var(--shadow-1);
-  color: var(--ink-2);
+  box-shadow: 0 1px 2px rgba(13, 29, 59, .1), 0 8px 22px -8px rgba(34, 158, 217, .65);
+  color: #fff;
   display: inline-flex;
-  font-size: .78rem;
+  font-size: .82rem;
+  font-weight: 500;
   gap: 9px;
-  margin-bottom: 18px;
   max-width: 100%;
-  padding: 6px 14px 6px 7px;
+  padding: 9px 18px;
   text-decoration: none;
-  transition: border-color .16s var(--ease), color .16s var(--ease), transform .16s var(--ease);
+  transition: background .16s var(--ease), box-shadow .16s var(--ease), transform .16s var(--ease);
 }
-.updates-pill:hover { border-color: #229ED9; color: var(--ink); transform: translateY(-1px); }
-.updates-pill svg { flex: none; height: 20px; width: 20px; }
+.updates-pill:hover {
+  background: #1c8dc4;
+  box-shadow: 0 1px 2px rgba(13, 29, 59, .1), 0 12px 28px -8px rgba(34, 158, 217, .8);
+  transform: translateY(-1px);
+}
+.updates-pill:focus-visible { outline: 2px solid var(--ink); outline-offset: 3px; }
+.updates-pill svg { flex: none; height: 19px; width: 19px; }
 .updates-pill span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.updates-pill b { color: var(--ink-3); font-weight: 500; transition: transform .16s var(--ease); }
-.updates-pill:hover b { color: #229ED9; transform: translateX(2px); }
+.updates-pill b { font-weight: 500; opacity: .85; transition: transform .16s var(--ease); }
+.updates-pill:hover b { transform: translateX(2px); }
 /* CONTAIN, and a box that is NOT square. `BrandRender` hands <Image> one `size` for both axes, so
    the intrinsic ratio it declares is always 1:1 — fine for the round coin, wrong for these two,
    which arrived as 874x551 and 1216x896 and were being squashed into squares. Constraining the box
@@ -2362,11 +2312,9 @@ a.pool-row:hover { background: var(--surface-2); }
 /* ---------- 25. Responsive ------------------------------------------------ */
 
 @media (max-width: 980px) {
-  .hero-inner, .launch-note, .parameters-inner, .operation-inner, .eligibility { grid-template-columns: 1fr; }
-  .hero-inner { gap: 44px; padding-top: 68px; }
+  .hero-inner,   .hero-inner { gap: 44px; padding-top: 68px; }
   .hero-swap, .index-showcase .index-universe, .swap-panel { max-width: 540px; width: 100%; }
-  .launch-note { gap: 38px; }
-  .parameters-inner, .operation-inner { gap: 44px; }
+    .parameters-inner, .operation-inner { gap: 44px; }
   .index-showcase { gap: 36px; grid-template-columns: 1fr; }
   .index-showcase .index-universe { margin-left: 0; }
   .steps-grid, .roles-grid { grid-template-columns: repeat(2, 1fr); }
@@ -2452,11 +2400,7 @@ a.pool-row:hover { background: var(--surface-2); }
   .equity-card { min-height: 0; }
   .equity-name { margin-top: 18px; }
   .section-end { align-items: flex-start; flex-direction: column; gap: 13px; }
-  .launch-note { padding-bottom: 66px; }
-  .launch-rows > div { grid-template-columns: 22px 1fr; }
-  .launch-rows small, .launch-rows a { grid-column: 2; }
-  .launch-rows p { max-width: none; }
-
+        
   .page-intro { padding-bottom: 52px; padding-top: 40px; }
   .page-intro h1 { font-size: clamp(2.6rem, 12vw, 3.35rem); }
   .page-intro > p:last-child { font-size: .95rem; }

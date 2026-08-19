@@ -90,6 +90,37 @@ type WriteFunction = "buyStocks" | "snapshotHolders" | "startCycle" | "distribut
 
 const sleep = (milliseconds: number) => new Promise((resolve) => setTimeout(resolve, milliseconds));
 
+/**
+ * The block of our most recent transaction, or undefined before the first one in a cycle.
+ *
+ * Every read after a write is pinned to it. Without that the keeper decides on state older than its
+ * own transaction: RPC endpoints load-balance across nodes, and one a block behind reports the cycle
+ * we have just opened as not existing, or a cycle we have just finished as still owing a payout. Both
+ * happened on the first live run — the keeper walked away from a started cycle, then retried a batch
+ * on a closed one and ate a revert.
+ */
+let lastWriteBlock: bigint | undefined;
+
+/** Read vault state, never older than our own last transaction, retrying a lagging node. */
+async function read<T>(functionName: string, args: readonly unknown[] = []): Promise<T> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return (await publicClient.readContract({
+        abi: vaultAbi,
+        address: vault,
+        args: args as never,
+        functionName: functionName as never,
+        ...(lastWriteBlock === undefined ? {} : { blockNumber: lastWriteBlock }),
+      })) as T;
+    } catch (error) {
+      // A node that has not caught up yet rejects the pinned block. Give it time rather than
+      // falling back to "latest", which is the stale answer we are guarding against.
+      if (attempt >= 4) throw error;
+      await sleep(700 * (attempt + 1));
+    }
+  }
+}
+
 async function write(functionName: WriteFunction, args: readonly unknown[]) {
   const request = {
     address: vault,
@@ -102,27 +133,23 @@ async function write(functionName: WriteFunction, args: readonly unknown[]) {
   const hash = await walletClient.writeContract({ ...request, gas: (gas * 12n) / 10n } as any);
   const receipt = await publicClient.waitForTransactionReceipt({ hash });
   if (receipt.status !== "success") throw new Error(`${functionName} reverted: ${hash}`);
+  lastWriteBlock = receipt.blockNumber;
   console.log(`  ${functionName}: ${hash}`);
 }
 
 async function readStocks(): Promise<Stock[]> {
-  const count = (await publicClient.readContract({ address: vault, abi: vaultAbi, functionName: "stocksLength" })) as bigint;
+  const count = await read<bigint>("stocksLength");
   const stocks: Stock[] = [];
   for (let index = 0n; index < count; index += 1n) {
-    const [token, weightBps] = (await publicClient.readContract({
-      address: vault,
-      abi: vaultAbi,
-      functionName: "stockAt",
-      args: [index],
-    })) as [Address, number];
+    const [token, weightBps] = await read<[Address, number]>("stockAt", [index]);
     stocks.push({ token: getAddress(token), weightBps: BigInt(weightBps) });
   }
   return stocks;
 }
 
 async function buy(stocks: Stock[]): Promise<void> {
-  let gross = (await publicClient.readContract({ address: vault, abi: vaultAbi, functionName: "availableEth" })) as bigint;
-  const cap = (await publicClient.readContract({ address: vault, abi: vaultAbi, functionName: "maxGrossSpendPerCycle" })) as bigint;
+  let gross = await read<bigint>("availableEth");
+  const cap = await read<bigint>("maxGrossSpendPerCycle");
   if (cap !== 0n && gross > cap) gross = cap;
   if (gross < minEthToBuy) {
     console.log(`  buy skipped: ${formatEther(gross)} ETH available`);
@@ -188,7 +215,7 @@ async function buy(stocks: Stock[]): Promise<void> {
 }
 
 async function distributeFromOnchainRegistry(): Promise<void> {
-  let active = (await publicClient.readContract({ address: vault, abi: vaultAbi, functionName: "cycleActive" })) as boolean;
+  let active = await read<boolean>("cycleActive");
   if (dryRun) {
     console.log(`  dry run: on-chain payout cycle is ${active ? "active" : "idle"}`);
     return;
@@ -196,14 +223,14 @@ async function distributeFromOnchainRegistry(): Promise<void> {
 
   let transactions = 0;
   if (!active) {
-    const next = (await publicClient.readContract({ address: vault, abi: vaultAbi, functionName: "nextDistribution" })) as bigint;
+    const next = await read<bigint>("nextDistribution");
     if (next !== 0n && next > BigInt(Math.floor(Date.now() / 1_000))) {
       console.log(`  payout not due until ${new Date(Number(next) * 1_000).toISOString()}`);
       return;
     }
 
     while (true) {
-      const remaining = (await publicClient.readContract({ address: vault, abi: vaultAbi, functionName: "snapshotRemaining" })) as bigint;
+      const remaining = await read<bigint>("snapshotRemaining");
       if (remaining === 0n) break;
       if (transactions >= maxBatchTransactions) return console.log("  payout paused: snapshot transaction cap reached");
       console.log(`  snapshotting ${remaining} registry holders`);
@@ -216,17 +243,18 @@ async function distributeFromOnchainRegistry(): Promise<void> {
   }
 
   while (active) {
-    const remaining = (await publicClient.readContract({ address: vault, abi: vaultAbi, functionName: "distributionRemaining" })) as bigint;
+    const remaining = await read<bigint>("distributionRemaining");
     if (remaining === 0n) return;
     if (transactions >= maxBatchTransactions) return console.log("  payout paused: distribution transaction cap reached");
     console.log(`  paying ${remaining} snapshotted holders`);
     await write("distributeBatch", [BigInt(payoutBatchSize)]);
     transactions += 1;
-    active = (await publicClient.readContract({ address: vault, abi: vaultAbi, functionName: "cycleActive" })) as boolean;
+    active = await read<boolean>("cycleActive");
   }
 }
 
 async function cycle(): Promise<void> {
+  lastWriteBlock = undefined;
   const stocks = await readStocks();
   console.log(`[cycle] ${new Date().toISOString()} | ${stocks.length} B20 stocks`);
   await buy(stocks);
