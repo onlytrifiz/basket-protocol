@@ -591,16 +591,16 @@ code, kbd, samp, pre {
   overflow: hidden;
   position: relative;
 }
-.flow-strip img { height: 100%; object-fit: cover; object-position: 62% center; width: 100%; }
-.flow-strip::after {
-  background:
-    linear-gradient(90deg, var(--desk) 0%, color-mix(in srgb, var(--desk) 55%, transparent) 22%, transparent 42%),
-    linear-gradient(270deg, var(--desk) 0%, color-mix(in srgb, var(--desk) 40%, transparent) 18%, transparent 34%);
-  content: "";
-  inset: 0;
-  pointer-events: none;
-  position: absolute;
-}
+/* CONTAIN, not cover. The render is 3:1 and the band is roughly 6:1, so covering it scaled the
+   artwork until more than half its height was cropped away — the outer coins and the whole lower
+   arc of the ring were simply gone. Contained, the composition survives intact and sits smaller,
+   which is the trade this band wants: it is a divider, not a hero.
+
+   No edge gradient any more either. It existed to fade a full-bleed crop into the desk; against a
+   centred transparent render it would instead dim the leftmost coins while masking nothing, and the
+   PNG's own alpha already falls off at both ends. The labels keep their contrast because the
+   artwork no longer reaches them. */
+.flow-strip img { height: 100%; object-fit: contain; object-position: center; width: 100%; }
 .flow-strip-labels {
   align-items: center;
   display: flex;
@@ -2280,6 +2280,18 @@ a.pool-row:hover { background: var(--surface-2); }
   .docs-flow > div:nth-of-type(3) { grid-column: 1 / 2; }
   .docs-flow > div:nth-of-type(4) { grid-column: 3 / 4; }
   .flow-strip { height: 190px; }
+  /* Narrow enough and the contained render reaches the label; below ~660px it fills the width and
+     sits right under it. The scrim is sized in PIXELS to the label rather than as a percentage of
+     the viewport, because the artwork's left edge moves with both viewport AND band height — a
+     percentage that clears it at 1440 dims it at 900. Wide screens never load this rule at all. */
+  .flow-strip::after {
+    background: linear-gradient(90deg, var(--desk) 0%, color-mix(in srgb, var(--desk) 72%, transparent) 48%, transparent 100%);
+    content: "";
+    inset: 0 auto 0 0;
+    pointer-events: none;
+    position: absolute;
+    width: 215px;
+  }
 }
 
 @media (max-width: 660px) {
@@ -2301,7 +2313,6 @@ a.pool-row:hover { background: var(--surface-2); }
   .hero-note { font-size: .71rem; line-height: 1.45; }
   .hero-render { height: 104px; right: 12px; top: -22px; width: 104px; }
   .flow-strip { height: 150px; }
-  .flow-strip img { object-position: 70% center; }
   .flow-strip-labels { padding: 0 20px; }
   .flow-strip strong { font-size: .82rem; }
   .flow-strip-out { display: none; }

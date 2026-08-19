@@ -170,7 +170,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
 
               {market && market.news.length > 0 && (
                 <section className="detail-panel">
-                  <h2>Recent coverage</h2>
+                  <h2>Recent news</h2>
                   <ul className="news-list">
                     {market.news.map((item) => (
                       <li key={item.url}>
