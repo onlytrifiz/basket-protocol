@@ -32,6 +32,7 @@ type DexPair = {
   baseToken: { address: string; symbol: string };
   quoteToken: { address: string; symbol: string };
   priceUsd?: string;
+  priceNative?: string;
   liquidity?: { usd?: number };
   volume?: { h24?: number };
   priceChange?: { h24?: number };
@@ -47,6 +48,9 @@ export type Pool = {
   url: string;
   quoteSymbol: string;
   priceUsd: number;
+  /** Price in the pair's QUOTE token — for an ETH-quoted pool, the token's price in ETH. This is
+   *  what a direct router needs: USD would have to be converted back through an ETH price. */
+  priceNative: number;
   liquidityUsd: number;
   volume24Usd: number;
   priceChange24: number;
@@ -78,6 +82,7 @@ function toPool(pair: DexPair, minLiq: number): Pool {
     url: pair.url,
     quoteSymbol: pair.quoteToken?.symbol ?? "",
     priceUsd: Number(pair.priceUsd ?? 0),
+    priceNative: Number(pair.priceNative ?? 0),
     liquidityUsd: Math.round(liquidityUsd),
     volume24Usd: Math.round(Number(pair.volume?.h24 ?? 0)),
     priceChange24: Number(pair.priceChange?.h24 ?? 0),

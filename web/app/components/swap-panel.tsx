@@ -4,12 +4,21 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { stocks, type IndexStock } from "../../lib/stocks";
 import { SegmentRing } from "./segment-ring";
 import { StockifyMark } from "./site-chrome";
+import type { Pool } from "../../lib/pools";
+import { allowanceCall, approveCall, buyCall, estimateOut, hasRouter, ROUTER, sellCall } from "../../lib/stfyRoute";
 import { CoinMark } from "./coin-mark";
 import { StockLogo } from "./stock-logo";
 
-/** Raw units to a short human string, without pulling in a formatting dependency. */
+/**
+ * Raw units to a short human string, without pulling in a formatting dependency.
+ *
+ * Six fixed decimals suits ETH and fails a token priced at 2.4e-9 of one: selling a tenth of a STFY
+ * rounded a real quote to "0". Below that threshold it switches to significant digits, so a
+ * genuinely tiny output reads as tiny rather than as nothing.
+ */
 function formatUnits(raw: string, decimals: number) {
   const value = Number(BigInt(raw)) / 10 ** decimals;
+  if (value > 0 && value < 0.000001) return value.toLocaleString("en-US", { maximumSignificantDigits: 4 });
   return value.toLocaleString("en-US", { maximumFractionDigits: 6 });
 }
 import { truncateAddress, useWallet, type Eip1193Provider } from "./wallet";
@@ -116,6 +125,8 @@ export function SwapPanel() {
   const [sourceSymbol, setSourceSymbol] = useState("ETH");
   const [targetSymbol, setTargetSymbol] = useState("STFY");
   const [needsApproval, setNeedsApproval] = useState(false);
+  /** The STFY pool, read once — the direct route prices itself from its mid price. */
+  const [stfyPool, setStfyPool] = useState<Pool | null>(null);
   const [kycUrl, setKycUrl] = useState<string>();
   const quoteToken = useRef(0);
   const pickerRef = useRef<HTMLDivElement>(null);
@@ -143,13 +154,24 @@ export function SwapPanel() {
   const policyLeg = source.stock ? source : target.stock ? target : null;
   // An address is not a market: the ETH/STFY pool is not initialised yet, so quoting it would ask
   // Velora for a route that cannot exist. Gated on the pool id, which only exists once it does.
-  const needsStockifyConfig =
-    (target.symbol === "STFY" || source.symbol === "STFY") && !process.env.NEXT_PUBLIC_STOCKIFY_POOL_ID;
+  /**
+   * ETH<->STFY does not go through the aggregator.
+   *
+   * No aggregator will route a pool whose hook is not on its allowlist, and this one's never will be
+   * while it is unreviewed — Velora answers "no routes with enough liquidity" for a pair DexScreener
+   * indexes with real depth. `StockifyRouter` calls the manager directly instead.
+   */
+  const isDirect = source.symbol === "STFY" || target.symbol === "STFY";
+  const needsStockifyConfig = isDirect && !hasRouter;
 
   /** Swap the legs. Picking the asset already on the other side flips rather than duplicating it. */
   function flip() {
-    setSourceSymbol(targetSymbol);
+    // An amount sized for ETH is meaningless for a token worth 2.4e-9 of one, so the field resets to
+    // something the new pay asset can plausibly be spent in.
+    const next = targetSymbol;
+    setSourceSymbol(next);
     setTargetSymbol(sourceSymbol);
+    setAmount(next === "ETH" ? "0.10" : next === "STFY" ? "1000000" : "1");
     clearTradeState();
   }
 
@@ -172,6 +194,44 @@ export function SwapPanel() {
     const forWallet = swapper ?? account;
     setIsBusy(true);
     try {
+      if (isDirect) {
+        const out = estimateOut(BigInt(raw), source.symbol === "STFY" ? "sell" : "buy", stfyPool);
+        if (token !== quoteToken.current) return;
+        if (out === null) {
+          setQuote(undefined);
+          setNotice("The STFY pool has no readable price yet.");
+          return;
+        }
+        // `minOut` is a floor, not MEV protection — Base has no public mempool. It only stops a
+        // badly mispriced call from filling, so it sits well below the estimate.
+        const minOut = (out * BigInt(10_000 - SLIPPAGE_BPS)) / 10_000n;
+        setQuote({
+          destAmount: out.toString(),
+          destDecimals: target.decimals,
+          executable: Boolean(forWallet),
+          spender: source.symbol === "STFY" ? ROUTER : null,
+          tx: source.symbol === "STFY"
+            ? { ...sellCall(BigInt(raw), minOut), value: "0" }
+            : { ...buyCall(minOut), value: raw },
+          venues: [],
+        });
+        setQuoteAt(Date.now());
+        setNotice(undefined);
+
+        if (forWallet && source.symbol === "STFY") {
+          const allowance = await provider().request({
+            method: "eth_call",
+            params: [allowanceCall(source.address, forWallet), "latest"],
+          });
+          if (token === quoteToken.current) {
+            setNeedsApproval(BigInt(typeof allowance === "string" && allowance !== "0x" ? allowance : "0x0") < BigInt(raw));
+          }
+        } else {
+          setNeedsApproval(false);
+        }
+        return;
+      }
+
       if (forWallet && policyLeg) {
         // Buying the equity makes the wallet its RECEIVER; selling makes it the SENDER. Checking the
         // wrong scope clears a wallet the transfer then rejects.
@@ -226,7 +286,22 @@ export function SwapPanel() {
     } finally {
       if (token === quoteToken.current) setIsBusy(false);
     }
-  }, [account, amount, needsStockifyConfig, policyLeg, provider, source, target]);
+    // `stfyPool` and `isDirect` belong here: the pool arrives AFTER the first quote attempt, and
+    // without them the callback kept its stale null and the panel stayed on "no readable price"
+    // until the user happened to type.
+  }, [account, amount, isDirect, needsStockifyConfig, policyLeg, provider, source, stfyPool, target]);
+
+  useEffect(() => {
+    if (!isDirect || !isConfiguredAddress(stockifyAddress)) return;
+    let cancelled = false;
+    fetch(`/api/pools?addr=${stockifyAddress}&minLiq=0`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("pool unavailable"))))
+      .then((body: { pools: Record<string, { best: Pool | null }> }) => {
+        if (!cancelled) setStfyPool(body.pools?.[stockifyAddress.toLowerCase()]?.best ?? null);
+      })
+      .catch(() => undefined);
+    return () => { cancelled = true; };
+  }, [isDirect]);
 
   // Quote as the amount is typed, settled by a short pause. Without a wallet this prices only —
   // asking someone to connect before they can see a number is the wrong order.
@@ -241,7 +316,9 @@ export function SwapPanel() {
     try {
       await provider().request({
         method: "eth_sendTransaction",
-        params: [{ from: account, to: source.address, data: `0x095ea7b3${pad32(quote.spender)}${"f".repeat(64)}` }],
+        params: [isDirect
+          ? { from: account, ...approveCall(source.address, BigInt(toBaseUnits(amount, source.decimals))) }
+          : { from: account, to: source.address, data: `0x095ea7b3${pad32(quote.spender)}${"f".repeat(64)}` }],
       });
       setNeedsApproval(false);
       setNotice("Approval submitted. Confirm the swap once it has been mined.");
@@ -289,7 +366,7 @@ export function SwapPanel() {
   }
 
   const actionLabel = needsStockifyConfig
-    ? "STFY pool pending"
+    ? "STFY router pending"
     : isBusy
     ? "Working…"
     : needsApproval
@@ -374,7 +451,9 @@ export function SwapPanel() {
           <svg aria-hidden="true" viewBox="0 0 16 16" focusable="false">
             <path d="M3.5 8.4l3 3 6-6.8" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
-          Best price available
+          {/* Not "best price available" on the direct path: no aggregator compared anything, this is
+              the only venue that carries the pair. Saying otherwise would be a small lie. */}
+          {isDirect ? "Direct through the STFY pool" : "Best price available"}
         </p>
       ) : null}
       {kycUrl && <a className="swap-kyc" href={kycUrl} rel="noreferrer" target="_blank">Verify wallet to trade ↗</a>}
