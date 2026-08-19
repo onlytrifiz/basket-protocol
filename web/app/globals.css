@@ -220,6 +220,7 @@ h1 em, h2 em { font-style: normal; font-weight: 600; }
 .desk-head p, .desk-metrics strong, .table-head, .desk-cycle-meta,
 .flow-strip span,
 .swap-leg label, .swap-currency, .swap-foot,
+.swap-slippage > span, .swap-slippage button,
 .footer-links span, .footer-meta,
 .docs-status-row span, .docs-nav > span, .docs-nav a b, .docs-source-link,
 .docs-section-label, .docs-contracts li, .docs-contract-head code,
@@ -1284,6 +1285,40 @@ code, kbd, samp, pre {
 }
 .swap-leg input::placeholder { color: rgba(255, 255, 255, .26); }
 .asset-trigger.is-static { cursor: default; }
+
+/* The one setting worth exposing on this card, in the same pill-group shape the asset chips use. */
+.swap-slippage {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  padding: 4px 2px 0;
+}
+.swap-slippage > span {
+  color: var(--desk-fg-3);
+  font-size: .62rem;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+.swap-slippage > div {
+  background: var(--desk-glass);
+  border: 1px solid var(--desk-line);
+  border-radius: var(--r-pill);
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+}
+.swap-slippage button {
+  background: transparent;
+  border: 0;
+  border-radius: var(--r-pill);
+  color: var(--desk-fg-3);
+  cursor: pointer;
+  font-size: .68rem;
+  padding: 4px 11px;
+  transition: background .16s var(--ease), color .16s var(--ease);
+}
+.swap-slippage button:hover { color: var(--desk-fg); }
+.swap-slippage button.is-active { background: var(--desk-glass-2); color: var(--desk-fg); }
 
 .swap-currency { color: var(--sky); font-size: .76rem; font-weight: 600;   align-items: center; display: inline-flex; gap: 6px;
 }

@@ -62,15 +62,14 @@ type SwapTransaction = {
 const baseChainHex = "0x2105";
 
 /**
- * Slippage, in basis points. Fixed, and generous.
+ * Slippage presets, in basis points, opening at 5%.
  *
- * NO PICKER, because there is nothing here for a user to tune against: Base has no public mempool,
- * so the sandwich this setting exists to prevent elsewhere cannot be built. What is left is ordinary
- * price movement between quote and signature, and 5% simply absorbs it — well clear of the 300 bps
- * the STFY hook takes on the way through, which is itself why an AMM front-end's 0.5% would reject
- * the trade outright.
+ * Not the 0.5% an AMM front-end defaults to: the STFY hook takes 300 bps in ETH on the way through,
+ * so anything under about 3% rejects the very trade this card exists to make. It is a floor rather
+ * than MEV protection — Base has no public mempool, so the sandwich this guards against elsewhere
+ * cannot be built here — but a thin pool still moves between quote and signature.
  */
-const SLIPPAGE_BPS = 500;
+const SLIPPAGE_PRESETS = [500, 1000, 1500] as const;
 /** Velora's native-asset sentinel. Paying in ETH needs no wrap and no approval. */
 const NATIVE_ETH = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 const stockifyAddress = process.env.NEXT_PUBLIC_STOCKIFY_TOKEN_ADDRESS ?? "";
@@ -125,6 +124,7 @@ export function SwapPanel() {
   const [sourceSymbol, setSourceSymbol] = useState("ETH");
   const [targetSymbol, setTargetSymbol] = useState("STFY");
   const [needsApproval, setNeedsApproval] = useState(false);
+  const [slippageBps, setSlippageBps] = useState<number>(SLIPPAGE_PRESETS[0]);
   /** The STFY pool, read once — the direct route prices itself from its mid price. */
   const [stfyPool, setStfyPool] = useState<Pool | null>(null);
   const [kycUrl, setKycUrl] = useState<string>();
@@ -214,7 +214,7 @@ export function SwapPanel() {
         }
         // `minOut` is a floor, not MEV protection — Base has no public mempool. It only stops a
         // badly mispriced call from filling, so it sits well below the estimate.
-        const minOut = (out * BigInt(10_000 - SLIPPAGE_BPS)) / 10_000n;
+        const minOut = (out * BigInt(10_000 - slippageBps)) / 10_000n;
         setQuote({
           destAmount: out.toString(),
           destDecimals: target.decimals,
@@ -264,7 +264,7 @@ export function SwapPanel() {
         // client-supplied `destDecimals` was one typo away from quoting a trade 10^10 too large.
         srcToken: source.address,
         destToken: target.address,
-        slippageBps: SLIPPAGE_BPS,
+        slippageBps,
         swapper: forWallet ?? PREVIEW_ADDRESS,
       });
       if (token !== quoteToken.current) return;
@@ -299,7 +299,7 @@ export function SwapPanel() {
     // `stfyPool` and `isDirect` belong here: the pool arrives AFTER the first quote attempt, and
     // without them the callback kept its stale null and the panel stayed on "no readable price"
     // until the user happened to type.
-  }, [account, amount, isDirect, needsStockifyConfig, policyLeg, provider, source, stfyPool, target]);
+  }, [account, amount, isDirect, needsStockifyConfig, policyLeg, provider, slippageBps, source, stfyPool, target]);
 
   useEffect(() => {
     if (!isDirect || !isConfiguredAddress(stockifyAddress)) return;
@@ -454,6 +454,22 @@ export function SwapPanel() {
           {picker("target")}
         </div>
       </div>
+      <div className="swap-slippage">
+        <span>Max slippage</span>
+        <div>
+          {SLIPPAGE_PRESETS.map((bps) => (
+            <button
+              className={bps === slippageBps ? "is-active" : undefined}
+              key={bps}
+              onClick={() => { setSlippageBps(bps); clearTradeState(); }}
+              type="button"
+            >
+              {bps / 100}%
+            </button>
+          ))}
+        </div>
+      </div>
+
       {needsStockifyConfig ? (
         <p className="swap-notice">
           {!hasToken
@@ -462,14 +478,14 @@ export function SwapPanel() {
         </p>
       ) : notice ? (
         <p className={`swap-notice${quote ? " is-ready" : ""}`}>{notice}</p>
-      ) : quote ? (
+      ) : quote && !isDirect ? (
+        // Only on the aggregator path, where something really was compared. The direct route has one
+        // venue, so it has nothing to announce.
         <p className="trade-route">
           <svg aria-hidden="true" viewBox="0 0 16 16" focusable="false">
             <path d="M3.5 8.4l3 3 6-6.8" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
-          {/* Not "best price available" on the direct path: no aggregator compared anything, this is
-              the only venue that carries the pair. Saying otherwise would be a small lie. */}
-          {isDirect ? "Direct through the STFY pool" : "Best price available"}
+          Best price available
         </p>
       ) : null}
       {kycUrl && <a className="swap-kyc" href={kycUrl} rel="noreferrer" target="_blank">Verify wallet to trade ↗</a>}
