@@ -103,7 +103,9 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
             </div>
             <div className="price-block price-block-spread">
               <span>Premium</span>
-              <strong className={spread === null ? undefined : spread >= 0 ? "is-up" : "is-down"}>
+              {/* Green is the DISCOUNT: below the share price is the side a buyer wants, which is
+                  the opposite of how a price-change figure would be coloured. */}
+              <strong className={spread === null ? undefined : spread <= 0 ? "is-up" : "is-down"}>
                 {spread === null ? "—" : percent(spread)}
               </strong>
               <small>{spread === null ? "needs both prices" : spread >= 0 ? "token above the share" : "token below the share"}</small>

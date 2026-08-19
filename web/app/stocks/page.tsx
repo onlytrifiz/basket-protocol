@@ -5,6 +5,7 @@ import { readAssets } from "../../lib/b20";
 import { marketBoard } from "../../lib/market";
 import { poolsForAll } from "../../lib/pools";
 import { percent, premium, shares, usd, usdCompact } from "../../lib/format";
+import { BrandRender } from "../components/brand-render";
 import { Sparkline } from "../components/sparkline";
 import { SiteFooter, SiteHeader } from "../components/site-chrome";
 import { StockLogo } from "../components/stock-logo";
@@ -57,14 +58,19 @@ export default async function StocksPage() {
       <SiteHeader active="stocks" />
       <main>
         <header className="section wrap hub-head">
-          <p className="eyebrow">BASE · B20 UNIVERSE</p>
-          <h1>Every tokenized stock on Base.</h1>
-          <p className="hub-lede">
-            Coinbase issues these equities directly on Base as B20 tokens. Supply, splits and icons on
-            this page are read from the tokens themselves; the markets come from live Aerodrome and
-            Uniswap pools. The column worth reading is the last one — how far a token trades from the
-            share it represents.
-          </p>
+          <div className="hub-head-copy">
+            <p className="eyebrow">BASE · B20 UNIVERSE</p>
+            <h1>Every tokenized stock on Base.</h1>
+            <p className="hub-lede">
+              Coinbase issues these equities directly on Base as B20 tokens. Supply, splits and icons
+              on this page are read from the tokens themselves; the markets come from live Aerodrome
+              and Uniswap pools. The column worth reading is the last one — how far a token trades
+              from the share it represents.
+            </p>
+          </div>
+          {/* The same coins the table lists, which is the point: the render is the universe and the
+              rows are its numbers. Decorative — everything it depicts is named below it in text. */}
+          <BrandRender className="hub-render" priority size={300} src="/stocks.png" />
         </header>
 
         <section className="stats-band" aria-label="Universe at a glance">
@@ -133,10 +139,12 @@ export default async function StocksPage() {
                   <small>{pool?.poolCount ? `${pool.poolCount} pool${pool.poolCount === 1 ? "" : "s"}` : "no pools"}</small>
                 </span>
 
-                {/* The reason this page exists. Neutral when either side is missing: a premium
-                    against a price we could not read would be an invented number. */}
+                {/* The reason this page exists. GREEN IS THE DISCOUNT, not the rise: this column is
+                    not a price move, it is what the token costs against the share it represents, and
+                    below the share is the side a buyer wants. Neutral when either price is missing —
+                    a premium against a price we could not read would be an invented number. */}
                 <span className="hub-num hub-premium" data-label="Premium vs share" role="cell">
-                  <b className={spread === null ? undefined : spread >= 0 ? "is-up" : "is-down"}>
+                  <b className={spread === null ? undefined : spread <= 0 ? "is-up" : "is-down"}>
                     {spread === null ? "—" : percent(spread)}
                   </b>
                   <small>{spread === null ? "no pair" : spread >= 0 ? "over share" : "under share"}</small>

@@ -1200,7 +1200,8 @@ code, kbd, samp, pre {
   width: 100%;
 }
 .swap-leg input::placeholder { color: rgba(255, 255, 255, .26); }
-.swap-currency { color: var(--sky); font-size: .76rem; font-weight: 600; }
+.swap-currency { color: var(--sky); font-size: .76rem; font-weight: 600;   align-items: center; display: inline-flex; gap: 6px;
+}
 .swap-divider { align-items: center; display: flex; height: 14px; justify-content: center; position: relative; z-index: 1; }
 .swap-divider::before {
   background: var(--blue);
@@ -1672,7 +1673,27 @@ code, kbd, samp, pre {
 
 /* The hub is a data surface, so it borrows the mono/uppercase register the rest of the
    site reserves for figures, and drops the card padding that suits marketing copy. */
-.hub-head { padding-bottom: 34px; }
+/* Copy left, render right. The image is decorative and drops out entirely below 860px rather than
+   shrinking to a thumbnail — at that size it stops reading as a set of coins and just eats height
+   above a table someone came to read. */
+.hub-head {
+  align-items: center;
+  display: grid;
+  gap: 40px;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  padding-bottom: 34px;
+}
+.hub-head-copy { min-width: 0; }
+.hub-render {
+  filter: drop-shadow(var(--shadow-render));
+  height: 300px;
+  justify-self: end;
+  pointer-events: none;
+  position: relative;
+  width: 300px;
+  transform: translate3d(0, var(--parallax, 0px), 0);
+}
+.hub-render img { display: block; height: 100%; width: 100%; }
 .hub-head h1 { font-size: clamp(2rem, 3.7vw, 3.05rem); line-height: 1.03; margin: 14px 0 0; }
 .hub-lede {
   color: var(--ink-2);
@@ -2113,7 +2134,7 @@ a.pool-row:hover { background: var(--surface-2); }
 }
 .trade-leg input:focus-visible { outline: none; }
 .trade-leg input::placeholder { color: var(--desk-fg-3); }
-.trade-leg select, .trade-fixed {
+.trade-leg .trade-cash, .trade-fixed {
   align-items: center;
   background: var(--desk-glass-2);
   border: 1px solid var(--desk-line-2);
@@ -2126,7 +2147,17 @@ a.pool-row:hover { background: var(--surface-2); }
   gap: 6px;
   padding: 6px 11px;
 }
-.trade-leg select { cursor: pointer; }
+.trade-cash select {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  padding: 0 2px 0 0;
+}
+.trade-cash select:focus-visible { outline: 2px solid var(--sky); outline-offset: 3px; }
+.coin-mark { border-radius: 50%; display: block; flex: none; }
 .trade-fixed .stock-logo { height: 18px; width: 18px; }
 .trade-balance {
   background: none;
@@ -2154,6 +2185,21 @@ a.pool-row:hover { background: var(--surface-2); }
 }
 .trade-facts .is-up { color: var(--lime); }
 .trade-facts .is-down { color: #ff8f85; }
+
+/* A confirmation, not a diagnostic. It replaced a line naming the venues a trade cleared on, which
+   answered a question nobody buying a share was asking. */
+.trade-route {
+  align-items: center;
+  color: var(--lime);
+  display: flex;
+  font-family: var(--mono-stack);
+  font-size: .68rem;
+  gap: 7px;
+  letter-spacing: .04em;
+  margin: 0;
+  padding: 2px 0;
+}
+.trade-route svg { flex: none; height: 13px; width: 13px; }
 
 .trade-notice {
   background: var(--desk-glass);
@@ -2236,6 +2282,8 @@ a.pool-row:hover { background: var(--surface-2); }
   }
   .hub-premium { grid-column: 1 / -1; }
   .hub-notes { grid-template-columns: 1fr; gap: 22px; }
+  .hub-head { grid-template-columns: 1fr; }
+  .hub-render { display: none; }
 }
 
 @media (max-width: 760px) {

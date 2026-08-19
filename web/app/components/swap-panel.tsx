@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { stocks, type IndexStock } from "../../lib/stocks";
 import { SegmentRing } from "./segment-ring";
 import { StockifyMark } from "./site-chrome";
+import { CoinMark } from "./coin-mark";
 import { StockLogo } from "./stock-logo";
 
 /** Raw units to a short human string, without pulling in a formatting dependency. */
@@ -157,9 +158,10 @@ export function SwapPanel() {
       setKycUrl(undefined);
       setQuote({ ...nextQuote, executable: Boolean(forWallet) });
       setQuoteAt(Date.now());
-      // Naming the venues is the point of routing through Velora: this depth is split across
-      // Aerodrome and Uniswap, and the trader should see which ones filled the order.
-      setNotice(`Route via ${nextQuote.venues.join(" + ") || "Velora"}.`);
+      // Named venues were the wrong answer to "is this a good fill?". Nobody buying a share needs
+      // to know it cleared on aerodromeslipstreamfactory3; they need to know the aggregator looked
+      // and this was the best route it found. `notice` is left for problems only.
+      setNotice(undefined);
     } catch (error) {
       if (token !== quoteToken.current) return;
       setQuote(undefined);
@@ -225,7 +227,7 @@ export function SwapPanel() {
       <div className="swap-panel-head"><div><span>BUY ON BASE</span><strong>Trade ETH for stocks</strong></div></div>
       <div className="swap-leg">
         <label htmlFor="swap-amount">You pay</label>
-        <div><input id="swap-amount" inputMode="decimal" onChange={(event) => { setAmount(event.target.value); clearTradeState(); }} placeholder="0.00" value={amount} /><span className="swap-currency">ETH</span></div>
+        <div><input id="swap-amount" inputMode="decimal" onChange={(event) => { setAmount(event.target.value); clearTradeState(); }} placeholder="0.00" value={amount} /><span className="swap-currency"><CoinMark symbol="ETH" size={17} />ETH</span></div>
       </div>
       <div className="swap-divider" aria-hidden="true"><span>↓</span></div>
       <div className="swap-leg swap-leg-output">
@@ -268,7 +270,16 @@ export function SwapPanel() {
         </div>
       </div>
       <div className="swap-details"><span>Input</span><b>Native ETH</b><span>Target</span><b>{target.symbol === "STFY" ? "Custom-hook pool" : "Base B20 token"}</b></div>
-      {notice && <p className={`swap-notice${quote ? " is-ready" : ""}`}>{notice}</p>}
+      {notice ? (
+        <p className={`swap-notice${quote ? " is-ready" : ""}`}>{notice}</p>
+      ) : quote ? (
+        <p className="trade-route">
+          <svg aria-hidden="true" viewBox="0 0 16 16" focusable="false">
+            <path d="M3.5 8.4l3 3 6-6.8" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          Best price available
+        </p>
+      ) : null}
       {kycUrl && <a className="swap-kyc" href={kycUrl} rel="noreferrer" target="_blank">Verify wallet to trade ↗</a>}
       <button className="swap-action" disabled={isBusy || Boolean(kycUrl) || needsStockifyConfig} onClick={quote?.executable ? executeSwap : connectThenQuote} type="button">{isBusy ? <SegmentRing filled={2} motion="spin" size={15} stroke={16} /> : null}{actionLabel}</button>
       <p className="swap-foot">{account ? `Connected ${truncateAddress(account)}` : "Wallet signs the transaction; Stockify never takes custody."}</p>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { CoinMark } from "./coin-mark";
 import { StockLogo } from "./stock-logo";
 import { SegmentRing } from "./segment-ring";
 import { truncateAddress, useWallet } from "./wallet";
@@ -170,9 +171,10 @@ export function TradeCard({
       setBlocked(false);
       setQuote(next);
       setQuoteAt(Date.now());
-      // Naming the venues is the point of routing through an aggregator: this depth is split across
-      // Aerodrome and Uniswap, and the trader should see which ones filled the order.
-      setNotice(next.venues.length ? `Routed through ${next.venues.join(" + ")}.` : undefined);
+      // Named venues were the wrong answer to "is this a good fill?". Nobody buying a share needs to
+      // know it cleared on aerodromeslipstreamfactory3; they need to know the aggregator looked and
+      // this was the best route it found. `notice` is left for problems only.
+      setNotice(undefined);
 
       if (wallet && next.spender) {
         const allowance = BigInt(await ethCall(pay.address, "0xdd62ed3e" + pad32(wallet) + pad32(next.spender)));
@@ -307,9 +309,12 @@ export function TradeCard({
             onChange={(event) => { setAmount(event.target.value); reset(); }}
           />
           {side === "buy" ? (
-            <select aria-label="Pay with" onChange={(event) => { setCashSymbol(event.target.value as "ETH" | "USDC"); reset(); }} value={cashSymbol}>
-              {CASH.map((c) => <option key={c.symbol} value={c.symbol}>{c.symbol}</option>)}
-            </select>
+            <span className="trade-cash">
+              <CoinMark symbol={cashSymbol} />
+              <select aria-label="Pay with" onChange={(event) => { setCashSymbol(event.target.value as "ETH" | "USDC"); reset(); }} value={cashSymbol}>
+                {CASH.map((c) => <option key={c.symbol} value={c.symbol}>{c.symbol}</option>)}
+              </select>
+            </span>
           ) : (
             <span className="trade-fixed"><StockLogo stock={asset} logo={asset.logo} size="small" />{asset.symbol}</span>
           )}
@@ -328,9 +333,12 @@ export function TradeCard({
         <div className="trade-leg-body">
           <output>{quote ? fromBaseUnits(quote.destAmount, quote.destDecimals) : "—"}</output>
           {side === "sell" ? (
-            <select aria-label="Receive" onChange={(event) => { setCashSymbol(event.target.value as "ETH" | "USDC"); reset(); }} value={cashSymbol}>
-              {CASH.map((c) => <option key={c.symbol} value={c.symbol}>{c.symbol}</option>)}
-            </select>
+            <span className="trade-cash">
+              <CoinMark symbol={cashSymbol} />
+              <select aria-label="Receive" onChange={(event) => { setCashSymbol(event.target.value as "ETH" | "USDC"); reset(); }} value={cashSymbol}>
+                {CASH.map((c) => <option key={c.symbol} value={c.symbol}>{c.symbol}</option>)}
+              </select>
+            </span>
           ) : (
             <span className="trade-fixed"><StockLogo stock={asset} logo={asset.logo} size="small" />{asset.symbol}</span>
           )}
@@ -355,6 +363,13 @@ export function TradeCard({
         </p>
       ) : notice ? (
         <p className={`trade-notice${blocked ? " is-warn" : ""}`}>{notice}</p>
+      ) : quote ? (
+        <p className="trade-route">
+          <svg aria-hidden="true" viewBox="0 0 16 16" focusable="false">
+            <path d="M3.5 8.4l3 3 6-6.8" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+          Best price available
+        </p>
       ) : null}
 
       <button
