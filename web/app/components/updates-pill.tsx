@@ -1,14 +1,20 @@
 import Link from "next/link";
 
 /**
- * A link to the updates channel, shown only when there is one to link to.
+ * A link to the updates channel.
  *
- * Gated on `NEXT_PUBLIC_TELEGRAM_URL` rather than shipped with a guessed handle: `t.me/<something>`
- * that we did not verify either 404s or, worse, resolves to a channel belonging to someone else,
- * and a header pill is the most trusted link on the page. No URL configured, no pill.
+ * The handle is a default here rather than env-only because `.env.local` is gitignored: configured
+ * there, the pill would work locally and quietly vanish in production. It is not a secret, and it
+ * was verified before being hardcoded — t.me answers 200 with "Base Stocks Alerts · Powered by
+ * Stockify", which matters because a header pill is the most trusted link on the page and an
+ * unchecked t.me handle can resolve to a channel belonging to someone else entirely.
+ *
+ * `NEXT_PUBLIC_TELEGRAM_URL` still overrides, and setting it empty removes the pill.
  */
+const DEFAULT_CHANNEL = "https://t.me/basestocksalerts";
+
 export function UpdatesPill() {
-  const href = process.env.NEXT_PUBLIC_TELEGRAM_URL;
+  const href = process.env.NEXT_PUBLIC_TELEGRAM_URL ?? DEFAULT_CHANNEL;
   if (!href) return null;
 
   return (
