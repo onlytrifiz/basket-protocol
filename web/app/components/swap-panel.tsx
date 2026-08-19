@@ -28,6 +28,8 @@ const PREVIEW_ADDRESS = process.env.NEXT_PUBLIC_DIVIDEND_VAULT_ADDRESS
 
 type VeloraQuote = {
   destAmount: string;
+  /** Comes back from the route now, so the panel no longer has to infer 8-vs-18 from the target. */
+  destDecimals: number;
   executable?: boolean;
   tx: { to: string; data: string; value: string };
   venues: string[];
@@ -41,6 +43,8 @@ type SwapTransaction = {
 };
 
 const baseChainHex = "0x2105";
+/** Velora's native-asset sentinel. Paying in ETH needs no wrap and no approval. */
+const NATIVE_ETH = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 const stockifyAddress = process.env.NEXT_PUBLIC_STOCKIFY_TOKEN_ADDRESS ?? "";
 
 function isConfiguredAddress(value: string) {
@@ -88,6 +92,23 @@ export function SwapPanel() {
   const [targetSymbol, setTargetSymbol] = useState("STFY");
   const [kycUrl, setKycUrl] = useState<string>();
   const quoteToken = useRef(0);
+  const pickerRef = useRef<HTMLDivElement>(null);
+  const [isPickerOpen, setPickerOpen] = useState(false);
+
+  // A dropdown that ignores Escape or a click elsewhere is a dropdown that traps you.
+  useEffect(() => {
+    if (!isPickerOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!pickerRef.current?.contains(event.target as Node)) setPickerOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") setPickerOpen(false); };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [isPickerOpen]);
 
   const target = targets.find((entry) => entry.symbol === targetSymbol) ?? targets[0];
   // An address is not a market: the ETH/STFY pool is not initialised yet, so quoting it would ask
@@ -126,9 +147,11 @@ export function SwapPanel() {
 
       const nextQuote = await postJson<VeloraQuote>("/api/velora/swap", {
         amount: wei,
-        decimals: target.stock ? 8 : 18,
+        // The route takes both legs by address and resolves decimals from its own allowlist — a
+        // client-supplied `destDecimals` was one typo away from quoting a trade 10^10 too large.
+        srcToken: NATIVE_ETH,
+        destToken: target.address,
         swapper: forWallet ?? PREVIEW_ADDRESS,
-        tokenOut: target.address,
       });
       if (token !== quoteToken.current) return;
       setKycUrl(undefined);
@@ -193,15 +216,13 @@ export function SwapPanel() {
     ? "STFY pool pending"
     : isBusy
     ? "Preparing route…"
-    : quote
+    : quote?.executable
       ? "Confirm in wallet"
-      : account
-        ? "Get quote"
-        : "Connect wallet";
+      : "Connect wallet";
 
   return (
     <aside className="swap-panel" aria-label="Buy Stockify or a Base tokenized stock">
-      <div className="swap-panel-head"><div><span>BUY ON BASE</span><strong>Trade ETH for stocks</strong></div><b>UNISWAP v4</b></div>
+      <div className="swap-panel-head"><div><span>BUY ON BASE</span><strong>Trade ETH for stocks</strong></div></div>
       <div className="swap-leg">
         <label htmlFor="swap-amount">You pay</label>
         <div><input id="swap-amount" inputMode="decimal" onChange={(event) => { setAmount(event.target.value); clearTradeState(); }} placeholder="0.00" value={amount} /><span className="swap-currency">ETH</span></div>
@@ -210,11 +231,40 @@ export function SwapPanel() {
       <div className="swap-leg swap-leg-output">
         <label htmlFor="swap-target">You receive</label>
         <div className="swap-target-row">
-          {target.stock ? <StockLogo stock={target.stock} /> : <StockifyMark />}
-          <output className="swap-output" htmlFor="swap-amount">{quote ? formatUnits(quote.destAmount, target.stock ? 8 : 18) : "—"}</output>
-          <select id="swap-target" onChange={(event) => { setTargetSymbol(event.target.value); clearTradeState(); }} value={targetSymbol}>
-            {targets.map((entry) => <option key={entry.symbol} value={entry.symbol}>{entry.symbol} · {entry.name}</option>)}
-          </select>
+          <output className="swap-output" htmlFor="swap-amount">{quote ? formatUnits(quote.destAmount, quote.destDecimals) : "—"}</output>
+          <div className="asset-select" ref={pickerRef}>
+            <button
+              aria-expanded={isPickerOpen}
+              aria-haspopup="listbox"
+              className="asset-trigger"
+              id="swap-target"
+              onClick={() => setPickerOpen((open) => !open)}
+              type="button"
+            >
+              {target.stock ? <StockLogo stock={target.stock} /> : <StockifyMark small />}
+              <span>{target.symbol}</span>
+              <svg aria-hidden="true" className="asset-caret" viewBox="0 0 10 6"><path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="1.6" /></svg>
+            </button>
+            {isPickerOpen && (
+              <ul className="asset-menu" role="listbox" tabIndex={-1}>
+                {targets.map((entry) => (
+                  <li key={entry.symbol}>
+                    <button
+                      aria-selected={entry.symbol === targetSymbol}
+                      className={entry.symbol === targetSymbol ? "is-active" : undefined}
+                      onClick={() => { setTargetSymbol(entry.symbol); clearTradeState(); setPickerOpen(false); }}
+                      role="option"
+                      type="button"
+                    >
+                      {entry.stock ? <StockLogo stock={entry.stock} /> : <StockifyMark small />}
+                      <span className="asset-symbol">{entry.symbol}</span>
+                      <span className="asset-name">{entry.name}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
         </div>
       </div>
       <div className="swap-details"><span>Input</span><b>Native ETH</b><span>Target</span><b>{target.symbol === "STFY" ? "Custom-hook pool" : "Base B20 token"}</b></div>
