@@ -1,6 +1,5 @@
 import Image from "next/image";
 import Link from "next/link";
-import { BrandRender } from "./components/brand-render";
 import { IndexUniverse } from "./components/index-universe";
 import { RingMarker } from "./components/segment-ring";
 import { SiteFooter, SiteHeader } from "./components/site-chrome";
@@ -22,7 +21,6 @@ export default function Home() {
       <main>
         <header className="hero-card" id="overview">
           <div className="hero-inner">
-            <BrandRender className="hero-render" priority size={214} src="/logo.png" />
             <div className="hero-copy">
               <p className="eyebrow">BASE · B20 EQUITY DIVIDENDS</p>
               <h1>Hold Stockify.<br /><span>Receive stocks.</span></h1>
@@ -35,8 +33,8 @@ export default function Home() {
           <div className="flow-strip">
             <Image alt="" fill priority sizes="100vw" src="/header-transparent.png" />
             <div className="flow-strip-labels">
-              <div><span>Fees in</span><strong>3.00% hook fee, in ETH</strong></div>
-              <div className="flow-strip-out"><span>Stocks out</span><strong>B20 assets to holders</strong></div>
+              <div><span>Fees in</span><strong>3% hook fee</strong></div>
+              <div className="flow-strip-out"><span>Stocks out</span><strong>B20 stocks to holders</strong></div>
             </div>
           </div>
         </header>
@@ -50,7 +48,13 @@ export default function Home() {
 
         <section className="section wrap" id="how"><div className="section-head"><p className="eyebrow">THE DIVIDEND LOOP</p><h2>A stock dividend that starts with volume.</h2><p>Stockify does not reflect another token into your wallet. The vault acquires the B20 assets themselves and pushes the resulting entitlement to holders.</p></div><div className="steps-grid">{mechanics.map((step) => <article className="step-card" key={step.number}><RingMarker filled={step.filled} label={step.number} lit={step.lit} /><h3>{step.title}</h3><p>{step.copy}</p></article>)}</div></section>
 
-        <section className="section wrap" id="index"><div className="index-showcase"><div className="section-head index-head"><div><p className="eyebrow">INITIAL EQUITY UNIVERSE</p><h2>Thirteen stocks, native to Base.</h2></div><p>The active index can be updated between cycles. Assets already purchased remain eligible for their subsequent distribution.</p></div><IndexUniverse /></div><StockGrid compact /><div className="section-end"><p>Each asset is a Base B20 token. Prices are reference data, not live market quotes.</p><Link href="/docs#cycle">Index policy <span>→</span></Link></div></section>
+        <section className="section wrap" id="index"><div className="index-showcase"><div className="section-head index-head"><div><p className="eyebrow">INITIAL EQUITY UNIVERSE</p><h2>Thirteen stocks, native to Base.</h2></div><p>Every B20 equity Coinbase has issued on Base. The dividend vault buys a configurable subset of them, and the index can change between cycles.</p></div><IndexUniverse /></div><StockGrid compact /><div className="universe-cta">
+            <p>Thirteen are listed on Base; the dividend vault currently buys four of them. Both sets are read from the chain, not from this page.</p>
+            <div className="universe-cta-actions">
+              <Link className="button button-ink" href="/stocks">Browse every stock <span>→</span></Link>
+              <Link className="button button-ghost" href="/distributions">See what the vault buys <span>→</span></Link>
+            </div>
+          </div></section>
 
         <section className="section wrap launch-note"><div><p className="eyebrow">PRE-LAUNCH STATUS</p><h2>Ready for a market,<br />not pretending to have one.</h2></div><div className="launch-rows"><div><span>01</span><p><strong>Contracts</strong>Token, hook and dividend-vault addresses are pending final deployment setup.</p><small>Pending</small></div><div><span>02</span><p><strong>Liquidity</strong>The v4 pool is intentionally not initialized before its price and liquidity parameters are decided.</p><small>Pending</small></div><div><span>03</span><p><strong>Distributions</strong>Completed cycles will become an auditable history on the distribution desk.</p><Link href="/distributions">Preview →</Link></div></div></section>
       </main>

@@ -19,20 +19,26 @@ interface IPermit2 {
     function approve(address token, address spender, uint160 amount, uint48 expiration) external;
 }
 
-/// @title Stand up the ETH/TEST v4 pool that makes StockifyFeeHook reviewable
-/// @notice Uniswap's hook review needs a live pool carrying liquidity. This deploys a throwaway
-/// TEST token, opens ETH/TEST against the REAL hook, and mints a one-sided v4 position as an NFT.
+/// @title Open a one-sided ETH/<token> Uniswap v4 pool behind the Stockify hook
+/// @notice Deploys a throwaway TEST token when TOKEN is unset, or opens the pool for an existing
+/// token when it is — the path the real launch takes. Mints the position through the v4
+/// PositionManager as a real NFT.
 ///
-/// @dev ONE-SIDED, ON PURPOSE. currency0 is native ETH and currency1 is TEST, so a position whose
-/// whole range sits at or below the opening tick holds nothing but TEST — no ETH is risked to open
-/// the market. Buying ETH->TEST walks the tick DOWN into the range, so the position sells TEST and
-/// accumulates ETH exactly like a launch curve. Opening tick is derived from a $4,000 market cap on
-/// the 1e9 supply, at the ETH price read from the Aerodrome WETH/USDC pool.
+/// @dev ONE-SIDED, ON PURPOSE. currency0 is native ETH and currency1 is the token, so a position
+/// whose whole range sits at or below the opening tick holds nothing but the token — no ETH is
+/// risked to open the market. Buying ETH->token walks the tick DOWN into the range, so the position
+/// sells and accumulates ETH exactly like a launch curve.
+///
+/// @dev AND IT DEPOSITS EVERYTHING. With a one-sided position the deposit IS the float: whatever is
+/// held back is not liquidity, not backing and not buyable — just a bag sitting outside the market
+/// it is supposed to price. The default is therefore the deployer's entire balance, and DEPOSIT
+/// exists to override it deliberately, not by forgetting. The opening tick prices the FULL supply at
+/// the target market cap, so holding some back would also make that number a fiction.
 ///
 /// @dev The fee tier is a plain 1% (10000). It must NEVER be LPFeeLibrary.DYNAMIC_FEE_FLAG: the hook
 /// returns 0 as its override, which has no OVERRIDE_FEE_FLAG set, so a dynamic-fee pool would store
 /// a 0% LP fee permanently and the hook has no path to update it.
-contract DeployTestPool is Script {
+contract LaunchPool is Script {
     using PoolIdLibrary for PoolKey;
 
     address internal constant POOL_MANAGER = 0x498581fF718922c3f8e6A244956aF099B2652b2b;
@@ -56,15 +62,21 @@ contract DeployTestPool is Script {
         int24 tickLower = tickUpper - int24(int256(vm.envOr("BAND_TICKS", uint256(46_000))));
         require(tickLower % TICK_SPACING == 0, "BAND must align to 200");
 
-        uint256 deposit = vm.envOr("DEPOSIT", uint256(100_000_000e18));
 
         vm.startBroadcast(pk);
 
-        TestToken token = new TestToken(deployer);
+        // An existing token for the real launch; a throwaway one when probing the hook.
+        address tokenAddress = vm.envOr("TOKEN", address(0));
+        if (tokenAddress == address(0)) tokenAddress = address(new TestToken(deployer));
+        IERC20 token = IERC20(tokenAddress);
+
+        // Everything, unless deliberately overridden.
+        uint256 deposit = vm.envOr("DEPOSIT", token.balanceOf(deployer));
+        require(deposit > 0, "nothing to deposit");
 
         PoolKey memory key = PoolKey({
             currency0: Currency.wrap(address(0)),
-            currency1: Currency.wrap(address(token)),
+            currency1: Currency.wrap(tokenAddress),
             fee: FEE,
             tickSpacing: TICK_SPACING,
             hooks: IHooks(hook)
@@ -78,8 +90,8 @@ contract DeployTestPool is Script {
             TickMath.getSqrtPriceAtTick(tickLower), sqrtPriceX96, deposit
         );
 
-        IERC20(address(token)).approve(PERMIT2, type(uint256).max);
-        IPermit2(PERMIT2).approve(address(token), POSITION_MANAGER, type(uint160).max, type(uint48).max);
+        token.approve(PERMIT2, type(uint256).max);
+        IPermit2(PERMIT2).approve(tokenAddress, POSITION_MANAGER, type(uint160).max, type(uint48).max);
 
         bytes memory actions = abi.encodePacked(uint8(Actions.MINT_POSITION), uint8(Actions.SETTLE_PAIR));
         bytes[] memory params = new bytes[](2);
@@ -90,12 +102,13 @@ contract DeployTestPool is Script {
 
         vm.stopBroadcast();
 
-        console2.log("TestToken:  ", address(token));
+        console2.log("Token:      ", tokenAddress);
         console2.log("Hook:       ", hook);
         console2.log("tickLower:  ", tickLower);
         console2.log("tickUpper:  ", tickUpper);
         console2.log("liquidity:  ", liquidity);
-        console2.log("TEST posted:", deposit);
+        console2.log("posted:     ", deposit);
+        console2.log("kept back:  ", token.balanceOf(deployer));
         console2.log("PoolId:");
         console2.logBytes32(PoolId.unwrap(key.toId()));
     }
