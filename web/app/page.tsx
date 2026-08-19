@@ -1,6 +1,8 @@
 import Image from "next/image";
 import Link from "next/link";
 
+import { readAssets } from "../lib/b20";
+import { stockByAddress } from "../lib/stocks";
 import { readVault } from "../lib/vault";
 import { IndexUniverse } from "./components/index-universe";
 import { RingMarker } from "./components/segment-ring";
@@ -29,8 +31,24 @@ const mechanics = [
 export default async function Home() {
   // The same read /distributions makes. A homepage claiming a different index from the page that
   // shows the vault would be two answers to one question.
-  const vault = await readVault();
-  const slices = vault.holdings.map((h) => ({ symbol: h.symbol, name: h.name, weightBps: h.weightBps }));
+  // Weights from the vault, marks from the tokens themselves — the same `contractURI()` icons the
+  // hub uses, so a ticker Base lists tomorrow arrives correctly branded here too.
+  const [vault, assets] = await Promise.all([readVault(), readAssets()]);
+  const byAddress = new Map(assets.map((a) => [a.address.toLowerCase(), a]));
+
+  const slices = vault.holdings.map((h) => {
+    const asset = byAddress.get(h.address.toLowerCase());
+    const known = stockByAddress(h.address);
+    return {
+      symbol: h.symbol,
+      name: h.name,
+      weightBps: h.weightBps,
+      // A listing this repo has no colour for still gets an arc, in the house blue.
+      brand: known?.brand ?? "#7aa8ff",
+      logo: asset?.logo,
+      domain: asset?.domain,
+    };
+  });
 
   return (
     <div className="site-shell">

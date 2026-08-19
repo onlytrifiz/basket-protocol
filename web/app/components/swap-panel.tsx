@@ -44,6 +44,16 @@ type SwapTransaction = {
 };
 
 const baseChainHex = "0x2105";
+
+/**
+ * Slippage, in basis points, starting at 5%.
+ *
+ * NOT the 0.5% an AMM front-end would default to. STFY trades through a custom v4 hook that takes
+ * 300 bps in ETH on the way through, so anything under about 3% rejects the trade this card exists
+ * to make — and the pool is new enough that depth moves the rest. The presets start where a fill is
+ * plausible and go up from there.
+ */
+const SLIPPAGE_PRESETS = [500, 1000, 1500] as const;
 /** Velora's native-asset sentinel. Paying in ETH needs no wrap and no approval. */
 const NATIVE_ETH = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 const stockifyAddress = process.env.NEXT_PUBLIC_STOCKIFY_TOKEN_ADDRESS ?? "";
@@ -91,6 +101,7 @@ export function SwapPanel() {
   const [quote, setQuote] = useState<VeloraQuote>();
   const [quoteAt, setQuoteAt] = useState(0);
   const [targetSymbol, setTargetSymbol] = useState("STFY");
+  const [slippageBps, setSlippageBps] = useState<number>(SLIPPAGE_PRESETS[0]);
   const [kycUrl, setKycUrl] = useState<string>();
   const quoteToken = useRef(0);
   const pickerRef = useRef<HTMLDivElement>(null);
@@ -152,6 +163,7 @@ export function SwapPanel() {
         // client-supplied `destDecimals` was one typo away from quoting a trade 10^10 too large.
         srcToken: NATIVE_ETH,
         destToken: target.address,
+        slippageBps,
         swapper: forWallet ?? PREVIEW_ADDRESS,
       });
       if (token !== quoteToken.current) return;
@@ -169,7 +181,7 @@ export function SwapPanel() {
     } finally {
       if (token === quoteToken.current) setIsBusy(false);
     }
-  }, [account, amount, needsStockifyConfig, target]);
+  }, [account, amount, needsStockifyConfig, target, slippageBps]);
 
   // Quote as the amount is typed, settled by a short pause. Without a wallet this prices only —
   // asking someone to connect before they can see a number is the wrong order.
@@ -224,10 +236,14 @@ export function SwapPanel() {
 
   return (
     <aside className="swap-panel" aria-label="Buy Stockify or a Base tokenized stock">
-      <div className="swap-panel-head"><div><span>BUY ON BASE</span><strong>Trade ETH for stocks</strong></div></div>
       <div className="swap-leg">
         <label htmlFor="swap-amount">You pay</label>
-        <div><input id="swap-amount" inputMode="decimal" onChange={(event) => { setAmount(event.target.value); clearTradeState(); }} placeholder="0.00" value={amount} /><span className="swap-currency"><CoinMark symbol="ETH" size={17} />ETH</span></div>
+        <div>
+          <input id="swap-amount" inputMode="decimal" onChange={(event) => { setAmount(event.target.value); clearTradeState(); }} placeholder="0.00" value={amount} />
+          {/* The same pill the receive side uses. ETH used to be bare blue text against a bordered
+              asset chip, so the two halves of one sentence were set in different voices. */}
+          <span className="asset-trigger is-static"><CoinMark symbol="ETH" size={20} /><span>ETH</span></span>
+        </div>
       </div>
       <div className="swap-divider" aria-hidden="true"><span>↓</span></div>
       <div className="swap-leg swap-leg-output">
@@ -269,7 +285,24 @@ export function SwapPanel() {
           </div>
         </div>
       </div>
-      <div className="swap-details"><span>Input</span><b>Native ETH</b><span>Target</span><b>{target.symbol === "STFY" ? "Custom-hook pool" : "Base B20 token"}</b></div>
+      {/* "Input: Native ETH / Target: Custom-hook pool" restated the two rows above it. Slippage is
+          the one setting a trader here actually needs: STFY's pool carries a 3% hook fee, so a
+          default tuned for ordinary AMMs rejects the trade this card exists to make. */}
+      <div className="swap-slippage">
+        <span>Max slippage</span>
+        <div>
+          {SLIPPAGE_PRESETS.map((bps) => (
+            <button
+              className={bps === slippageBps ? "is-active" : undefined}
+              key={bps}
+              onClick={() => { setSlippageBps(bps); clearTradeState(); }}
+              type="button"
+            >
+              {bps / 100}%
+            </button>
+          ))}
+        </div>
+      </div>
       {notice ? (
         <p className={`swap-notice${quote ? " is-ready" : ""}`}>{notice}</p>
       ) : quote ? (

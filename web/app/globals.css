@@ -219,17 +219,6 @@ h1 em, h2 em { font-style: normal; font-weight: 600; }
 .universe-head, .universe-legend b, .index-universe > p,
 .desk-head p, .desk-metrics strong, .table-head, .desk-cycle-meta,
 .flow-strip span,
-.swap-panel-head span, .swap-panel-head > b, .swap-leg label,
-.swap-currency, .swap-details b, .swap-foot,
-.footer-links span, .footer-meta,
-.docs-status-row span, .docs-nav > span, .docs-nav a b, .docs-source-link,
-.docs-section-label, .docs-contracts li, .docs-contract-head code,
-.docs-cycle > li > span, .docs-cycle-head small, .docs-formula span,
-.docs-split-grid span, .docs-role-grid span, .docs-launch-grid article > span,
-code, kbd, samp, pre {
-  font-family: var(--mono-stack);
-  font-variant-numeric: tabular-nums;
-}
 
 .eyebrow {
   color: var(--ink-3);
@@ -332,14 +321,19 @@ code, kbd, samp, pre {
 
 /* Chips ------------------------------------------------------------------ */
 
+/* Left, like the input above it. `margin-left: auto` pushed the figure you RECEIVE to the right
+   while the figure you PAY sat on the left, so the two numbers of one trade never lined up. */
 .swap-output {
   color: var(--desk-fg);
+  flex: 1;
   font-size: 1.35rem;
   font-variant-numeric: tabular-nums;
   font-weight: 600;
   letter-spacing: -0.01em;
-  margin-left: auto;
+  min-width: 0;
+  overflow: hidden;
   padding-right: 0.6rem;
+  text-overflow: ellipsis;
 }
 
 .wallet-pill {
@@ -796,6 +790,7 @@ code, kbd, samp, pre {
   position: absolute;
 }
 .universe-ring strong {
+  transition: color .18s var(--ease);
   font-family: var(--mono-stack);
   font-size: 1.6rem;
   font-variant-numeric: tabular-nums;
@@ -805,6 +800,8 @@ code, kbd, samp, pre {
 .universe-ring span { color: var(--desk-fg-3); font-size: .62rem; margin-top: 5px; }
 
 .universe-legend { display: grid; gap: 3px; min-width: 0; width: 100%; }
+/* The legend's first column held an 8px colour chip; it holds the company's mark now, so the
+   column has to fit one. The arc colour still does the linking — it is the mark's own. */
 .universe-legend button {
   align-items: center;
   background: transparent;
@@ -816,7 +813,7 @@ code, kbd, samp, pre {
   font-family: var(--ui-stack);
   font-size: .72rem;
   gap: 9px;
-  grid-template-columns: 8px 1fr auto;
+  grid-template-columns: 20px 1fr auto;
   min-width: 0;
   padding: 5px 7px;
   text-align: left;
@@ -825,7 +822,7 @@ code, kbd, samp, pre {
 .universe-legend button:hover, .universe-legend button:focus-visible { background: var(--desk-glass-2); }
 .universe-legend button:focus-visible { outline: 2px solid var(--sky); outline-offset: 2px; }
 .universe-legend button.is-dimmed { opacity: .3; }
-.universe-legend i { border-radius: 2px; height: 8px; width: 8px; }
+.universe-legend .stock-logo { height: 20px; width: 20px; }
 .universe-legend span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .universe-legend b { color: var(--desk-fg-3); font-size: .64rem; font-weight: 500; }
 .index-universe.is-unread { display: flex; flex-direction: column; }
@@ -1213,18 +1210,6 @@ code, kbd, samp, pre {
   color: var(--desk-fg);
   padding: 20px;
 }
-.swap-panel-head {
-  align-items: start;
-  border-bottom: 1px solid var(--desk-line);
-  display: flex;
-  gap: 16px;
-  justify-content: space-between;
-  padding-bottom: 16px;
-}
-.swap-panel-head div { display: grid; gap: 4px; }
-.swap-panel-head span { color: var(--desk-fg-3); font-size: .61rem; font-weight: 600; letter-spacing: .12em; }
-.swap-panel-head strong { font-size: .92rem; letter-spacing: -.03em; }
-.swap-panel-head > b { color: var(--sky); font-size: .59rem; font-weight: 500; letter-spacing: .08em; padding-top: 3px; }
 
 .swap-leg {
   background: var(--desk-glass);
@@ -1252,6 +1237,35 @@ code, kbd, samp, pre {
   width: 100%;
 }
 .swap-leg input::placeholder { color: rgba(255, 255, 255, .26); }
+.asset-trigger.is-static { cursor: default; }
+.swap-slippage {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  padding: 2px 2px 0;
+}
+.swap-slippage > span {
+  color: var(--desk-fg-3);
+  font-family: var(--mono-stack);
+  font-size: .62rem;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+.swap-slippage > div { background: var(--desk-glass); border-radius: var(--r-pill); display: flex; gap: 2px; padding: 3px; }
+.swap-slippage button {
+  background: transparent;
+  border: 0;
+  border-radius: var(--r-pill);
+  color: var(--desk-fg-3);
+  cursor: pointer;
+  font-family: var(--mono-stack);
+  font-size: .68rem;
+  padding: 4px 10px;
+  transition: background .16s var(--ease), color .16s var(--ease);
+}
+.swap-slippage button:hover { color: var(--desk-fg); }
+.swap-slippage button.is-active { background: var(--desk-glass-2); color: var(--desk-fg); }
+
 .swap-currency { color: var(--sky); font-size: .76rem; font-weight: 600;   align-items: center; display: inline-flex; gap: 6px;
 }
 .swap-divider { align-items: center; display: flex; height: 14px; justify-content: center; position: relative; z-index: 1; }
@@ -1346,17 +1360,6 @@ code, kbd, samp, pre {
   width: 100%;
 }
 .swap-target-row select option { background: var(--desk); color: var(--desk-fg); }
-.swap-details {
-  border-bottom: 1px solid var(--desk-line);
-  display: grid;
-  font-size: .68rem;
-  gap: 7px 18px;
-  grid-template-columns: 1fr auto;
-  margin-top: 16px;
-  padding-bottom: 15px;
-}
-.swap-details span { color: var(--desk-fg-3); }
-.swap-details b { color: rgba(255, 255, 255, .88); font-size: .64rem; font-weight: 500; }
 .swap-notice {
   background: rgba(145, 212, 255, .1);
   border-left: 2px solid var(--sky);
@@ -1369,12 +1372,15 @@ code, kbd, samp, pre {
 }
 .swap-notice.is-ready { background: rgba(0, 82, 255, .16); border-left-color: #7aa8ff; }
 .swap-kyc { color: var(--sky); display: inline-block; font-size: .76rem; font-weight: 600; margin-top: 12px; }
+/* Slate, not blue. The primary blue is the site's "go", and this button spends most of its life
+   unable to go anywhere — the STFY pool is not open yet. Slate also stops it competing with the
+   hero's own blue CTA a few inches to its left. */
 .swap-action {
   align-items: center;
-  background: var(--blue);
-  border: 0;
+  background: rgba(255, 255, 255, .11);
+  border: 1px solid var(--desk-line-2);
   border-radius: var(--r-sm);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .25), 0 6px 18px rgba(0, 60, 190, .34);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .1);
   color: #fff;
   cursor: pointer;
   display: flex;
@@ -1389,15 +1395,12 @@ code, kbd, samp, pre {
   width: 100%;
 }
 .swap-action:hover:not(:disabled) {
-  background: var(--blue-hover);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .25), 0 10px 26px rgba(0, 60, 190, .4);
+  background: rgba(255, 255, 255, .17);
+  border-color: rgba(255, 255, 255, .34);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .14);
   transform: translateY(-1px);
 }
-.swap-action:active:not(:disabled) {
-  background: var(--blue-press);
-  box-shadow: inset 0 2px 5px rgba(0, 24, 80, .45);
-  transform: translateY(1px);
-}
+.swap-action:active:not(:disabled) { background: rgba(255, 255, 255, .09); transform: translateY(1px); }
 .swap-action:disabled { box-shadow: none; cursor: not-allowed; opacity: .55; }
 .swap-foot { color: var(--desk-fg-3); font-size: .63rem; line-height: 1.5; margin: 12px 0 0; text-align: center; }
 

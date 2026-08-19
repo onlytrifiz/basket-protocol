@@ -2,7 +2,18 @@
 
 import { useState } from "react";
 
-export type IndexSlice = { symbol: string; name: string; weightBps: number };
+import { StockLogo } from "./stock-logo";
+
+export type IndexSlice = {
+  symbol: string;
+  name: string;
+  weightBps: number;
+  /** The company's own mark colour — see `lib/stocks`. */
+  brand: string;
+  /** Official Coinbase equity icon, read from the token's `contractURI()`. */
+  logo?: string;
+  domain?: string;
+};
 
 /**
  * The dividend index as a donut — the four equities the vault actually buys, at their on-chain
@@ -14,9 +25,11 @@ export type IndexSlice = { symbol: string; name: string; weightBps: number };
  * The weights are real and on-chain, so the ring can mean what a ring normally means.
  *
  * Slices come from the server, which reads `stockAt()`. Ownership can change them between cycles.
+ *
+ * Each arc carries its company's OWN colour rather than a slot from a house palette, and the legend
+ * carries the mark. Four blues told a reader which slice was which only by position; NVIDIA green
+ * next to Apple silver is legible without the legend at all.
  */
-const COLORS = ["#7aa8ff", "#ffffff", "#5b88ec", "#a9c6ff", "#274f9f", "#3f6fd8"];
-
 const RADIUS = 58;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
@@ -39,9 +52,9 @@ export function IndexUniverse({ slices }: { slices: IndexSlice[] }) {
 
   const total = slices.reduce((sum, slice) => sum + slice.weightBps, 0) || 1;
   let offset = 0;
-  const arcs = slices.map((slice, index) => {
+  const arcs = slices.map((slice) => {
     const percentage = (slice.weightBps / total) * 100;
-    const arc = { ...slice, percentage, offset, color: COLORS[index % COLORS.length] };
+    const arc = { ...slice, percentage, offset, color: slice.brand };
     offset += percentage;
     return arc;
   });
@@ -73,7 +86,9 @@ export function IndexUniverse({ slices }: { slices: IndexSlice[] }) {
             ))}
           </svg>
           <div>
-            <strong>{active === null ? slices.length : `${(arcs[active].percentage).toFixed(0)}%`}</strong>
+            <strong style={active === null ? undefined : { color: arcs[active].color }}>
+              {active === null ? slices.length : `${(arcs[active].percentage).toFixed(0)}%`}
+            </strong>
             <span>{active === null ? "assets" : arcs[active].symbol}</span>
           </div>
         </div>
@@ -88,7 +103,7 @@ export function IndexUniverse({ slices }: { slices: IndexSlice[] }) {
               onMouseLeave={() => setActive(null)}
               type="button"
             >
-              <i style={{ background: arc.color }} />
+              <StockLogo logo={arc.logo} size="small" stock={{ symbol: arc.symbol, domain: arc.domain }} />
               <span>{arc.name}</span>
               <b>{(arc.weightBps / 100).toFixed(0)}%</b>
             </button>
