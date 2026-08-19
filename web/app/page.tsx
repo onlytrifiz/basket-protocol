@@ -55,13 +55,17 @@ export default async function Home() {
 
         <section className="section wrap" id="how"><div className="section-head"><p className="eyebrow">THE DIVIDEND LOOP</p><h2>A stock dividend that starts with volume.</h2><p>Stockify does not reflect another token into your wallet. The vault acquires the B20 assets themselves and pushes the resulting entitlement to holders.</p></div><div className="steps-grid">{mechanics.map((step) => <article className="step-card" key={step.number}><RingMarker filled={step.filled} label={step.number} lit={step.lit} /><h3>{step.title}</h3><p>{step.copy}</p></article>)}</div></section>
 
-        <section className="section wrap" id="index"><div className="index-showcase"><div className="section-head index-head"><div><p className="eyebrow">THE B20 STOCKS UNIVERSE</p><h2>Thirteen listed. Four in the index.</h2></div><p>Every B20 equity Coinbase has issued on Base. The dividend vault buys a configurable subset of them, and the index can change between cycles.</p></div><IndexUniverse slices={slices} /></div><StockGrid compact /><div className="universe-cta">
-            <p>Thirteen are listed on Base; the dividend vault currently buys four of them. Both sets are read from the chain, not from this page.</p>
-            <div className="universe-cta-actions">
-              <Link className="button button-ink" href="/stocks">Browse every stock <span>→</span></Link>
-              <Link className="button button-ghost" href="/distributions">See what the vault buys <span>→</span></Link>
-            </div>
-          </div></section>
+        <section className="section wrap" id="index"><div className="index-showcase"><div className="section-head index-head"><div><p className="eyebrow">THE B20 STOCKS UNIVERSE</p><h2>Thirteen listed. Four in the index.</h2></div><p>Every B20 equity Coinbase has issued on Base. The dividend vault buys a configurable subset of them, and the index can change between cycles.</p></div><IndexUniverse slices={slices} /></div><StockGrid compact>
+            {/* The two ways out sit IN the grid rather than under it: thirteen assets across five
+                columns leave exactly two empty cells, and an action shaped like the things it acts
+                on reads as part of the set instead of as a banner below it. */}
+            <Link className="equity-card is-action" href="/stocks">
+              <span className="equity-name"><strong>All stocks</strong><span>Every B20 on Base</span></span>
+            </Link>
+            <Link className="equity-card is-action" href="/distributions">
+              <span className="equity-name"><strong>The vault</strong><span>What it buys</span></span>
+            </Link>
+          </StockGrid></section>
       </main>
       <SiteFooter />
     </div>

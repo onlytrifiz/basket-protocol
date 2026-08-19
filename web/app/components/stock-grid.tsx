@@ -11,7 +11,7 @@ import { StockLogo } from "./stock-logo";
  * the contract address is on the detail page anyway. That also lets the cards lose their footer
  * row, which is most of why they were too heavy for a section the page passes through.
  */
-export function StockGrid({ compact = false }: { compact?: boolean }) {
+export function StockGrid({ children, compact = false }: { children?: React.ReactNode; compact?: boolean }) {
   return (
     <div className={`equity-grid${compact ? " equity-grid-compact" : ""}`}>
       {stocks.map((stock) => (
@@ -21,8 +21,13 @@ export function StockGrid({ compact = false }: { compact?: boolean }) {
             <strong>{stock.symbol}</strong>
             <span>{stock.name}</span>
           </span>
+          {/* Nothing about a tile of text says "this opens". Faint until hover, then it moves. */}
+          <svg aria-hidden="true" className="equity-go" viewBox="0 0 6 10" focusable="false">
+            <path d="M1 1l4 4-4 4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6" />
+          </svg>
         </Link>
       ))}
+      {children}
     </div>
   );
 }

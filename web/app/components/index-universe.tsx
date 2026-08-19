@@ -23,6 +23,20 @@ const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 export function IndexUniverse({ slices }: { slices: IndexSlice[] }) {
   const [active, setActive] = useState<number | null>(null);
 
+  // No slices means the vault did not answer, not that it buys nothing. Drawing "0 assets" in a
+  // donut would state the second while meaning the first.
+  if (slices.length === 0) {
+    return (
+      <aside className="index-universe is-unread" aria-label="Dividend index weights">
+        <div className="universe-head"><span>DIVIDEND INDEX</span><b>—</b></div>
+        <p className="universe-unread">
+          The vault&apos;s index could not be read just now. It is not shown as empty, because empty
+          is a different claim.
+        </p>
+      </aside>
+    );
+  }
+
   const total = slices.reduce((sum, slice) => sum + slice.weightBps, 0) || 1;
   let offset = 0;
   const arcs = slices.map((slice, index) => {

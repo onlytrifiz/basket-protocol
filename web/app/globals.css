@@ -213,7 +213,24 @@ h1 em, h2 em { font-style: normal; font-weight: 600; }
 .eyebrow,
 .waiting-chip, .theme-toggle,
 .stats-inner strong, .stats-inner span,
-.step-card > span, .roles-grid > article > span, 
+.step-card > span, .roles-grid > article > span,
+.payout-list article > span,
+.equity-name strong,
+.universe-head, .universe-legend b, .index-universe > p,
+.desk-head p, .desk-metrics strong, .table-head, .desk-cycle-meta,
+.flow-strip span,
+.swap-panel-head span, .swap-panel-head > b, .swap-leg label,
+.swap-currency, .swap-details b, .swap-foot,
+.footer-links span, .footer-meta,
+.docs-status-row span, .docs-nav > span, .docs-nav a b, .docs-source-link,
+.docs-section-label, .docs-contracts li, .docs-contract-head code,
+.docs-cycle > li > span, .docs-cycle-head small, .docs-formula span,
+.docs-split-grid span, .docs-role-grid span, .docs-launch-grid article > span,
+code, kbd, samp, pre {
+  font-family: var(--mono-stack);
+  font-variant-numeric: tabular-nums;
+}
+
 .eyebrow {
   color: var(--ink-3);
   font-size: .68rem;
@@ -811,6 +828,15 @@ h1 em, h2 em { font-style: normal; font-weight: 600; }
 .universe-legend i { border-radius: 2px; height: 8px; width: 8px; }
 .universe-legend span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .universe-legend b { color: var(--desk-fg-3); font-size: .64rem; font-weight: 500; }
+.index-universe.is-unread { display: flex; flex-direction: column; }
+.universe-unread {
+  color: var(--desk-fg-2);
+  font-size: .8rem;
+  line-height: 1.55;
+  margin: 18px 0 0 !important;
+  max-width: 34ch;
+}
+
 .universe-tickers {
   border-top: 1px solid var(--desk-line);
   display: flex;
@@ -845,6 +871,28 @@ h1 em, h2 em { font-style: normal; font-weight: 600; }
   transform: translateY(-1px);
 }
 .equity-card .stock-logo { flex: none; }
+.equity-go {
+  color: var(--line-2);
+  flex: none;
+  height: 10px;
+  margin-left: auto;
+  transition: color .18s var(--ease), transform .18s var(--ease);
+  width: 6px;
+}
+.equity-card:hover .equity-go { color: var(--link); transform: translateX(2px); }
+
+/* Same shape as an asset tile, different intent: tinted, and it leads with the label. */
+.equity-card.is-action { background: var(--chip); border-color: var(--chip-line); }
+.equity-card.is-action .equity-name strong { color: var(--chip-fg); }
+.equity-card.is-action .equity-name span { color: var(--chip-fg); opacity: .72; }
+.equity-card.is-action::after {
+  color: var(--chip-fg);
+  content: "→";
+  font-size: .8rem;
+  margin-left: auto;
+  transition: transform .18s var(--ease);
+}
+.equity-card.is-action:hover::after { transform: translateX(3px); }
 .equity-name { min-width: 0; }
 .equity-name strong, .equity-name span { display: block; }
 .equity-name strong { font-family: var(--mono-stack); font-size: .76rem; letter-spacing: -.01em; }
@@ -1669,18 +1717,6 @@ h1 em, h2 em { font-style: normal; font-weight: 600; }
 .flow-strip { animation: settle-fade .5s var(--ease) .22s backwards; }
 .page-intro-render { animation: settle-render .56s var(--ease) .04s backwards; }
 
-.universe-cta {
-  align-items: center;
-  border-top: 1px solid var(--line);
-  display: flex;
-  flex-wrap: wrap;
-  gap: 20px 32px;
-  justify-content: space-between;
-  margin-top: 34px;
-  padding-top: 26px;
-}
-.universe-cta > p { color: var(--ink-2); font-size: .88rem; line-height: 1.6; margin: 0; max-width: 46ch; }
-.universe-cta-actions { display: flex; flex-wrap: wrap; gap: 10px; }
 
 /* ---------- 20. Stocks hub ------------------------------------------------ */
 
@@ -2346,8 +2382,18 @@ a.pool-row:hover { background: var(--surface-2); }
   }
   .hub-premium { grid-column: 1 / -1; }
   .hub-notes { grid-template-columns: 1fr; gap: 22px; }
+  /* Stacked, not dropped. Hiding the render on a phone removed the one thing on the page that says
+     at a glance what a "tokenized stock" is; below the copy it costs a scroll and keeps saying it.
+     Centred and capped so it never becomes a full-width banner on a wide phone. */
   .hub-head { grid-template-columns: 1fr; }
-  .hub-render { display: none; }
+  .hub-render {
+    height: auto;
+    justify-self: center;
+    max-width: 300px;
+    order: 2;
+    width: 100%;
+  }
+  .hub-render img { height: auto; }
 }
 
 @media (max-width: 760px) {
@@ -2369,7 +2415,11 @@ a.pool-row:hover { background: var(--surface-2); }
 /* ---------- 25. Responsive ------------------------------------------------ */
 
 @media (max-width: 980px) {
-  .hero-inner,   .hero-inner { gap: 44px; padding-top: 68px; }
+  /* Restored: an unanchored regex removing the pre-launch section's styles took this rule's
+     declaration with it, and with it the hero's collapse — the swap panel stayed in a second column
+     and ran off the side of every phone. */
+  .hero-inner, .parameters-inner, .operation-inner, .eligibility { grid-template-columns: 1fr; }
+  .hero-inner { gap: 44px; padding-top: 68px; }
   .hero-swap, .index-showcase .index-universe, .swap-panel { max-width: 540px; width: 100%; }
     .parameters-inner, .operation-inner { gap: 44px; }
   .index-showcase { gap: 36px; grid-template-columns: 1fr; }

@@ -66,9 +66,16 @@ const EMPTY: VaultState = {
   availableEthWei: null, eligibleSupplyRaw: null, holderCount: null, minShareBalanceRaw: null,
 };
 
-/** Vault state, refreshed on the cadence a cycle could plausibly change it. */
+/**
+ * Vault state, refreshed on the cadence a cycle could plausibly change it.
+ *
+ * `loadVault` THROWS when the chain does not answer rather than returning an empty state, so
+ * `cached()` can fall back to its last good read. Returning `EMPTY` looked harmless and was not:
+ * a hiccup pinned "0 assets, 0% weights" for the whole TTL and the homepage donut rendered it as
+ * fact — the same read-failure-as-zero mistake the B20 loader was built to avoid.
+ */
 export function readVault(): Promise<VaultState> {
-  return cached("vault", 30_000, loadVault);
+  return cached("vault", 30_000, loadVault).catch(() => EMPTY);
 }
 
 async function loadVault(): Promise<VaultState> {
@@ -77,7 +84,7 @@ async function loadVault(): Promise<VaultState> {
   // Stage 1 — how many stocks are in the index. Everything else depends on the count.
   const [lengthResult] = await batchCall([{ to: VAULT, data: SIG.stocksLength }]);
   const length = toBigInt(lengthResult);
-  if (length === null) return EMPTY;
+  if (length === null) throw new Error("vault: stocksLength unreadable");
   const count = Math.min(Number(length), 32);
 
   // Stage 2 — which stocks, plus the vault-wide figures, in one round.
