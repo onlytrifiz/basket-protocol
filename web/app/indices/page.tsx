@@ -68,6 +68,12 @@ export default async function IndicesPage() {
               back and destroy it. Nothing is claimed, nothing is staked, and what an index buys is
               fixed the day it is created.
             </p>
+            <div className="hub-head-cta">
+              <Link className="button button-ink" href="/indices/create">
+                Create an index <span>→</span>
+              </Link>
+              <a className="button button-ghost" href="#live">See the live ones</a>
+            </div>
           </div>
           <BrandRender className="hub-render" priority size={340} src="/baskets.png" />
         </header>
@@ -97,15 +103,15 @@ export default async function IndicesPage() {
           </div>
         </section>
 
-        <section className="section wrap hub-section">
+        <section className="section wrap hub-section" id="live">
           <div className="section-head">
             <p className="eyebrow">THE LIVE SET</p>
             <h2>{indices.length === 0 ? "Nothing has pointed its fees here yet." : `${indices.length} ${indices.length === 1 ? "index" : "indices"}, read from the chain.`}</h2>
             <p>
               Every row is a contract answering for itself — what it holds, what it pays, and whether
-              the stream behind it can still be taken back. Created on{" "}
-              <a href={LAUNCHPAD.url} rel="noreferrer" target="_blank">{LAUNCHPAD.name} ↗</a>, at the
-              moment a coin is launched.
+              the stream behind it can still be taken back. Made here, or inside a launch on{" "}
+              <a href={LAUNCHPAD.url} rel="noreferrer" target="_blank">{LAUNCHPAD.name} ↗</a>; an index
+              does not care which launchpad its coin came from.
             </p>
           </div>
 
@@ -248,11 +254,16 @@ export default async function IndicesPage() {
         <section className="page-cta wrap">
           <div>
             <p className="eyebrow">CREATE ONE</p>
-            <h2>An index is made at launch.</h2>
+            <h2>Five questions, one transaction.</h2>
+            <p className="page-cta-note">
+              Then point your coin&apos;s creator fees at it — from{" "}
+              <a href={LAUNCHPAD.url} rel="noreferrer" target="_blank">{LAUNCHPAD.name}</a>&apos;s launch
+              form, or any launchpad this service supports.
+            </p>
           </div>
-          <a className="button button-ink" href={LAUNCHPAD.url} rel="noreferrer" target="_blank">
-            Launch on {LAUNCHPAD.name} <span>→</span>
-          </a>
+          <Link className="button button-ink" href="/indices/create">
+            Create an index <span>→</span>
+          </Link>
         </section>
 
         {indicesLive && (

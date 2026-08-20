@@ -1,4 +1,5 @@
 import { cached } from "./cache";
+import { readDecimals } from "./decimals";
 import { batchCall, getLogs, pad, toBigInt, type Log, type RpcCall } from "./rpc";
 import { stockByAddress } from "./stocks";
 
@@ -64,7 +65,15 @@ export type IndexHolding = {
   heldRaw: string | null;
   /** Raw units already credited to holders and awaiting their transfer. `null` when unread. */
   unpaidRaw: string | null;
-  decimals: number;
+  /**
+   * The token's own scale, read from the token. `null` when unread — never assumed.
+   *
+   * This used to be a literal 8, which was right for as long as every entry came from `lib/stocks`.
+   * The index does not: it is read from `stockAt()`, and the row above deliberately renders an asset
+   * this repo has never heard of. Pairing "we do not know what this is" with "we know how to scale
+   * it" was the contradiction. See `lib/decimals`.
+   */
+  decimals: number | null;
 };
 
 export type VaultState = {
