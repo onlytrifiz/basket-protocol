@@ -124,10 +124,14 @@ export default async function IndexPage({
                 </a>
               </p>
             </div>
-            <div className="detail-badges">
-              {index.paused && <span className="chip">Paused</span>}
-              <span className="chip">{index.permanent ? "Irrevocable" : "Revocable by creator"}</span>
-            </div>
+            {/* Paused is a state that changes what this index is doing right now. Whether the fee
+                stream could in principle be taken back is not — and when it actually IS taken back,
+                `stillCollecting` says so below, in the only terms a holder can act on. */}
+            {index.paused && (
+              <div className="detail-badges">
+                <span className="chip">Paused</span>
+              </div>
+            )}
           </header>
 
           {bound && !index.stillCollecting && (

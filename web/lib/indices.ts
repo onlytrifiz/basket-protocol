@@ -39,7 +39,6 @@ const SEL = {
   interval: "0x947a36fb",
   creatorShareBps: "0xb1a25c94",
   paused: "0x5c975abb",
-  bindIsPermanent: "0x6fe1e2d7",
   basketAll: "0x415bdc42",
   symbol: "0x95d89b41",
   creatorClaimable: "0x9e5f358a",
@@ -57,8 +56,6 @@ export type Index = {
   interval: number;
   creatorShareBps: number;
   paused: boolean;
-  /** True only when the treasury holds the launchpad's creator ROLE, which the creator cannot move. */
-  permanent: boolean;
   basket: string[];
   weights: number[];
 };
@@ -135,7 +132,7 @@ async function loadIndices(): Promise<Index[]> {
   );
 
   const fields = [
-    "coin", "quote", "mode", "interval", "creatorShareBps", "paused", "bindIsPermanent", "basketAll",
+    "coin", "quote", "mode", "interval", "creatorShareBps", "paused", "basketAll",
   ] as const;
   const calls: RpcCall[] = [];
   for (const a of addresses) for (const f of fields) calls.push({ to: a, data: SEL[f] });
@@ -153,7 +150,6 @@ async function loadIndices(): Promise<Index[]> {
       interval: numOf(at("interval").data),
       creatorShareBps: numOf(at("creatorShareBps").data),
       paused: numOf(at("paused").data) === 1,
-      permanent: numOf(at("bindIsPermanent").data) === 1,
       basket: tokens,
       weights: bps,
     };
@@ -206,9 +202,10 @@ export type IndexDetail = Index & {
   /**
    * Who the launchpad pays for this coin RIGHT NOW.
    *
-   * `permanent` is a snapshot taken when the index bound and never revised, so a split that has since
-   * been pointed away would still read as bound. This is the live answer, and the only way the page
-   * can stop telling holders a programme is running when it is not.
+   * The only question worth putting to a holder: is anything still arriving? Whether it COULD have
+   * been stopped is a term, and terms do not change; whether it HAS been is a fact, and this is the
+   * only way to know it — `bindIsPermanent` on the treasury is a snapshot taken at bind and never
+   * revised, so an index whose split was pointed away still reads as bound there.
    */
   paidNow: string | null;
   stillCollecting: boolean;
