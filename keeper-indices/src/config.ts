@@ -60,9 +60,40 @@ export const SLIPPAGE_BPS = Number(process.env.SLIPPAGE_BPS ?? "300");
  * seven therefore needs seven times this accumulated before it moves at all; small weights simply
  * pay less often, and nothing is lost while they wait.
  */
-export const MIN_ROUND_ETH = parseEther(process.env.MIN_ROUND_ETH ?? "0.01");
-/** The same gate for an ERC20-quoted basket, in whole units of that quote. */
-export const MIN_ROUND_QUOTE = process.env.MIN_ROUND_QUOTE ?? "20";
+/**
+ * What one name's slice must be worth before it is bought, IN DOLLARS.
+ *
+ * Denominated in dollars because that is the only unit in which the question makes sense. The gate
+ * asks whether a slice is worth the transaction that moves it, and a transaction costs dollars — so
+ * a threshold written in whole units of whatever a coin happened to be paired against was a
+ * different threshold for every index. Measured against the live equity-quoted one it was $6,245.
+ *
+ * $10 covers the swap many times over — a leg measured 306k gas, which is under a cent at Base's
+ * ordinary gas price — so this is really about not paying a spread on dust, and about the round it
+ * feeds being worth running.
+ */
+export const MIN_ROUND_USD = Number(process.env.MIN_ROUND_USD ?? "10");
+
+/**
+ * What a round must be worth before it is paid out, in dollars.
+ *
+ * The payout is the expensive half by a wide margin: measured on live batches, ~72,000 gas PER
+ * HOLDER against 306,000 for a whole swap, so 150 holders is ~11M gas — thirty-five times the buy.
+ * And `distribute()` runs per basket entry, so a basket of four costs it four times.
+ *
+ * $20 is two of those rounds' worth of headroom at ordinary gas. `PAYOUT_COST_MAX_BPS` still applies
+ * on top and is what actually protects a gas spike, where this floor alone would not.
+ */
+export const MIN_PAYOUT_USD = Number(process.env.MIN_PAYOUT_USD ?? "20");
+
+/**
+ * The floor used when a quote asset cannot be priced at all.
+ *
+ * Permissive on purpose. The previous fallback was "20 whole units", which for anything valuable
+ * means never buying again — a permanent stall indistinguishable from an index with no fees. An
+ * unpriced asset should cost us a gate, not the programme.
+ */
+export const MIN_ROUND_UNPRICED = process.env.MIN_ROUND_UNPRICED ?? "0.000001";
 
 /**
  * Distribution gas is linear in holders; beyond this the round is split into batches.
@@ -132,6 +163,9 @@ export const MIN_PAYOUT_UNITS = BigInt(process.env.MIN_PAYOUT_UNITS ?? "100000")
 
 /** A round is deferred when its gas would eat more than this share of what it pays out. */
 export const PAYOUT_COST_MAX_BPS = Number(process.env.PAYOUT_COST_MAX_BPS ?? "500"); // 5%
+
+/** Base WETH — the asset a native quote is priced as. */
+export const WETH_ADDRESS = WETH;
 
 /** How many split events one repair pass will inspect before giving up for this cycle. */
 export const SPLIT_CANDIDATES = Number(process.env.SPLIT_CANDIDATES ?? "200");

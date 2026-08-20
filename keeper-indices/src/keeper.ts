@@ -44,8 +44,9 @@ import {
   LOG_CHUNK,
   MAX_HOLDERS_PER_TX,
   MIN_PAYOUT_UNITS,
-  MIN_ROUND_ETH,
-  MIN_ROUND_QUOTE,
+  MIN_ROUND_UNPRICED,
+  MIN_ROUND_USD,
+  MIN_PAYOUT_USD,
   ONLY_INDEXES,
   PAYOUT_COST_MAX_BPS,
   POSITION_MANAGER,
@@ -61,6 +62,7 @@ import {
   chain,
 } from "./config.js";
 import { quote } from "./venue.js";
+import { unitsForUsd, usdPrice, usdValue } from "./prices.js";
 import { fetchHolders } from "./holders.js";
 import { announce } from "./notify.js";
 
@@ -370,8 +372,6 @@ async function harvest(treasury: Address) {
  * here. A miss falls back to the configured unit count, which is wrong in the same way it always
  * was, rather than blocking the round.
  */
-const quoteRate = new Map<Address, bigint>(); // quote token -> units worth 1 ETH
-
 /**
  * An amount of some quote asset expressed in ether, or null if it cannot be priced.
  *
@@ -380,22 +380,31 @@ const quoteRate = new Map<Address, bigint>(); // quote token -> units worth 1 ET
  * six-decimal stablecoin that is twelve, which is enough to make every round look uneconomic
  * forever.
  */
-function valueInEth(quoteToken: Address, amount: bigint): bigint | null {
-  const unitsPerEth = quoteRate.get(quoteToken);
-  if (unitsPerEth === undefined || unitsPerEth === 0n) return null;
-  return (amount * 10n ** 18n) / unitsPerEth;
+async function valueInEth(quoteToken: Address, amount: bigint, decimals: number): Promise<bigint | null> {
+  const [quoteUsd, ethUsd] = await Promise.all([usdPrice(quoteToken), usdPrice(WETH)]);
+  if (quoteUsd === null || ethUsd === null || ethUsd <= 0) return null;
+  const dollars = (Number(amount) / 10 ** decimals) * quoteUsd;
+  return BigInt(Math.floor((dollars / ethUsd) * 1e18));
 }
 
 /**
- * The per-name spend gate, in the units of the quote the basket is actually paid in.
+ * The per-name spend gate, converted from dollars into the quote the basket is paid in.
  *
- * The sibling protocol converted this to ETH through its RFQ desk's price feed. There is no such
- * feed here — and pricing the gate would mean the treasury could only buy names something quotes,
- * which is the exact dependency this design refuses. So an ERC20-quoted basket states its floor in
- * its own quote (`MIN_ROUND_QUOTE`) and a native one in ether, and neither needs a conversion.
+ * The gate asks whether a slice is worth the transaction that would move it, and a transaction
+ * costs dollars — so the threshold has to be stated in dollars and converted, not written in units
+ * of whatever a coin was paired against. Written in units it was a different threshold for every
+ * index: $20 against a stablecoin and $6,245 against AAPLc, which is why the first live
+ * equity-quoted index would have had to grow 22,000x before anything happened.
+ *
+ * A quote nobody prices falls through to a floor low enough to be no gate at all. That direction is
+ * deliberate: the old fallback refused forever, and an unpriced asset should cost us a check rather
+ * than the programme. `PAYOUT_COST_MAX_BPS` still stands behind this on the expensive half.
  */
-async function thresholdIn(_quoteToken: Address, decimals: number): Promise<bigint> {
-  return parseUnits(MIN_ROUND_QUOTE, decimals);
+async function thresholdIn(quoteToken: Address, decimals: number): Promise<bigint> {
+  const units = await unitsForUsd(quoteToken, MIN_ROUND_USD, decimals);
+  if (units !== null && units > 0n) return units;
+  console.log(`    ${short(quoteToken)} has no price — buying without a value floor`);
+  return parseUnits(MIN_ROUND_UNPRICED, decimals);
 }
 
 async function allocate(treasury: Address, index: number, size: bigint, decimals: number): Promise<bigint> {
@@ -445,14 +454,12 @@ async function buy(
     functionName: "spendableQuote",
   })) as bigint;
 
-  let decimals = 18;
-  let threshold = MIN_ROUND_ETH;
-  if (!isNative) {
-    decimals = Number(
-      await publicClient.readContract({ address: quoteToken, abi: erc20Abi, functionName: "decimals" })
-    );
-    threshold = await thresholdIn(quoteToken, decimals);
-  }
+  // One rule for both: ether is priced like anything else, so the native branch only decides where
+  // the decimals come from.
+  const decimals = isNative
+    ? 18
+    : Number(await publicClient.readContract({ address: quoteToken, abi: erc20Abi, functionName: "decimals" }));
+  const threshold = await thresholdIn(quoteToken, decimals);
 
   // The treasury pays no gas, but leaving it bone dry means an owner rescue has nothing to work with.
   const spendable = isNative
@@ -829,6 +836,8 @@ async function runIndex(treasury: Address) {
    * either way, because it leaves in the very next transaction.
    */
   const spent = await buy(treasury, quoteToken, tokens, weights);
+  // The quote's own scale, for pricing what that spend was worth below.
+  const quoteDecimals = quoteToken === ZERO ? 18 : (await decimalsOf(quoteToken)) ?? 18;
   const bought = spent > 0n;
 
   // Holders are fetched once and reused across the names, because it is the same list for all.
@@ -861,24 +870,47 @@ async function runIndex(treasury: Address) {
   if (holders.length === 0) return console.log("    no eligible holders");
 
   /**
-   * A payout costs gas per holder, so whether it is worth running depends on the holder count as
-   * much as on the amount. The value of a round is what it just spent buying; if moving it would
-   * cost more than PAYOUT_COST_MAX_BPS of that, the stock waits for the next round instead — the
-   * holders keep it either way, and they keep more of it by not paying for the trip twice.
+   * Two gates, and they answer different questions.
+   *
+   * The payout is the expensive half of everything this keeper does: ~72,000 gas PER HOLDER measured
+   * on live batches, against 306,000 for an entire swap. At 150 holders that is ~11M gas, thirty-five
+   * times the buy — and `distribute()` runs once per basket entry, so a basket of four pays it four
+   * times. The gas is the keeper's, not the treasury's, so a round that is not worth running is our
+   * money, not the holders'.
+   *
+   * FIRST, IS IT WORTH ANYTHING. A dollar floor, because a round's value is a dollar amount and the
+   * cost it is weighed against is too. Everything the round would pay out, priced.
+   *
+   * SECOND, IS IT WORTH IT TODAY. The floor alone cannot survive a gas spike — at 0.3 gwei a
+   * 150-holder round costs about $7.60, which would eat a third of a $20 payout — so the ratio gate
+   * stands behind it. It used to be reachable only for ether-quoted baskets, because nothing ever
+   * priced anything else and `valueInEth` returned null for every one of them; it applies to all of
+   * them now.
+   *
+   * Neither gate loses anything. The stock stays in the treasury and goes out in the next round,
+   * which is the same stock plus more of it, moved once instead of twice.
    */
-  if (spent > 0n) {
-    // Gas is quoted in wei, so the round has to be too. A basket paid in something other than ether
-    // is worth whatever the venue says it is; if that cannot be priced the gate is skipped rather
-    // than guessed, since guessing wrong here means never paying out at all.
-    const worth = quoteToken === ZERO ? spent : valueInEth(quoteToken, spent);
-    const gasPrice = await publicClient.getGasPrice().catch(() => 0n);
-    const gasCost = gasPrice * (GAS_BASE + GAS_PER_HOLDER * BigInt(holders.length));
-    if (worth !== null && gasCost * 10_000n > worth * BigInt(PAYOUT_COST_MAX_BPS)) {
-      return console.log(
-        `    holding: paying ${holders.length} holders would cost ${formatEther(gasCost)} ETH ` +
-          `against a round worth ${formatEther(worth)} — waiting for a bigger one`
-      );
-    }
+  let roundUsd: number | null = 0;
+  for (const d of due) {
+    const value = await usdValue(tokens[d.index], d.amount, (await decimalsOf(tokens[d.index])) ?? 8);
+    if (value === null) { roundUsd = null; break; }
+    roundUsd += value;
+  }
+
+  if (roundUsd !== null && roundUsd < MIN_PAYOUT_USD) {
+    return console.log(
+      `    holding: the round is worth $${roundUsd.toFixed(2)}, under the $${MIN_PAYOUT_USD} floor — it keeps accruing`
+    );
+  }
+
+  const gasPrice = await publicClient.getGasPrice().catch(() => 0n);
+  const gasCost = gasPrice * (GAS_BASE + GAS_PER_HOLDER * BigInt(holders.length));
+  const worth = spent > 0n ? await valueInEth(quoteToken, spent, quoteDecimals) : null;
+  if (worth !== null && worth > 0n && gasCost * 10_000n > worth * BigInt(PAYOUT_COST_MAX_BPS)) {
+    return console.log(
+      `    holding: paying ${holders.length} holders would cost ${formatEther(gasCost)} ETH ` +
+        `against a round worth ${formatEther(worth)} — waiting for a bigger one`
+    );
   }
 
   for (const d of due) {
@@ -949,20 +981,13 @@ async function main() {
   if (balance === 0n) throw new Error("keeper wallet has no ETH for gas");
 
   /**
-   * WETH is one ether, by construction. Seeding the rate says so rather than asking a venue.
+   * Say up front what the gates are, because they decide whether this keeper does anything at all.
    *
-   * Everything else quoted in an ERC20 has to be priced, and a price that cannot be fetched falls
-   * back to `MIN_ROUND_QUOTE` whole units — which for a token worth an ether apiece is a threshold of
-   * twenty ether, and a basket that never buys anything. That is the shape the USDG threshold bug
-   * already took once. A WETH-quoted basket is reachable now that pools.fun pays its paired leg
-   * wrapped, so the one rate nobody should ever have to ask for is put in up front.
+   * A seeded WETH rate used to live here — the one asset that could be priced, patched in so a
+   * WETH-quoted basket would not stall. Every asset is priced now, so there is nothing to seed and
+   * nothing left that only works for ether.
    */
-  const weth = (await publicClient.readContract({
-    address: FACTORY,
-    abi: factoryAbi,
-    functionName: "weth",
-  })) as Address;
-  quoteRate.set(getAddress(weth), 10n ** 18n);
+  console.log(`buy at $${MIN_ROUND_USD}+ per name · pay out at $${MIN_PAYOUT_USD}+ per round · gas capped at ${PAYOUT_COST_MAX_BPS / 100}% of it`);
 
   for (;;) {
     const started = Date.now();
