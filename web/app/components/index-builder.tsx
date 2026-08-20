@@ -22,12 +22,22 @@ import type { IndexStock } from "../../lib/stocks";
 import { INDEX_FACTORY, LAUNCHPAD, MIN_BUY_ETH, MIN_HOLDER_COINS, indicesLive } from "../../lib/indices";
 import { encodeCreateIndex, saltFor, type IndexConfig } from "../../lib/indexCalldata";
 import { truncateAddress, useWallet } from "./wallet";
+import { CoinMark } from "./coin-mark";
 import { StockLogo } from "./stock-logo";
 
 const ZERO = "0x0000000000000000000000000000000000000000";
+/** Base WETH. The locker settles an ETH-paired launch in wrapped; the treasury quotes native. */
+const WETH = "0x4200000000000000000000000000000000000006";
+// From `cast sig`, not from memory — three of these were wrong when written by hand, and a wrong
+// selector here reads as "the launchpad does not know your coin" rather than as a bug.
 const PREDICT_SELECTOR = "0xcb193942"; // predictAddress(address,bytes32)
+const INDEX_COUNT_OF = "0x1c72cafc"; // indexCountOf(address)
+const LAUNCHPAD_LIST = "0x43ffc6fe"; // launchpadList()
+const LAUNCHPADS = "0xf12131dd"; // launchpads(uint8)
+const TOKEN_QUOTE = "0xbcd40a0c"; // tokenQuote(address) — on the launchpad's fee locker
 const pad32 = (v: string | number) =>
   (typeof v === "string" ? v.replace(/^0x/, "") : v.toString(16)).toLowerCase().padStart(64, "0");
+const isAddress = (v: string) => /^0x[a-fA-F0-9]{40}$/.test(v.trim());
 
 type Shape = "single" | "basket" | "buyback";
 
@@ -80,7 +90,6 @@ export function IndexBuilder({ stocks, platformBps }: { stocks: IndexStock[]; pl
   const [weights, setWeights] = useState<number[]>([]);
   const [creatorShareBps, setCreatorShareBps] = useState(0);
   const [interval, setInterval] = useState(3_600);
-  const [coin, setCoin] = useState("");
   const [search, setSearch] = useState("");
 
   const [predicted, setPredicted] = useState<string | null>(null);
@@ -89,7 +98,29 @@ export function IndexBuilder({ stocks, platformBps }: { stocks: IndexStock[]; pl
   const [txHash, setTxHash] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  /**
+   * The asset the coin's fees will arrive in — and the field that used to be hardcoded to ETH.
+   *
+   * `bind()` refuses a treasury whose `quote` is not what the launchpad says the coin is paired
+   * against (`QuoteMismatch`). `quote` is set at `initialize` and there is no setter, so getting it
+   * wrong does not produce a warning: it produces a treasury that can never bind, cannot be
+   * reconfigured, and whose fee stream has to be pointed somewhere else entirely. That is what
+   * happened to the first index created here — an AAPL-paired launch against a treasury quoting ETH.
+   */
+  const [quote, setQuote] = useState<string>(ZERO);
+  /** Optional: an already-launched coin, used to READ the pairing instead of asking for it. */
+  const [coinInput, setCoinInput] = useState("");
+  const [quoteResolved, setQuoteResolved] = useState<"idle" | "looking" | "found" | "unknown">("idle");
+
   const isBuyback = shape === "buyback";
+  /** How the chosen pairing reads: "ETH", a ticker, or the raw address for something unlisted. */
+  const quoteLabel =
+    quote === ZERO
+      ? "ETH"
+      : stocks.find((s) => s.address.toLowerCase() === quote.toLowerCase())?.symbol
+        ?? `${quote.slice(0, 8)}…`;
+  /** The basket holds the pairing itself — the `allocate()` path, not a swap. */
+  const selfPicked = quote !== ZERO && picked.some((a) => a.toLowerCase() === quote.toLowerCase());
   const maxNames = shape === "single" ? 1 : 12;
   const total = weights.reduce((a, b) => a + b, 0);
   const rest = 10_000 - platformBps;
@@ -97,20 +128,47 @@ export function IndexBuilder({ stocks, platformBps }: { stocks: IndexStock[]; pl
   const holderCut = rest - creatorCut;
   const floor = isBuyback ? MIN_BUY_ETH : MIN_BUY_ETH * Math.max(1, picked.length);
 
-  /** The address the factory would produce for this wallet. Read live, never guessed. */
+  const call = useCallback(
+    async (to: string, data: string) => {
+      const result = await provider().request({ method: "eth_call", params: [{ to, data }, "latest"] });
+      return typeof result === "string" ? result : "0x";
+    },
+    [provider]
+  );
+
+  /**
+   * The address the factory would produce for this wallet — at the first nonce still free.
+   *
+   * `create2` at an address that already holds code returns zero and the factory reverts
+   * `CloneFailed`, so a fixed salt is one index per wallet for good. Starting from
+   * `indexCountOf(account)` lands on a free slot immediately in the ordinary case, and the loop
+   * covers the rest: indexes created by an earlier version of this page, or outside it entirely.
+   */
   useEffect(() => {
     let cancelled = false;
     (async () => {
       if (!account || !indicesLive) return setPredicted(null);
-      const s = await saltFor(account);
-      if (cancelled) return;
-      setSalt(s);
       try {
-        const result = (await provider().request({
-          method: "eth_call",
-          params: [{ to: INDEX_FACTORY, data: PREDICT_SELECTOR + pad32(account) + pad32(s) }, "latest"],
-        })) as string;
-        if (!cancelled) setPredicted(`0x${result.slice(-40)}`);
+        const countHex = await call(INDEX_FACTORY, INDEX_COUNT_OF + pad32(account));
+        let nonce = countHex && countHex !== "0x" ? Number(BigInt(countHex)) : 0;
+
+        for (let tries = 0; tries < 16; tries++) {
+          const s = await saltFor(account, nonce);
+          const result = await call(INDEX_FACTORY, PREDICT_SELECTOR + pad32(account) + pad32(s));
+          const address = `0x${result.slice(-40)}`;
+          const code = (await provider().request({
+            method: "eth_getCode",
+            params: [address, "latest"],
+          })) as string;
+          if (cancelled) return;
+          if (code === "0x" || code === "0x0") {
+            setSalt(s);
+            setPredicted(address);
+            return;
+          }
+          nonce += 1;
+        }
+        if (!cancelled) setPredicted(null);
       } catch {
         if (!cancelled) setPredicted(null);
       }
@@ -118,7 +176,62 @@ export function IndexBuilder({ stocks, platformBps }: { stocks: IndexStock[]; pl
     return () => {
       cancelled = true;
     };
-  }, [account, provider]);
+  }, [account, call, provider]);
+
+  /**
+   * Read the pairing off the launchpad rather than asking the creator to remember it.
+   *
+   * This is the same question `bind()` asks, against the same registries, so an answer here cannot
+   * disagree with the answer that decides whether the treasury works. The factory's launchpad list
+   * is walked in order — exactly as `bind()` walks it — and the first registry that names an asset
+   * for this coin settles it.
+   *
+   * A coin nobody recognises leaves the manual choice in place: an unlaunched coin has no pairing to
+   * read yet, and that is the ordinary case for someone reserving an address before their launch.
+   */
+  useEffect(() => {
+    const entered = coinInput.trim();
+    if (!isAddress(entered) || !indicesLive || !account) {
+      setQuoteResolved("idle");
+      return;
+    }
+    let cancelled = false;
+    setQuoteResolved("looking");
+    (async () => {
+      try {
+        const listHex = await call(INDEX_FACTORY, LAUNCHPAD_LIST);
+        const body = listHex.replace(/^0x/, "");
+        const n = body.length >= 128 ? Number(BigInt(`0x${body.slice(64, 128)}`)) : 0;
+        const ids = Array.from({ length: n }, (_, i) =>
+          Number(BigInt(`0x${body.slice(128 + i * 64, 128 + (i + 1) * 64)}`))
+        );
+
+        for (const id of ids) {
+          const padHex = await call(INDEX_FACTORY, LAUNCHPADS + pad32(id));
+          const w = padHex.replace(/^0x/, "");
+          if (w.length < 192) continue;
+          const registry = `0x${w.slice(24, 64)}`;
+          const enabled = BigInt(`0x${w.slice(128, 192)}`) !== 0n;
+          if (!enabled || !isAddress(registry) || BigInt(registry) === 0n) continue;
+
+          const quoteHex = await call(registry, TOKEN_QUOTE + pad32(entered));
+          const paired = quoteHex.length >= 66 ? `0x${quoteHex.slice(-40)}` : ZERO;
+          if (BigInt(paired) === 0n) continue;
+          if (cancelled) return;
+          // WETH and native are one asset to the treasury: it unwraps what the locker pays.
+          setQuote(paired.toLowerCase() === WETH.toLowerCase() ? ZERO : paired);
+          setQuoteResolved("found");
+          return;
+        }
+        if (!cancelled) setQuoteResolved("unknown");
+      } catch {
+        if (!cancelled) setQuoteResolved("unknown");
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [account, call, coinInput]);
 
   const toggle = useCallback(
     (address: string) => {
@@ -151,8 +264,9 @@ export function IndexBuilder({ stocks, platformBps }: { stocks: IndexStock[]; pl
         owner: account,
         creator: account,
         // Native when the coin is paired against WETH; the treasury treats ether and wrapped as one
-        // asset. A coin paired against an equity states that equity here instead.
-        quote: ZERO,
+        // asset. A coin paired against an equity states that equity here — read off the launchpad
+        // when the coin already exists, chosen above when it does not.
+        quote,
         basket: isBuyback ? [] : picked,
         weights: isBuyback ? [] : weights,
         interval,
@@ -245,11 +359,70 @@ export function IndexBuilder({ stocks, platformBps }: { stocks: IndexStock[]; pl
 
       {step === 1 && (
         <div className="builder-panel">
+          {/* WHAT THE FEES ARRIVE IN. Asked before what to buy with them, because it decides
+              whether there is anything to buy at all: when the pairing IS the name you want, the
+              treasury sets the asset aside instead of selling it to itself. */}
+          <div className="builder-quote">
+            <label htmlFor="builder-coin">Your coin, if it has already launched</label>
+            <input
+              className="builder-search"
+              id="builder-coin"
+              onChange={(e) => setCoinInput(e.target.value)}
+              placeholder="0x… — optional, we read the pairing from the launchpad"
+              spellCheck={false}
+              value={coinInput}
+            />
+            {quoteResolved === "looking" && <p className="builder-note">Asking the launchpad…</p>}
+            {quoteResolved === "found" && (
+              <p className="builder-ok">
+                Paired against <strong>{quoteLabel}</strong>, read from the launchpad. That is what
+                your fees arrive in, so that is what this index is quoted in.
+              </p>
+            )}
+            {quoteResolved === "unknown" && (
+              <p className="builder-note">
+                No launchpad recognises that address yet. If your coin is not launched, that is
+                expected — pick what you will pair it against below.
+              </p>
+            )}
+
+            {quoteResolved !== "found" && (
+              <>
+                <span className="builder-quote-label">Paired against</span>
+                <div className="builder-grid is-tight">
+                  <button
+                    className={quote === ZERO ? "is-picked" : undefined}
+                    onClick={() => setQuote(ZERO)}
+                    type="button"
+                  >
+                    <CoinMark size={22} symbol="ETH" />
+                    <span>ETH</span>
+                  </button>
+                  {stocks.map((s) => (
+                    <button
+                      className={quote.toLowerCase() === s.address.toLowerCase() ? "is-picked" : undefined}
+                      key={`q-${s.address}`}
+                      onClick={() => setQuote(s.address)}
+                      type="button"
+                    >
+                      <StockLogo logo={undefined} stock={{ symbol: s.symbol, domain: s.domain }} />
+                      <span>{s.ticker}</span>
+                    </button>
+                  ))}
+                </div>
+                <p className="builder-note">
+                  This has to match what the launchpad says, or the index can never bind — and it is
+                  fixed at creation, with no way to change it afterwards.
+                </p>
+              </>
+            )}
+          </div>
+
           {isBuyback ? (
             <p className="builder-note">
-              Nothing to choose. A buyback index buys back the coin it collects for and destroys it —
-              the target is fixed when it binds, not by configuration, so it can never be pointed at
-              anything else.
+              Nothing else to choose. A buyback index buys back the coin it collects for and destroys
+              it — the target is fixed when it binds, not by configuration, so it can never be pointed
+              at anything else.
             </p>
           ) : (
             <>
@@ -302,11 +475,21 @@ export function IndexBuilder({ stocks, platformBps }: { stocks: IndexStock[]; pl
                 </div>
               )}
 
-              {picked.length > 0 && (
+              {picked.length > 0 && quote === ZERO && (
                 <p className="builder-note">
                   Each name is bought only when its own slice is worth the gas, so this needs about{" "}
                   <strong>{floor.toFixed(2)} ETH</strong> of fees to accumulate before it moves at
                   all. More names means rarer payouts.
+                </p>
+              )}
+
+              {/* The pairing sitting in the basket is the case worth calling out: it is not a
+                  mistake, it is the cheapest shape this can take. */}
+              {selfPicked && (
+                <p className="builder-ok">
+                  {quoteLabel} is both what your fees arrive in and what you are paying out, so
+                  nothing is traded for it — the treasury sets it aside and hands it over. No venue,
+                  no spread, no route that can fail.
                 </p>
               )}
             </>

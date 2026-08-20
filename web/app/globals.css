@@ -2891,6 +2891,33 @@ a.pool-row:hover { background: var(--surface-2); }
 .builder-error { color: var(--warn-fg); font-size: .8rem; margin: 14px 0 0; }
 .builder-ok { color: var(--lime); font-size: .84rem; margin: 14px 0 0; }
 
+/* The pairing block. It sits above the basket because it decides what the basket can even mean:
+   when the pairing IS one of the names, that entry is allocated rather than bought. */
+.builder-quote {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 16px;
+  margin-bottom: 18px;
+}
+.builder-quote > label {
+  display: block;
+  font-size: .78rem;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.builder-quote .builder-search { margin-bottom: 0; }
+.builder-quote-label {
+  display: block;
+  font-size: .78rem;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 16px 0 8px;
+}
+.builder-grid.is-tight { grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); }
+
 .builder-nav { display: flex; gap: 10px; justify-content: space-between; margin-top: 18px; }
 .builder-nav button:first-child {
   background: none; border: 1px solid var(--line); border-radius: var(--r-sm); color: var(--ink-2);

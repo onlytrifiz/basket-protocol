@@ -81,9 +81,23 @@ export function encodeCreateIndex(cfg: IndexConfig, salt: string, expected: stri
  * `predictAddress` hashes (deployer, salt), so a salt derived from the deployer means nobody else
  * can take the address a creator has already been shown — and the same wallet gets the same address
  * back if it walks away and returns.
+ *
+ * `nonce` IS WHAT MAKES A SECOND INDEX POSSIBLE, and its absence was a bug rather than a limit. The
+ * salt used to be the wallet alone, which is one address per wallet FOREVER: `create2` at an
+ * occupied address returns zero and the factory reverts `CloneFailed`. A creator who wanted a
+ * second basket — or who had to replace one that was configured wrong, which is exactly how this
+ * was found — could not, from that wallet, ever again.
+ *
+ * The caller passes the first nonce whose predicted address is still empty, so the stability the
+ * original design wanted survives: walk away and come back to the same address, until you actually
+ * use it.
  */
-export async function saltFor(account: string): Promise<string> {
-  const data = new TextEncoder().encode(`stockify-indices:${account.toLowerCase()}`);
-  const digest = await crypto.subtle.digest("SHA-256", data);
+export async function saltFor(account: string, nonce = 0): Promise<string> {
+  // Nonce 0 keeps the original preimage byte-for-byte, so an address already shown to a creator
+  // under the previous version is still the one they get.
+  const seed = nonce === 0
+    ? `stockify-indices:${account.toLowerCase()}`
+    : `stockify-indices:${account.toLowerCase()}:${nonce}`;
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(seed));
   return `0x${[...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, "0")).join("")}`;
 }
