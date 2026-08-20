@@ -111,11 +111,11 @@ export default async function IndexPage({
     <div className="site-shell">
       <SiteHeader active="indices" />
       <main>
-        <section className="section wrap">
+        <section className="section wrap idx-head">
           <Link className="detail-back" href="/indices">← The live set</Link>
 
-          <header className="detail-head" style={{ marginTop: "14px" }}>
-            <div>
+          <header className="detail-head">
+            <div className="idx-head-id">
               <p className="eyebrow">{burns ? "BUYBACK AND BURN" : "HOLDER REWARDS"}</p>
               <h1>{index.coinSymbol ?? (bound ? shorten(index.coin) : "Not bound yet")}</h1>
               <p className="detail-id">
@@ -131,14 +131,14 @@ export default async function IndexPage({
           </header>
 
           {bound && !index.stillCollecting && (
-            <p className="hub-note-degraded" style={{ marginTop: "18px" }}>
+            <p className="hub-note-degraded">
               This index is <strong>no longer being paid</strong>. The coin&apos;s creator has pointed
               the fee stream somewhere else, so nothing new will arrive — what it already bought and
               paid out stays with the holders who received it.
             </p>
           )}
           {!bound && (
-            <p className="hub-note-degraded" style={{ marginTop: "18px" }}>
+            <p className="hub-note-degraded">
               No coin is tied to this index yet, so its fees have nowhere to come from. It starts
               working the moment a launch points its creator fees at the address above.
             </p>

@@ -2912,6 +2912,7 @@ a.pool-row:hover { background: var(--surface-2); }
   margin-bottom: 8px;
 }
 .builder-quote .builder-search { margin-bottom: 0; }
+.builder-quote-label.is-first { margin-top: 0; }
 .builder-quote-label {
   display: block;
   font-size: .78rem;
@@ -2961,6 +2962,23 @@ a.pool-row:hover { background: var(--surface-2); }
 
 .hub-head-cta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
 .page-cta-note { color: var(--ink-3); font-size: .82rem; line-height: 1.6; margin: 10px 0 0; max-width: 46ch; }
+
+/* An index's header is a label, a name and an address — not a section of content. The 88px that
+   gives a real section room reads here as a gap with nothing in it, twice over. */
+.idx-head { padding-top: 34px; padding-bottom: 22px; }
+.idx-head .detail-back { margin-bottom: 14px; }
+/* Top, not centre: the chip belongs beside the title, not floating at the block's midpoint. */
+.idx-head .detail-head { align-items: flex-start; }
+.idx-head .detail-head .idx-head-id { flex: 1 1 auto; min-width: 0; }
+.idx-head h1 { margin: 6px 0 0; }
+.idx-head .detail-id {
+  color: var(--ink-3);
+  font-family: var(--mono-stack);
+  font-size: .8rem;
+  margin: 10px 0 0;
+  word-break: break-all;
+}
+.idx-head .hub-note-degraded { margin-top: 18px; }
 
 /* ── Indices: the live set, and one index ──────────────────────────────────────────────────────
    Its own table rather than `hub-table`, because the columns are different in kind: a coin, a row

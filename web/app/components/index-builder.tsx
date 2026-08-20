@@ -102,6 +102,19 @@ export function IndexBuilder({ stocks, platformBps }: { stocks: IndexStock[]; pl
    * happened to the first index created here — an AAPL-paired launch against a treasury quoting ETH.
    */
   const [quote, setQuote] = useState<string>(ZERO);
+  /**
+   * Which order this creator is doing it in — and it is a real fork, not a detail.
+   *
+   * The address is a CREATE2 prediction, so the index can exist BEFORE the coin does: you take the
+   * address, name it as the fee recipient when you launch, and it binds itself. That is the ordinary
+   * path for someone who has not launched yet, and it was buried in a parenthetical on a field
+   * labelled "if it has already launched" — which reads as a requirement to anyone skimming.
+   *
+   * Asking outright costs one control and removes the question. It also decides what the rest of
+   * the step can say: an unlaunched coin has no pairing to read, and a launched one should not be
+   * asked to guess it.
+   */
+  const [launched, setLaunched] = useState<"later" | "already">("later");
   /** Optional: an already-launched coin, used to READ the pairing instead of asking for it. */
   const [coinInput, setCoinInput] = useState("");
   const [quoteResolved, setQuoteResolved] = useState<"idle" | "looking" | "found" | "unknown">("idle");
@@ -470,15 +483,42 @@ export function IndexBuilder({ stocks, platformBps }: { stocks: IndexStock[]; pl
                 has to be stated. Both belong with the address, which is the other thing a creator
                 leaves this page holding. */}
             <div className="builder-quote">
-              <label htmlFor="builder-coin">Your coin, if it has already launched</label>
-              <input
-                className="builder-search"
-                id="builder-coin"
-                onChange={(e) => setCoinInput(e.target.value)}
-                placeholder="0x…"
-                spellCheck={false}
-                value={coinInput}
-              />
+              <span className="builder-quote-label is-first">Your coin</span>
+              <div className="builder-choices is-tight">
+                <button
+                  className={launched === "later" ? "is-picked" : undefined}
+                  onClick={() => { setLaunched("later"); setCoinInput(""); }}
+                  type="button"
+                >
+                  <strong>Not launched yet</strong>
+                  <span>Create the index first and name its address at launch.</span>
+                </button>
+                <button
+                  className={launched === "already" ? "is-picked" : undefined}
+                  onClick={() => setLaunched("already")}
+                  type="button"
+                >
+                  <strong>Already launched</strong>
+                  <span>Paste it and the pairing is filled in for you.</span>
+                </button>
+              </div>
+
+              {launched === "already" ? (
+                <input
+                  className="builder-search"
+                  id="builder-coin"
+                  onChange={(e) => setCoinInput(e.target.value)}
+                  placeholder="0x… your coin's address"
+                  spellCheck={false}
+                  value={coinInput}
+                />
+              ) : (
+                <p className="builder-note">
+                  Nothing to enter. Your index gets an address below that is real before the contract
+                  is — take it, launch your coin with it as the creator-fee recipient, and it ties
+                  itself to that coin on its own.
+                </p>
+              )}
 
               <span className="builder-quote-label">Paired against</span>
               {quoteResolved === "found" ? (
@@ -562,24 +602,23 @@ export function IndexBuilder({ stocks, platformBps }: { stocks: IndexStock[]; pl
                 )}
               </div>
 
-              <p className="builder-note">
-                Create it now, then point your launch&apos;s creator fees at this address. It works in
-                either order: the address exists before the contract does, so it can be named in a
-                launch you have not made yet.
-              </p>
-
               <ol className="builder-after">
-                <li>
-                  Create the index — one transaction, and it is yours at the address above.
-                </li>
-                <li>
-                  Point your coin&apos;s creator fees at it, on{" "}
-                  <a href={LAUNCHPAD.url} rel="noreferrer" target="_blank">{LAUNCHPAD.name}</a> or any
-                  launchpad this service supports.
-                </li>
-                <li>
-                  Nothing else. The keeper notices, binds the coin, and runs the cycle from then on.
-                </li>
+                <li>Create the index — one transaction, and it is yours at the address above.</li>
+                {launched === "later" ? (
+                  <li>
+                    Launch your coin on{" "}
+                    <a href={LAUNCHPAD.url} rel="noreferrer" target="_blank">{LAUNCHPAD.name}</a>, naming
+                    the address above as the creator-fee recipient.
+                  </li>
+                ) : (
+                  <li>
+                    Point your coin&apos;s creator fees at the address above, on{" "}
+                    <a href={LAUNCHPAD.url} rel="noreferrer" target="_blank">{LAUNCHPAD.name}</a> or any
+                    launchpad this service supports. Fees earned before you do go to whoever was named
+                    first, so it is worth doing early.
+                  </li>
+                )}
+                <li>Nothing else. The keeper notices, binds the coin, and runs the cycle from then on.</li>
               </ol>
 
               {error && <p className="builder-error">{error}</p>}
