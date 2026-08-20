@@ -29,6 +29,27 @@ export const dynamic = "force-dynamic";
 
 /* `filled` advances the ring across the loop; only the final step is a payout,
    so it is the only one allowed to light a segment lime. */
+const products = [
+  {
+    name: "$STFY",
+    href: "/dividends",
+    line: "Stock dividend protocol",
+    copy: "Trading fees buy tokenized equity and push it to holders. Nothing to claim.",
+  },
+  {
+    name: "Indices",
+    href: "/indices",
+    line: "Turn token fees into a stocks basket",
+    copy: "Point a launch's creator fees at an index and its holders are paid in real equity.",
+  },
+  {
+    name: "Stocks Terminal",
+    href: "/stocks",
+    line: "Get info about any B20 stock",
+    copy: "Supply, markets and how far each one trades from the share it represents.",
+  },
+] as const;
+
 const mechanics = [
   { number: "01", filled: 3, lit: false, title: "Trade STFY", copy: "The ETH / STFY v4 market is designed to collect a 3% hook fee on trading." },
   { number: "02", filled: 6, lit: false, title: "Acquire the index", copy: "A keeper routes 90% of each collected hook fee into the active Base B20 equity index." },
@@ -59,7 +80,7 @@ export default async function Home() {
 
   return (
     <div className="site-shell">
-      <SiteHeader active="overview" />
+      <SiteHeader active="home" />
       <main>
         <header className="hero-card" id="overview">
           <div className="hero-inner">
@@ -101,6 +122,30 @@ export default async function Home() {
               <span className="equity-name"><strong>The vault</strong><span>What it buys</span></span>
             </Link>
           </StockGrid></section>
+
+        {/* WHAT THIS SITE IS, in three lines, after the universe it is built on.
+            Here rather than at the top because each one only means something once you know what a
+            B20 stock is — the section above is the premise and this is the consequence. */}
+        <section className="section wrap" id="products">
+          <div className="section-head">
+            <p className="eyebrow">THREE WAYS IN</p>
+            <h2>The hub for B20 stocks on Base.</h2>
+            <p>
+              One protocol that pays them out, one that turns any launch&apos;s fees into them, and one
+              place to look them up.
+            </p>
+          </div>
+          <div className="product-grid">
+            {products.map((product) => (
+              <Link className="product-card" href={product.href} key={product.name}>
+                <span className="product-name">{product.name}</span>
+                <strong>{product.line}</strong>
+                <p>{product.copy}</p>
+                <b aria-hidden="true">→</b>
+              </Link>
+            ))}
+          </div>
+        </section>
       </main>
       <SiteFooter />
     </div>
