@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { readAssets } from "../../lib/b20";
+import { readDecimals, toUnits } from "../../lib/decimals";
 import { readLedger } from "../../lib/ledger";
 import { marketBoard } from "../../lib/market";
 import { readVault } from "../../lib/vault";
@@ -33,11 +34,21 @@ const phases = [
   { number: "04", filled: 8, lit: true, title: "Assets are sent", copy: "The vault pushes each B20 entitlement to every eligible holder in batches." },
 ];
 
-const toUnits = (raw: string | null, decimals: number) =>
-  raw === null ? null : Number(BigInt(raw)) / 10 ** decimals;
-
 export default async function DividendPage({ searchParams }: PageProps<"/dividends">) {
   const [vault, assets, ledger] = await Promise.all([readVault(), readAssets(), readLedger()]);
+
+  /**
+   * The scale for every asset this page names, including the ones only the ledger knows.
+   *
+   * The active index is not the whole set: `setIndex` rotates names out, and a cycle that bought one
+   * before it left keeps its row in the ledger forever. Those addresses arrive from `StockBought`
+   * logs with no metadata attached, which is exactly the case a hardcoded 8 could not survive.
+   */
+  const decimals = await readDecimals([
+    ...vault.holdings.map((h) => h.address),
+    ...ledger.cycles.flatMap((cycle) => cycle.bought.map((b) => b.address)),
+  ]);
+  const scaleOf = (address: string) => decimals.get(address.toLowerCase()) ?? null;
 
   const byAddress = new Map(assets.map((a) => [a.address.toLowerCase(), a]));
   const tickers = vault.holdings
@@ -64,12 +75,18 @@ export default async function DividendPage({ searchParams }: PageProps<"/dividen
    * nothing about whether the protocol is working — the number that does is what reached holders.
    * Summed from the `StockBought` logs of every cycle ever settled; each cycle buys and then
    * pushes, so acquired and distributed are one quantity seen at two moments.
+   *
+   * An asset whose scale went unread contributes nothing rather than a number at the wrong scale:
+   * its row shows "—" and the totals below simply do not count it, which is the same rule the rest
+   * of this page follows for a balance it could not read.
    */
   const distributedByAsset = new Map<string, number>();
   for (const cycle of ledger.cycles) {
     for (const bought of cycle.bought) {
       const key = bought.address.toLowerCase();
-      distributedByAsset.set(key, (distributedByAsset.get(key) ?? 0) + Number(BigInt(bought.receivedRaw)) / 1e8);
+      const units = toUnits(bought.receivedRaw, scaleOf(key));
+      if (units === null) continue;
+      distributedByAsset.set(key, (distributedByAsset.get(key) ?? 0) + units);
     }
   }
 
@@ -87,11 +104,9 @@ export default async function DividendPage({ searchParams }: PageProps<"/dividen
   });
 
   const acquired = rows.reduce((sum, r) => sum + (r.value ?? 0), 0);
-  // What has actually left for holders, summed across every cycle the vault ever settled.
-  const distributedShares = ledger.cycles.reduce(
-    (sum, cycle) => sum + cycle.bought.reduce((inner, b) => inner + Number(BigInt(b.receivedRaw)) / 1e8, 0),
-    0,
-  );
+  // What has actually left for holders, summed across every cycle the vault ever settled — from the
+  // per-asset totals above, so an unread scale is skipped in one place rather than two.
+  const distributedShares = [...distributedByAsset.values()].reduce((sum, units) => sum + units, 0);
   const anyHeld = rows.some((r) => (r.held ?? 0) > 0);
   const distributedValue = rows.reduce((sum, r) => sum + (r.distributedValue ?? 0), 0);
   const anyDistributed = rows.some((r) => r.distributed > 0);
@@ -253,7 +268,7 @@ export default async function DividendPage({ searchParams }: PageProps<"/dividen
                             {asset?.logo
                               ? <img alt="" className="cycle-mark" loading="lazy" src={asset.logo} />
                               : <span className="cycle-mark cycle-mark-blank" />}
-                            {fmtShares(Number(BigInt(b.receivedRaw)) / 1e8)}
+                            {fmtShares(toUnits(b.receivedRaw, scaleOf(b.address)))}
                           </span>
                         );
                       }) : "—"}
