@@ -136,8 +136,19 @@ export type Log = { address: string; topics: string[]; data: string; blockNumber
  * array. Collapsing the two is how a ledger that could not be read renders as a ledger with nothing
  * in it — the caller has to be able to tell "the vault emitted nothing" from "nobody would say".
  */
-export async function getLogs(address: string, topics: (string | null)[], fromBlock: number, toBlock: number): Promise<Log[] | null> {
+export async function getLogs(
+  /**
+   * One address, or many. `eth_getLogs` takes an array here, and using it matters: a service with a
+   * dozen contracts to watch is one chunked scan rather than a dozen, so the request count follows
+   * the block range instead of multiplying by however many contracts exist.
+   */
+  address: string | string[],
+  topics: (string | null)[],
+  fromBlock: number,
+  toBlock: number,
+): Promise<Log[] | null> {
   const SPAN = Math.max(1, Number(process.env.BASE_RPC_LOG_SPAN) || 9_500);
+  if (Array.isArray(address) && address.length === 0) return [];
 
   for (const rpc of RPCS) {
     const collected: Log[] = [];

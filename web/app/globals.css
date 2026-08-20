@@ -2916,7 +2916,34 @@ a.pool-row:hover { background: var(--surface-2); }
   color: var(--muted);
   margin: 16px 0 8px;
 }
-.builder-grid.is-tight { grid-template-columns: repeat(auto-fill, minmax(78px, 1fr)); }
+.builder-select {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  color: inherit;
+  font: inherit;
+  padding: 12px 14px;
+  appearance: none;
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: calc(100% - 20px) calc(50% + 2px), calc(100% - 14px) calc(50% + 2px);
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
+}
+.builder-select:focus { border-color: var(--blue); outline: none; }
+
+/* The pairing when it came from the launch record: one value, not a control — there is nothing to
+   choose once the chain has answered. */
+.builder-quote-locked {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 10px;
+  border: 1px solid var(--blue);
+  border-radius: 12px;
+  padding: 10px 14px;
+}
+.builder-quote-locked b { font-size: 1rem; }
+.builder-quote-locked span { color: var(--muted); font-size: .8rem; }
 
 .builder-nav { display: flex; gap: 10px; justify-content: space-between; margin-top: 18px; }
 .builder-nav button:first-child {

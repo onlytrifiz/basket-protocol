@@ -1,5 +1,9 @@
 import { cached } from "./cache";
-import { batchCall, pad, toBigInt, type RpcCall } from "./rpc";
+import { readDecimals } from "./decimals";
+import { marketBoard } from "./market";
+import { ethUsd } from "./pools";
+import { stockByAddress } from "./stocks";
+import { batchCall, blockNumber, getLogs, pad, toBigInt, type RpcCall } from "./rpc";
 
 /**
  * Indices — what a launch's creator fees are turned into.
@@ -229,4 +233,257 @@ export async function readIndexDetail(address: string): Promise<IndexDetail | nu
     paidNow,
     stillCollecting: !!paidNow && paidNow.toLowerCase() === base.address.toLowerCase(),
   };
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════════
+   What an index has actually DONE.
+
+   The figures that matter on these pages are not state — they are history. How much has reached
+   holders, how many rounds have run, how many wallets were paid: none of it is stored on the
+   treasury, because paying to keep a growing tally on-chain to serve a web page would be the wrong
+   trade. The events are the record, so this reads them.
+
+   ONE SCAN FOR EVERY TREASURY AT ONCE. `eth_getLogs` accepts an array of addresses, so the request
+   count follows the block range and not the number of indexes — a hundred of them cost exactly what
+   one does. Cached, because a settled round cannot change.
+   ══════════════════════════════════════════════════════════════════════════════════════════════ */
+
+const TOPIC = {
+  /** Harvested(uint256 amount, uint256 platformFee, uint256 creatorShare) — all in the data. */
+  harvested: "0xebdd323f18ba49318367d0c92a04d5c51a67f15a60ad50d46523db464661a302",
+  /** Distributed(uint256 indexed basketIdx, address indexed token, uint256 amount, uint256 holders) */
+  distributed: "0xebfe46b2b9627430364d1cff67d061f2e2f59dfedbd307f28a227b9ba08ad807",
+  /** Burned(address indexed coin, uint256 amount) */
+  burned: "0x696de425f79f4a40bc6d2122ca50507f0efbeabbff86a84871b7196ab8ea8df7",
+} as const;
+
+/** The block the factory was created in — nothing it minted can predate it. */
+const FACTORY_BLOCK = Math.max(0, Number(process.env.INDEX_FACTORY_DEPLOY_BLOCK) || 50_225_995);
+
+const dataWord = (data: string, i: number) => {
+  const w = (data.replace(/^0x/, "").match(/.{64}/g) ?? [])[i];
+  return w === undefined ? 0n : BigInt(`0x${w}`);
+};
+
+/** One thing an index did, for the activity feed. */
+export type IndexEvent = {
+  kind: "fees" | "paid" | "burn";
+  treasury: string;
+  blockNumber: number;
+  timestamp: number;
+  txHash: string;
+  /** Raw units — of the quote for `fees`, of the paid token for `paid`, of the coin for `burn`. */
+  amountRaw: string;
+  /** Only on `paid`: which basket entry, and how many wallets it reached. */
+  token?: string;
+  holders?: number;
+};
+
+export type IndexActivity = {
+  /** Raw quote units collected, ever. */
+  feesRaw: bigint;
+  /** Raw quote units accrued to the creator. */
+  creatorRaw: bigint;
+  /** Raw units pushed to holders, per token. */
+  distributed: Map<string, bigint>;
+  /** Rounds that actually paid, and the wallet payments inside them. */
+  rounds: number;
+  payments: number;
+  /** Newest first. */
+  events: IndexEvent[];
+};
+
+const emptyActivity = (): IndexActivity => ({
+  feesRaw: 0n,
+  creatorRaw: 0n,
+  distributed: new Map(),
+  rounds: 0,
+  payments: 0,
+  events: [],
+});
+
+/**
+ * Every index's history, keyed by treasury address.
+ *
+ * Returns null when no endpoint would serve the range — which is not the same as "nothing has
+ * happened", and the pages render it as unread rather than as zero.
+ */
+export function readActivity(): Promise<Map<string, IndexActivity> | null> {
+  return cached("indices:activity", 120_000, loadActivity).catch(() => null);
+}
+
+async function loadActivity(): Promise<Map<string, IndexActivity> | null> {
+  const all = await readIndices();
+  if (all.length === 0) return new Map();
+
+  const tip = await blockNumber();
+  if (tip === null) return null;
+
+  const logs = await getLogs(all.map((i) => i.address), [], FACTORY_BLOCK, tip);
+  if (logs === null) return null;
+
+  const out = new Map<string, IndexActivity>();
+  for (const index of all) out.set(index.address.toLowerCase(), emptyActivity());
+
+  for (const log of logs) {
+    const key = log.address.toLowerCase();
+    const entry = out.get(key);
+    if (!entry) continue;
+    const topic = log.topics[0];
+
+    if (topic === TOPIC.harvested) {
+      const amount = dataWord(log.data, 0);
+      entry.feesRaw += amount;
+      entry.creatorRaw += dataWord(log.data, 2);
+      // A harvest that brought nothing in is the ordinary empty poll, not an event worth a row.
+      if (amount > 0n) {
+        entry.events.push({
+          kind: "fees", treasury: key, blockNumber: log.blockNumber, timestamp: log.timestamp,
+          txHash: log.transactionHash, amountRaw: amount.toString(),
+        });
+      }
+    } else if (topic === TOPIC.distributed) {
+      const amount = dataWord(log.data, 0);
+      const holders = Number(dataWord(log.data, 1));
+      const token = `0x${(log.topics[2] ?? "").slice(-40)}`;
+      entry.distributed.set(token.toLowerCase(), (entry.distributed.get(token.toLowerCase()) ?? 0n) + amount);
+      entry.rounds += 1;
+      entry.payments += holders;
+      entry.events.push({
+        kind: "paid", treasury: key, blockNumber: log.blockNumber, timestamp: log.timestamp,
+        txHash: log.transactionHash, amountRaw: amount.toString(), token, holders,
+      });
+    } else if (topic === TOPIC.burned) {
+      entry.events.push({
+        kind: "burn", treasury: key, blockNumber: log.blockNumber, timestamp: log.timestamp,
+        txHash: log.transactionHash, amountRaw: dataWord(log.data, 0).toString(),
+      });
+    }
+  }
+
+  for (const entry of out.values()) entry.events.sort((a, b) => b.blockNumber - a.blockNumber);
+  return out;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════════════════════
+   The rows the tables render.
+
+   Assembled here rather than in the pages because both the list and the full set need the same
+   figures, and a second copy of "how do we price a distribution" is a second place for it to be
+   wrong. The pages stay presentational.
+   ══════════════════════════════════════════════════════════════════════════════════════════════ */
+
+export type IndexRow = Index & {
+  /** Dollars pushed to holders, ever. Null when nothing priced — never a confident zero. */
+  paidUsd: number | null;
+  /** Per-token, for the sub-line: [symbol, units]. */
+  paidUnits: Array<{ token: string; symbol: string; units: number }>;
+  /** Dollars collected in fees, ever. */
+  feesUsd: number | null;
+  rounds: number;
+  payments: number;
+  /** True when the history could not be read; the row shows dashes rather than zeros. */
+  unread: boolean;
+};
+
+export type IndexTotals = {
+  paidUsd: number | null;
+  count: number;
+  withRounds: number;
+  rounds: number;
+  payments: number;
+};
+
+/** Dollar price of one whole unit of a token, or null. ETH from a pool, equities from Nasdaq. */
+async function priceOf(token: string, quotes: Record<string, { price: number }>): Promise<number | null> {
+  if (token === ZERO_ADDRESS) return ethUsd();
+  const known = stockByAddress(token);
+  const price = known?.ticker ? quotes[known.ticker]?.price : undefined;
+  return typeof price === "number" && Number.isFinite(price) ? price : null;
+}
+
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+
+/** Every index with its history priced, newest first. */
+export function readIndexRows(): Promise<{ rows: IndexRow[]; totals: IndexTotals }> {
+  return cached("indices:rows", 60_000, loadRows).catch(() => ({
+    rows: [],
+    totals: { paidUsd: null, count: 0, withRounds: 0, rounds: 0, payments: 0 },
+  }));
+}
+
+async function loadRows(): Promise<{ rows: IndexRow[]; totals: IndexTotals }> {
+  const [all, activity] = await Promise.all([readIndices(), readActivity()]);
+
+  // Every token any index touches, so decimals and prices are fetched once for the whole page.
+  const tokens = new Set<string>();
+  for (const index of all) {
+    tokens.add(index.quote.toLowerCase());
+    for (const t of index.basket) tokens.add(t.toLowerCase());
+  }
+  const tickers = [...tokens].map((t) => stockByAddress(t)?.ticker).filter(Boolean) as string[];
+  const [decimals, board] = await Promise.all([
+    readDecimals([...tokens]),
+    tickers.length ? marketBoard(tickers) : Promise.resolve({ quotes: {} as Record<string, never> }),
+  ]);
+  const quotes = board.quotes as Record<string, { price: number }>;
+
+  const priced = new Map<string, number | null>();
+  await Promise.all(
+    [...tokens].map(async (t) => priced.set(t, await priceOf(t, quotes)))
+  );
+
+  const usd = (token: string, raw: bigint) => {
+    const d = decimals.get(token.toLowerCase());
+    const p = priced.get(token.toLowerCase());
+    if (d === null || d === undefined || p === null || p === undefined) return null;
+    return (Number(raw) / 10 ** d) * p;
+  };
+
+  const rows: IndexRow[] = all.map((index) => {
+    const a = activity?.get(index.address.toLowerCase());
+    if (!a) {
+      return { ...index, paidUsd: null, paidUnits: [], feesUsd: null, rounds: 0, payments: 0, unread: true };
+    }
+
+    const paidUnits: IndexRow["paidUnits"] = [];
+    let paidUsd: number | null = null;
+    for (const [token, raw] of a.distributed) {
+      const d = decimals.get(token);
+      if (d !== null && d !== undefined) {
+        paidUnits.push({
+          token,
+          symbol: stockByAddress(token)?.symbol ?? `${token.slice(0, 6)}…`,
+          units: Number(raw) / 10 ** d,
+        });
+      }
+      const value = usd(token, raw);
+      if (value !== null) paidUsd = (paidUsd ?? 0) + value;
+    }
+
+    return {
+      ...index,
+      paidUsd,
+      paidUnits,
+      feesUsd: a.feesRaw === 0n ? 0 : usd(index.quote, a.feesRaw),
+      rounds: a.rounds,
+      payments: a.payments,
+      unread: false,
+    };
+  });
+
+  // Biggest payer first. An index that has paid nothing yet is real but is not the headline.
+  rows.sort((a, b) => (b.paidUsd ?? -1) - (a.paidUsd ?? -1));
+
+  const totals: IndexTotals = {
+    paidUsd: rows.some((r) => r.paidUsd !== null)
+      ? rows.reduce((sum, r) => sum + (r.paidUsd ?? 0), 0)
+      : null,
+    count: rows.length,
+    withRounds: rows.filter((r) => r.rounds > 0).length,
+    rounds: rows.reduce((sum, r) => sum + r.rounds, 0),
+    payments: rows.reduce((sum, r) => sum + r.payments, 0),
+  };
+
+  return { rows, totals };
 }

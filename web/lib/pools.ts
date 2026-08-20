@@ -122,6 +122,30 @@ export async function poolsFor(address: string, minLiq: number, full: boolean): 
   };
 }
 
+/**
+ * ETH in dollars, from the deepest WETH pair DexScreener knows.
+ *
+ * Needed because an index quoted in ether collects and pays in ether, and a figure a reader can
+ * weigh has to be in dollars. Taken from the pair data this module already fetches rather than from
+ * a new price API: `priceUsd` on a pair whose BASE token is WETH is the ETH price by definition.
+ */
+export async function ethUsd(): Promise<number | null> {
+  const WETH = "0x4200000000000000000000000000000000000006";
+  try {
+    const response = await fetch(`${DEX_API}/${WETH}`, { next: { revalidate: 120 } });
+    if (!response.ok) return null;
+    const payload = await response.json() as unknown;
+    if (!Array.isArray(payload)) return null;
+    const best = (payload as DexPair[])
+      .filter((p) => p.baseToken?.address?.toLowerCase() === WETH && Number(p.priceUsd) > 0)
+      .sort((a, b) => Number(b.liquidity?.usd ?? 0) - Number(a.liquidity?.usd ?? 0))[0];
+    const price = Number(best?.priceUsd ?? 0);
+    return Number.isFinite(price) && price > 0 ? price : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Pool data for a set of tokens, keyed by lowercase address. */
 export async function poolsForAll(
   addresses: string[],
