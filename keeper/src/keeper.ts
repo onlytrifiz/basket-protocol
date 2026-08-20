@@ -48,6 +48,16 @@ const routeDeadlineSeconds = positiveInteger(process.env.ROUTE_DEADLINE_SEC, 900
 const payoutGasTarget = BigInt(process.env.PAYOUT_GAS_TARGET ?? "10000000");
 const intervalJitterPct = Math.min(90, Math.max(0, Number(process.env.INTERVAL_JITTER_PCT ?? 10)));
 const runOnce = process.env.RUN_ONCE === "1";
+/**
+ * Where to report a settled cycle, and the secret that proves it was us.
+ *
+ * The site keeps its own ledger of settled cycles so it does not have to re-read the chain for
+ * every visitor, and the keeper is the only party that can say when there is something new: it
+ * buys the stock, opens the cycle and pays the batches. Unset means the keeper simply does not
+ * announce — the protocol does not depend on this, only the page's freshness does.
+ */
+const ledgerUrl = process.env.LEDGER_INGEST_URL;
+const ledgerSecret = process.env.LEDGER_INGEST_SECRET;
 const dryRun = process.env.DRY_RUN === "1";
 
 const publicClient = createPublicClient({ chain, transport: http(rpcUrl, { timeout: 60_000 }) });
@@ -348,17 +358,24 @@ async function hasDistributionWork(): Promise<boolean> {
   return false;
 }
 
-async function distributeFromOnchainRegistry(): Promise<void> {
+/**
+ * Finish or open a payout cycle. Returns true when one is settled by the time we walk away.
+ *
+ * The return value drives the ledger announcement, so it has to mean "the vault emitted
+ * DistributionCycleCompleted", not "we did some work" — a paused batch run and a deferred payout
+ * both leave a cycle open and must not be reported as closed.
+ */
+async function distributeFromOnchainRegistry(): Promise<boolean> {
   payoutDueAt = undefined;
   let active = await read<boolean>("cycleActive");
   // A cycle already open still has to be finished; only a fresh one needs stock to divide.
   if (!active && !(await hasDistributionWork())) {
     console.log("  nothing to distribute: the vault holds no stock yet");
-    return;
+    return false;
   }
   if (dryRun) {
     console.log(`  dry run: on-chain payout cycle is ${active ? "active" : "idle"}`);
-    return;
+    return false;
   }
 
   let transactions = 0;
@@ -367,13 +384,16 @@ async function distributeFromOnchainRegistry(): Promise<void> {
     if (next !== 0n && next > BigInt(Math.floor(Date.now() / 1_000))) {
       payoutDueAt = Number(next);
       console.log(`  payout not due until ${new Date(payoutDueAt * 1_000).toISOString()}`);
-      return;
+      return false;
     }
 
     while (true) {
       const remaining = await read<bigint>("snapshotRemaining");
       if (remaining === 0n) break;
-      if (transactions >= maxBatchTransactions) return console.log("  payout paused: snapshot transaction cap reached");
+      if (transactions >= maxBatchTransactions) {
+        console.log("  payout paused: snapshot transaction cap reached");
+        return false;
+      }
       console.log(`  snapshotting ${remaining} registry holders`);
       await write("snapshotHolders", [BigInt(snapshotBatchSize)]);
       transactions += 1;
@@ -385,12 +405,44 @@ async function distributeFromOnchainRegistry(): Promise<void> {
 
   while (active) {
     const remaining = await read<bigint>("distributionRemaining");
-    if (remaining === 0n) return;
-    if (transactions >= maxBatchTransactions) return console.log("  payout paused: distribution transaction cap reached");
+    if (remaining === 0n) return true;
+    if (transactions >= maxBatchTransactions) {
+      console.log("  payout paused: distribution transaction cap reached");
+      return false;
+    }
     console.log(`  paying ${remaining} snapshotted holders`);
     await distributeSized(remaining);
     transactions += 1;
     active = await read<boolean>("cycleActive");
+  }
+  // The loop only ends here when the last batch closed the cycle.
+  return true;
+}
+
+/**
+ * Tell the site a cycle settled, so it walks the blocks since it last looked.
+ *
+ * DELIBERATELY NOT A RECORD OF WHAT HAPPENED. Sending the decoded cycle would make the keeper the
+ * author of the ledger, and then a keeper bug would be a wrong page with no way to notice. It sends
+ * a nudge; the site re-reads the chain from its own cursor and decodes it there.
+ *
+ * A failure is logged and dropped. The site scans from where its last successful ingest ended, so a
+ * lost announcement is picked up by the next one rather than leaving a hole.
+ */
+async function announceSettlement(): Promise<void> {
+  if (!ledgerUrl || !ledgerSecret) return;
+  try {
+    const response = await fetch(ledgerUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${ledgerSecret}` },
+      body: JSON.stringify({}),
+      signal: AbortSignal.timeout(30_000),
+    });
+    const payload = await response.json().catch(() => null) as { added?: number; total?: number } | null;
+    if (!response.ok) throw new Error(`${response.status} ${JSON.stringify(payload)}`);
+    console.log(`  ledger: +${payload?.added ?? 0} cycles, ${payload?.total ?? "?"} total`);
+  } catch (error) {
+    console.error(`  ledger announcement failed (recovers on the next one): ${(error as Error).message}`);
   }
 }
 
@@ -399,7 +451,7 @@ async function cycle(): Promise<void> {
   const stocks = await readStocks();
   console.log(`[cycle] ${new Date().toISOString()} | ${stocks.length} B20 stocks`);
   await buy(stocks);
-  await distributeFromOnchainRegistry();
+  if (await distributeFromOnchainRegistry()) await announceSettlement();
 }
 
 async function main() {

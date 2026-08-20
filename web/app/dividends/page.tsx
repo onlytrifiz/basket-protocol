@@ -2,9 +2,10 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { readAssets } from "../../lib/b20";
+import { readLedger } from "../../lib/ledger";
 import { marketBoard } from "../../lib/market";
-import { readCycles, readVault } from "../../lib/vault";
-import { shares as fmtShares, since, until, usd, usdCompact } from "../../lib/format";
+import { readVault } from "../../lib/vault";
+import { shares as fmtShares, stamp, until, usd, usdCompact } from "../../lib/format";
 import { BrandRender } from "../components/brand-render";
 import { RingMarker, SegmentRing } from "../components/segment-ring";
 import { SiteFooter, SiteHeader } from "../components/site-chrome";
@@ -15,8 +16,14 @@ export const metadata: Metadata = {
   description: "The live dividend index, vault holdings and payout mechanics for Stockify on Base.",
 };
 
-/** Vault state moves on the cycle interval; a minute is fresh and a stale ledger is not a ledger. */
-export const revalidate = 60;
+/**
+ * Rendered per request, because the ledger is paginated and `?page` is part of what to render.
+ *
+ * That costs nothing upstream: the vault multicall, the quote board and the stored ledger each sit
+ * behind `cached()`, so a burst of readers on any page still makes one call apiece. What used to be
+ * revalidated here was a log scan, and that no longer happens at render time at all.
+ */
+const PER_PAGE = 5;
 
 /* The sequence closes when assets reach holders — the one lime-lit step. */
 const phases = [
@@ -29,8 +36,8 @@ const phases = [
 const toUnits = (raw: string | null, decimals: number) =>
   raw === null ? null : Number(BigInt(raw)) / 10 ** decimals;
 
-export default async function DividendPage() {
-  const [vault, assets, ledger] = await Promise.all([readVault(), readAssets(), readCycles()]);
+export default async function DividendPage({ searchParams }: PageProps<"/dividends">) {
+  const [vault, assets, ledger] = await Promise.all([readVault(), readAssets(), readLedger()]);
 
   const byAddress = new Map(assets.map((a) => [a.address.toLowerCase(), a]));
   const tickers = vault.holdings
@@ -39,12 +46,24 @@ export default async function DividendPage() {
   const market = tickers.length ? await marketBoard(tickers) : { quotes: {}, series: {}, degraded: true };
 
   /**
+   * Which slice of the ledger this request is for.
+   *
+   * Clamped rather than 404ed: `?page=900` on a ledger of four is a stale link or a typo, and the
+   * useful answer to both is the last page that exists, not an error page.
+   */
+  const pageCount = Math.max(1, Math.ceil(ledger.cycles.length / PER_PAGE));
+  const requested = Number((await searchParams).page);
+  const page = Number.isSafeInteger(requested) && requested >= 1 ? Math.min(requested, pageCount) : 1;
+  const visible = ledger.cycles.slice((page - 1) * PER_PAGE, page * PER_PAGE);
+  const latest = ledger.cycles[0];
+
+  /**
    * What has actually LEFT the vault, per asset.
    *
    * The vault is emptied every cycle, so "what it holds" is near zero almost all the time and says
    * nothing about whether the protocol is working — the number that does is what reached holders.
-   * Summed from the `StockBought` logs of every settled cycle in the window; each cycle buys and
-   * then pushes, so acquired and distributed are one quantity seen at two moments.
+   * Summed from the `StockBought` logs of every cycle ever settled; each cycle buys and then
+   * pushes, so acquired and distributed are one quantity seen at two moments.
    */
   const distributedByAsset = new Map<string, number>();
   for (const cycle of ledger.cycles) {
@@ -68,7 +87,7 @@ export default async function DividendPage() {
   });
 
   const acquired = rows.reduce((sum, r) => sum + (r.value ?? 0), 0);
-  // What has actually left for holders, summed across the cycles in the window.
+  // What has actually left for holders, summed across every cycle the vault ever settled.
   const distributedShares = ledger.cycles.reduce(
     (sum, cycle) => sum + cycle.bought.reduce((inner, b) => inner + Number(BigInt(b.receivedRaw)) / 1e8, 0),
     0,
@@ -76,7 +95,6 @@ export default async function DividendPage() {
   const anyHeld = rows.some((r) => (r.held ?? 0) > 0);
   const distributedValue = rows.reduce((sum, r) => sum + (r.distributedValue ?? 0), 0);
   const anyDistributed = rows.some((r) => r.distributed > 0);
-  const windowHours = Math.round((ledger.windowBlocks * 2) / 3600);
   const eth = vault.availableEthWei === null ? null : Number(BigInt(vault.availableEthWei)) / 1e18;
   const threshold = vault.minShareBalanceRaw === null ? null : Number(BigInt(vault.minShareBalanceRaw)) / 1e18;
 
@@ -122,7 +140,7 @@ export default async function DividendPage() {
             <div>
               <span>Distributed</span>
               <strong>{anyDistributed ? usdCompact(distributedValue) : "—"}</strong>
-              <small>{anyDistributed ? `to holders, last ${windowHours}h` : "no cycle has settled yet"}</small>
+              <small>{anyDistributed ? "to holders, all time" : "no cycle has settled yet"}</small>
             </div>
             <div>
               <span>Awaiting the next buy</span>
@@ -142,21 +160,20 @@ export default async function DividendPage() {
         </section>
 
 
-        {/* THE LEDGER. Empty today and deliberately kept: it is the record this page exists to show,
-            and it has to be wired to the real events before the first cycle rather than after it.
-            Rebuilt from `DistributionCycleCompleted` and the `StockBought` logs preceding it. */}
-        <section className="desk-panel">
+        {/* THE LEDGER. Every cycle the vault has ever settled, decoded once from
+            `DistributionCycleCompleted` and the `StockBought` logs preceding it, then kept. */}
+        <section className="desk-panel" id="ledger">
           <div className="desk-inner">
             <div className="desk-head">
               <div>
                 <p>SETTLED DIVIDENDS</p>
-                <h2>{ledger.cycles.length === 0 ? "No cycles yet." : `${ledger.cycles.length} recent ${ledger.cycles.length === 1 ? "cycle" : "cycles"}.`}</h2>
+                <h2>{ledger.cycles.length === 0 ? "No cycles yet." : `${ledger.cycles.length} settled ${ledger.cycles.length === 1 ? "cycle" : "cycles"}.`}</h2>
               </div>
               <div className="desk-cycle">
                 <SegmentRing filled={vault.cycleActive ? 8 : 1} lit motion={vault.cycleActive ? "spin" : "sweep"} size={46} stroke={9} />
                 <div className="desk-cycle-meta">
                   <span>Cycle</span>
-                  <b>{vault.cycleActive ? "Running" : ledger.cycles.length || "—"}</b>
+                  <b>{vault.cycleActive ? "Running" : latest ? `#${latest.n}` : "—"}</b>
                 </div>
                 <span className="waiting-chip">
                   <i /> {vault.cycleActive ? "Distributing" : ledger.cycles.length ? "Idle" : "Awaiting first cycle"}
@@ -166,9 +183,9 @@ export default async function DividendPage() {
 
             <div className="desk-metrics">
               <div>
-                <span>Cycles in window</span>
+                <span>Cycles settled</span>
                 <strong>{ledger.available ? ledger.cycles.length : "—"}</strong>
-                <small>{ledger.available ? `last ${(ledger.windowBlocks / 1000).toFixed(0)}k blocks` : "ledger unavailable"}</small>
+                <small>{ledger.available ? "since the vault's first" : "ledger unavailable"}</small>
               </div>
               {/* In dollars, not shares. A share count sums four different equities into one
                   number that means nothing — 0.17 of what? Value is the only unit in which a slice
@@ -197,20 +214,20 @@ export default async function DividendPage() {
 
             <div className="distribution-table">
               <div className="table-head">
-                <span>Cycle</span><span>Assets acquired</span><span>Holders paid</span><span>Stock budget</span><span aria-hidden="true" />
+                <span>Cycle</span><span>Settled</span><span>Assets acquired</span><span>Holders paid</span><span>Stock budget</span><span aria-hidden="true" />
               </div>
-              {ledger.cycles.length === 0 ? (
+              {visible.length === 0 ? (
                 <div className="table-empty">
                   <span>—</span>
                   <span>
                     {ledger.available
-                      ? "No cycle has settled in the scanned window. Rows appear here as soon as one does."
-                      : "No endpoint would serve the log window, so the ledger cannot be read right now."}
+                      ? "No cycle has settled yet. Rows appear here as soon as one does."
+                      : "The stored ledger could not be read, so the record cannot be shown right now."}
                   </span>
-                  <span>—</span><span>—</span><span aria-hidden="true" />
+                  <span>—</span><span>—</span><span>—</span><span aria-hidden="true" />
                 </div>
               ) : (
-                ledger.cycles.map((cycle, i) => (
+                visible.map((cycle) => (
                   <a
                     className="table-row"
                     href={`https://basescan.org/tx/${cycle.txHash}`}
@@ -218,7 +235,11 @@ export default async function DividendPage() {
                     rel="noreferrer"
                     target="_blank"
                   >
-                    <span>#{ledger.cycles.length - i}</span>
+                    {/* The number is absolute and permanent — cycle #3 is the third the vault ever
+                        settled, on whichever page it happens to fall. Numbering from the top of the
+                        visible slice would have renumbered every row each time a new one landed. */}
+                    <span>#{cycle.n}</span>
+                    <span className="cycle-when">{stamp(cycle.timestamp)}</span>
                     {/* A comma list of tickers made four near-identical rows impossible to scan.
                         The mark carries the identity and the figure carries the size. */}
                     <span className="cycle-assets">
@@ -252,11 +273,28 @@ export default async function DividendPage() {
               )}
             </div>
 
+            {/* Plain links, not a control: each page of the ledger is a real URL someone can send,
+                and it works before any JavaScript has loaded. */}
+            {pageCount > 1 && (
+              <nav className="ledger-pager" aria-label="Ledger pages">
+                {page > 1
+                  ? <Link href={`/dividends?page=${page - 1}#ledger`} rel="prev">← Newer</Link>
+                  : <span aria-hidden="true">← Newer</span>}
+                <b>
+                  Page {page} of {pageCount}
+                  <small>cycles #{visible[visible.length - 1]?.n}–#{visible[0]?.n}</small>
+                </b>
+                {page < pageCount
+                  ? <Link href={`/dividends?page=${page + 1}#ledger`} rel="next">Older →</Link>
+                  : <span aria-hidden="true">Older →</span>}
+              </nav>
+            )}
+
             <p className="desk-note">
-              Cycles are rebuilt from the vault&apos;s own events. Public Base endpoints cap a log
-              query at roughly {(ledger.windowBlocks / 1000).toFixed(0)}k blocks — about{" "}
-              {Math.round((ledger.windowBlocks * 2) / 3600)} hours — so this is the recent record
-              rather than all history; each row links to its settlement transaction.
+              Cycles are rebuilt from the vault&apos;s own events and kept, so this is the complete
+              record since the vault was deployed rather than a recent window — the keeper reports
+              each settlement, and every block between one report and the next is read exactly once.
+              Each row links to its settlement transaction.
             </p>
           </div>
         </section>
@@ -339,7 +377,7 @@ export default async function DividendPage() {
 
           {!anyDistributed && vault.live && (
             <p className="hub-note-degraded">
-              Nothing has been distributed in the last {windowHours} hours. The vault is accruing hook
+              Nothing has been distributed yet. The vault is accruing hook
               fees{eth !== null && eth > 0 ? ` — ${eth.toFixed(4)} ETH so far` : ""}, and the first
               push happens when a cycle runs.
             </p>

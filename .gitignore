@@ -9,3 +9,6 @@ node_modules/
 web/.next/
 web/.playwright-cli/
 web/output/
+
+# Vercel project link (org/project ids, and the OIDC token it refreshes).
+.vercel

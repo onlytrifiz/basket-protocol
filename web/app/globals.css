@@ -1041,7 +1041,11 @@ code, kbd, samp, pre {
   margin-top: 22px;
   overflow: hidden;
 }
-.table-head, .table-empty, .table-row { align-items: center; display: grid; grid-template-columns: .5fr 1.6fr .9fr .8fr 14px; }
+/* The acquisitions column is sized to hold a cycle's whole basket on ONE line, and the widths
+   around it are what pay for it. Measured, not guessed: four marks need 366px and the column was
+   handing them 345, so the fourth wrapped and every row stood 120px tall for the sake of 21px.
+   Settled, holders and budget all had slack — their content is a date and two short figures. */
+.table-head, .table-empty, .table-row { align-items: center; display: grid; grid-template-columns: .42fr .64fr 1.95fr .58fr .67fr 14px; }
 .table-head {
   background: rgba(255, 255, 255, .04);
   color: var(--desk-fg-3);
@@ -1050,6 +1054,9 @@ code, kbd, samp, pre {
   text-transform: uppercase;
 }
 .table-head span, .table-empty span, .table-row span { padding: 13px 15px; }
+/* The trailing spacer sits in a 14px track and was carrying 30px of padding, overflowing the panel
+   by 16px. Invisible behind `overflow: hidden`, but it is 16px the acquisitions column could use. */
+.table-head span:last-child, .table-empty span:last-child { padding: 0; }
 
 /* A settled cycle. Each row is its settlement transaction, which is the only citation a ledger
    entry can honestly offer. */
@@ -1065,7 +1072,10 @@ code, kbd, samp, pre {
 .table-row span:first-child { color: var(--sky); font-family: var(--mono-stack); }
 
 /* Each acquisition as mark + size, wrapping when a cycle buys more than a row's width. */
-.cycle-assets { display: flex; flex-wrap: wrap; gap: 6px 12px; }
+/* Wrapping stays as the safety net — the index can be extended to thirteen assets and a row that
+   overflows is worse than a row that grows — but at the sizes the vault actually buys it no longer
+   fires. */
+.cycle-assets { display: flex; flex-wrap: wrap; gap: 6px 10px; }
 .cycle-asset { align-items: center; display: inline-flex; gap: 5px; white-space: nowrap; }
 /* `.stock-logo-small` also carries a size, and it lands later in the file than a plain descendant
    selector can beat on order alone — so this one matches both classes to win outright. */
@@ -1090,6 +1100,45 @@ code, kbd, samp, pre {
 }
 .table-row:hover .cycle-go { color: var(--sky); transform: translateX(2px); }
 .table-empty { color: var(--desk-fg-2); font-size: .77rem; min-height: 64px; }
+/* When a cycle settled. Dimmer than the figures beside it: it is how a reader locates a row, not
+   something they compare across rows. */
+.cycle-when { color: var(--desk-fg-2); font-family: var(--mono-stack); font-size: .72rem; white-space: nowrap; }
+
+/* Ledger pager. Links, not buttons — each page is an address. */
+.ledger-pager {
+  align-items: center;
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+  margin-top: 14px;
+}
+.ledger-pager a, .ledger-pager span {
+  border: 1px solid var(--desk-line);
+  border-radius: var(--r-sm);
+  font-size: .72rem;
+  padding: 7px 13px;
+  text-decoration: none;
+  transition: background .16s var(--ease), border-color .16s var(--ease), color .16s var(--ease);
+  white-space: nowrap;
+}
+.ledger-pager a { color: var(--desk-fg); }
+.ledger-pager a:hover { background: var(--desk-glass); border-color: var(--sky); color: var(--sky); }
+/* The end of the ledger is shown, not hidden: a missing button reads as a bug, a spent one reads
+   as the edge of the record. */
+.ledger-pager span { color: var(--desk-fg-3); opacity: .45; }
+.ledger-pager b {
+  color: var(--desk-fg-2);
+  font-size: .72rem;
+  font-weight: 500;
+  text-align: center;
+}
+.ledger-pager b small {
+  color: var(--desk-fg-3);
+  display: block;
+  font-family: var(--mono-stack);
+  font-size: .64rem;
+  margin-top: 2px;
+}
 .desk-note { color: var(--desk-fg-3); font-size: .7rem; line-height: 1.55; margin: 14px 0 0; }
 
 /* ---------- 14. Payout sequence + eligibility ----------------------------- */
@@ -2598,7 +2647,12 @@ a.pool-row:hover { background: var(--surface-2); }
   .desk-metrics strong { font-size: 1.4rem; }
   .desk-metrics small { font-size: .58rem; }
   .distribution-table { overflow-x: auto; }
-  .table-head, .table-empty { min-width: 560px; }
+  /* `.table-row` belongs in this list: with only the head widened, the rows laid out against the
+     narrower container and every column sat left of its own heading. The settlement date adds a
+     sixth column, hence the wider floor. */
+  .table-head, .table-empty, .table-row { min-width: 640px; }
+  .ledger-pager { gap: 8px; }
+  .ledger-pager a, .ledger-pager span { padding: 7px 10px; }
   .payout-list article { gap: 14px; grid-template-columns: auto 1fr auto; }
   .payout-list p { font-size: .74rem; }
   .eligibility { border-left: 0; border-radius: 0; border-right: 0; margin-left: -20px; margin-right: -20px; }

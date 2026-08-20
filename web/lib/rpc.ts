@@ -122,21 +122,21 @@ export async function batchCall(calls: RpcCall[]): Promise<CallResult[]> {
   return out;
 }
 
-export type Log = { address: string; topics: string[]; data: string; blockNumber: number; transactionHash: string };
+export type Log = { address: string; topics: string[]; data: string; blockNumber: number; timestamp: number; transactionHash: string };
 
 /**
- * Recent logs for one address.
+ * Logs for one address over an explicit block range, in `SPAN`-sized requests.
  *
- * BOUNDED BY WHAT PUBLIC ENDPOINTS ALLOW, which is much less than a full history. Measured against
- * all three: `mainnet.base.org` caps `eth_getLogs` at a 10,000-block range, `1rpc` at 50, and
- * publicnode refuses any range old enough to count as archive. Base produces a block every two
- * seconds, so 10,000 blocks is roughly five and a half hours.
+ * THE SPAN IS A REQUEST SIZE, NOT A HORIZON. Public endpoints cap what one `eth_getLogs` may cover
+ * — `mainnet.base.org` refuses a range over 10,000 blocks outright, and publicnode calls anything
+ * that old an archive request and asks for a token — so a wide range is walked in chunks rather
+ * than refused. The caller decides how far back to go; this decides how much to ask for at a time.
  *
- * That is deliberately enough for a distribution ledger whose cycles target hourly cadence, and
- * deliberately NOT presented as complete history — the page says which window it covers. A funded
- * archive endpoint in `BASE_RPC_URL` widens it; an indexer would replace this entirely.
+ * Returns NULL when no endpoint would serve the range, which is not the same answer as an empty
+ * array. Collapsing the two is how a ledger that could not be read renders as a ledger with nothing
+ * in it — the caller has to be able to tell "the vault emitted nothing" from "nobody would say".
  */
-export async function getLogs(address: string, topics: (string | null)[], fromBlock: number, toBlock: number): Promise<Log[]> {
+export async function getLogs(address: string, topics: (string | null)[], fromBlock: number, toBlock: number): Promise<Log[] | null> {
   const SPAN = Math.max(1, Number(process.env.BASE_RPC_LOG_SPAN) || 9_500);
 
   for (const rpc of RPCS) {
@@ -165,6 +165,10 @@ export async function getLogs(address: string, topics: (string | null)[], fromBl
             topics: Array.isArray(entry.topics) ? entry.topics as string[] : [],
             data: String(entry.data ?? "0x"),
             blockNumber: Number(BigInt(String(entry.blockNumber ?? "0x0"))),
+            // op-geth serves `blockTimestamp` on every log, so dating a row costs no extra call.
+            // Defaulted rather than required: it is an extension, and a node that omits it should
+            // cost a date, not the row.
+            timestamp: Number(BigInt(String(entry.blockTimestamp ?? "0x0"))),
             transactionHash: String(entry.transactionHash ?? ""),
           });
         }
@@ -175,7 +179,7 @@ export async function getLogs(address: string, topics: (string | null)[], fromBl
 
     if (ok) return collected;
   }
-  return [];
+  return null;
 }
 
 /** Latest block height, or null when no endpoint answers. */

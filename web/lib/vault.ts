@@ -1,5 +1,5 @@
 import { cached } from "./cache";
-import { batchCall, blockNumber, getLogs, pad, toBigInt, type RpcCall } from "./rpc";
+import { batchCall, getLogs, pad, toBigInt, type Log, type RpcCall } from "./rpc";
 import { stockByAddress } from "./stocks";
 
 /**
@@ -190,9 +190,10 @@ async function loadVault(): Promise<VaultState> {
  * to — paying to store a growing list on-chain to serve a web page would be the wrong trade. The
  * events are the record, so this reads them.
  *
- * WHAT THIS WINDOW IS. See `getLogs`: public endpoints cap the range at 10,000 blocks, about five
- * and a half hours of Base. With cycles targeting hourly cadence that covers the most recent
- * handful, and the page says so rather than implying it is everything that ever settled.
+ * SCANNED ONCE, NOT PER VISITOR. A settled cycle never changes, so re-deriving the same rows on
+ * every render was work with no possible new answer — and it bought only what the public log window
+ * happened to reach, roughly five hours, which quietly hid every older cycle. What lives here now
+ * is the decoder; `lib/ledger.ts` owns the scanning cursor and keeps the results.
  */
 const TOPIC = {
   cycleStarted: "0x6fa249767fee0ff570c08e8f07a9030d8fdb125b55f00a47606480a2e1429134",
@@ -203,6 +204,8 @@ const TOPIC = {
 
 export type Cycle = {
   blockNumber: number;
+  /** Unix seconds of the settling block, from the log itself. */
+  timestamp: number;
   txHash: string;
   /** Holders paid in this cycle, from `DistributionCycleCompleted`. */
   holderCount: number;
@@ -212,14 +215,6 @@ export type Cycle = {
   bought: Array<{ address: string; ethSpentWei: string; receivedRaw: string }>;
 };
 
-export type CycleLedger = {
-  /** False when no endpoint would serve the window — the page then says the ledger is unavailable. */
-  available: boolean;
-  cycles: Cycle[];
-  /** How many blocks back the scan reached, so the page can state its own coverage. */
-  windowBlocks: number;
-};
-
 /** Split `data` into 32-byte words. */
 const words = (data: string) => (data.replace(/^0x/, "").match(/.{64}/g) ?? []);
 const wordInt = (data: string, i: number) => {
@@ -227,27 +222,27 @@ const wordInt = (data: string, i: number) => {
   return w === undefined ? 0n : BigInt(`0x${w}`);
 };
 
-export function readCycles(): Promise<CycleLedger> {
-  return cached("vault:cycles", 60_000, loadCycles);
+/**
+ * Every cycle that settled between two blocks, oldest first, or null if the range went unread.
+ *
+ * One unfiltered pass over the vault's logs, then sorted here. Four filtered calls would be four
+ * times the range requests for the same rows.
+ */
+export async function scanCycles(fromBlock: number, toBlock: number): Promise<Cycle[] | null> {
+  if (!isAddress(VAULT) || toBlock < fromBlock) return null;
+  const logs = await getLogs(VAULT, [], fromBlock, toBlock);
+  return logs === null ? null : decodeCycles(logs);
 }
 
-async function loadCycles(): Promise<CycleLedger> {
-  const span = Math.max(1, Number(process.env.BASE_RPC_LOG_SPAN) || 9_500);
-  if (!isAddress(VAULT)) return { available: false, cycles: [], windowBlocks: span };
-
-  const head = await blockNumber();
-  if (head === null) return { available: false, cycles: [], windowBlocks: span };
-  const from = Math.max(0, head - span);
-
-  // One unfiltered pass over the vault's logs in the window, then sorted here. Four filtered calls
-  // would be four times the range requests for the same rows.
-  const logs = await getLogs(VAULT, [], from, head);
-  if (logs.length === 0) {
-    // No logs and no error are indistinguishable from here, but the honest reading of "the vault
-    // emitted nothing in the last five hours" is an empty ledger, not a broken one.
-    return { available: true, cycles: [], windowBlocks: span };
-  }
-
+/**
+ * Logs to cycles, oldest first.
+ *
+ * A PARTIAL FIRST CYCLE IS THE PRICE OF ANY WINDOW. Purchases are attributed to the cycle that
+ * settles after them, so a scan starting mid-cycle sees the settlement but not the buys that fed
+ * it. Starting from the vault's deploy block is what makes that theoretical; starting from a stored
+ * cursor keeps it that way, because every earlier block has already been walked exactly once.
+ */
+export function decodeCycles(logs: Log[]): Cycle[] {
   const cycles: Cycle[] = [];
   // Keyed by asset, because a cycle spans every purchase made since the previous one settled — the
   // keeper buys on its own poll interval while a cycle can only START hourly, so an hour of trading
@@ -257,7 +252,7 @@ async function loadCycles(): Promise<CycleLedger> {
   let pendingStockEth = 0n;
   let sawStockEth = false;
 
-  for (const log of logs.sort((a, b) => a.blockNumber - b.blockNumber)) {
+  for (const log of [...logs].sort((a, b) => a.blockNumber - b.blockNumber)) {
     const topic = log.topics[0];
     if (topic === TOPIC.stockBought) {
       const address = `0x${(log.topics[1] ?? "").slice(-40)}`;
@@ -274,6 +269,7 @@ async function loadCycles(): Promise<CycleLedger> {
     } else if (topic === TOPIC.cycleCompleted) {
       cycles.push({
         blockNumber: log.blockNumber,
+        timestamp: log.timestamp,
         txHash: log.transactionHash,
         holderCount: Number(wordInt(log.data, 0)),
         stockEthWei: sawStockEth ? pendingStockEth.toString() : null,
@@ -289,6 +285,5 @@ async function loadCycles(): Promise<CycleLedger> {
     }
   }
 
-  // Newest first: a ledger is read from the top.
-  return { available: true, cycles: cycles.reverse(), windowBlocks: span };
+  return cycles;
 }

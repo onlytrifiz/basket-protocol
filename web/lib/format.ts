@@ -92,3 +92,19 @@ export function since(seconds: number | null | undefined): string {
   if (hours < 24) return `${hours}h ago`;
   return `${Math.round(hours / 24)}d ago`;
 }
+
+/**
+ * An absolute settlement stamp, for rows a reader may reach on page nine.
+ *
+ * `since` is right for a live figure and wrong for a ledger: "23d ago" tells you nothing you can
+ * check, and every reload moves it. A settled cycle happened at a fixed moment, so it is shown as
+ * one — UTC, because the chain has no other timezone and a server-rendered local time would be the
+ * server's, not the reader's.
+ */
+export function stamp(seconds: number | null | undefined): string {
+  if (!seconds) return "—";
+  const date = new Date(seconds * 1000);
+  const day = date.toLocaleDateString("en-GB", { day: "2-digit", month: "short", timeZone: "UTC" });
+  const time = date.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "UTC" });
+  return `${day}, ${time}`;
+}
