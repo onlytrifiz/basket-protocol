@@ -16,7 +16,21 @@ import { IndexActions } from "../../components/index-actions";
 import { SiteFooter, SiteHeader } from "../../components/site-chrome";
 import { StockLogo } from "../../components/stock-logo";
 
-export const revalidate = 60;
+/**
+ * Rendered per request, and forced rather than inferred.
+ *
+ * This is the same trap `app/page.tsx` documents. `lib/cache` wraps every chain read, so when its
+ * in-process cache happens to be warm no `fetch` runs during render — Next's static analysis then
+ * sees no dynamic API and prerenders the page. The moment a real read does run, it is a `no-store`
+ * fetch on a page Next has decided is static, and it fails with "Page changed from static to dynamic
+ * at runtime" and serves the build-time render instead.
+ *
+ * Which is how a bound index that had collected fees rendered as "nothing has pointed its fees here
+ * yet": not a bad read, a page that was never allowed to make one.
+ *
+ * The reads are still cached for 60-120s each, so per-request rendering costs no extra traffic.
+ */
+export const dynamic = "force-dynamic";
 
 const PER_PAGE = 10;
 

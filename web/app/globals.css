@@ -2888,6 +2888,10 @@ a.pool-row:hover { background: var(--surface-2); }
 .builder-address button { background: none; border: 0; color: var(--link); cursor: pointer; font-size: .74rem; margin-top: 8px; padding: 0; }
 
 .builder-after { color: var(--ink-2); display: grid; font-size: .84rem; gap: 9px; line-height: 1.55; margin: 18px 0 0; padding-left: 19px; }
+/* The action sits under a list it is the conclusion of, so it needs to read as a step apart from
+   it rather than as the fourth bullet. */
+.builder-panel > .button,
+.builder-panel .builder-after + .button { margin-top: 22px; }
 .builder-error { color: var(--warn-fg); font-size: .8rem; margin: 14px 0 0; }
 .builder-ok { color: var(--lime); font-size: .84rem; margin: 14px 0 0; }
 
@@ -2916,22 +2920,6 @@ a.pool-row:hover { background: var(--surface-2); }
   color: var(--muted);
   margin: 16px 0 8px;
 }
-.builder-select {
-  width: 100%;
-  border: 1px solid var(--line);
-  border-radius: 12px;
-  background: var(--panel);
-  color: inherit;
-  font: inherit;
-  padding: 12px 14px;
-  appearance: none;
-  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%);
-  background-position: calc(100% - 20px) calc(50% + 2px), calc(100% - 14px) calc(50% + 2px);
-  background-size: 6px 6px, 6px 6px;
-  background-repeat: no-repeat;
-}
-.builder-select:focus { border-color: var(--blue); outline: none; }
-
 /* The pairing when it came from the launch record: one value, not a control — there is nothing to
    choose once the chain has answered. */
 .builder-quote-locked {

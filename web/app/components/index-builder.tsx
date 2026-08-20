@@ -497,18 +497,30 @@ export function IndexBuilder({ stocks, platformBps }: { stocks: IndexStock[]; pl
                 </>
               ) : (
                 <>
-                  <select
-                    className="builder-select"
-                    onChange={(e) => setQuote(e.target.value)}
-                    value={quote}
-                  >
-                    <option value={ZERO}>ETH</option>
+                  {/* The same picker as "What it buys", because it is the same kind of choice: one
+                      of a known set, each with a mark that identifies it faster than its ticker. A
+                      native select was foreign to everything around it and could not show the marks. */}
+                  <div className="builder-grid">
+                    <button
+                      className={quote === ZERO ? "is-picked" : undefined}
+                      onClick={() => setQuote(ZERO)}
+                      type="button"
+                    >
+                      <CoinMark size={22} symbol="ETH" />
+                      <span>ETH</span>
+                    </button>
                     {stocks.map((s) => (
-                      <option key={`q-${s.address}`} value={s.address}>
-                        {s.ticker} — {s.name}
-                      </option>
+                      <button
+                        className={quote.toLowerCase() === s.address.toLowerCase() ? "is-picked" : undefined}
+                        key={`q-${s.address}`}
+                        onClick={() => setQuote(s.address)}
+                        type="button"
+                      >
+                        <StockLogo logo={undefined} stock={{ symbol: s.symbol, domain: s.domain }} />
+                        <span>{s.ticker}</span>
+                      </button>
                     ))}
-                  </select>
+                  </div>
                   <p className="builder-note">
                     {quoteResolved === "looking"
                       ? "Checking your coin…"
