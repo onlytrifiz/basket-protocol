@@ -48,6 +48,9 @@ contract StockifyRouter is IUnlockCallback {
     error Slippage(uint256 out, uint256 minOut);
     error OnlyPoolManager();
     error NothingIn();
+    /// The pool could not absorb the whole input and the remainder would not go back to the caller.
+    /// Reverting is the only honest option left: this contract cannot hold it for them.
+    error RefundFailed();
 
     constructor(IPoolManager _pm, address _token, uint24 _fee, int24 _tickSpacing, address _hooks) {
         pm = _pm;
@@ -94,21 +97,50 @@ contract StockifyRouter is IUnlockCallback {
         BalanceDelta delta =
             pm.swap(key, SwapParams({zeroForOne: isBuy, amountSpecified: -amountIn, sqrtPriceLimitX96: limit}), "");
 
+        /**
+         * WHAT THE POOL TOOK, WHICH IS NOT ALWAYS WHAT WAS SENT.
+         *
+         * The price limits above are the extremes, so a swap runs until the input is spent OR the
+         * position's range runs out — and the range does run out. The liquidity here is one-sided
+         * and bounded on both ends: buying walks the tick DOWN to `tickLower` and there is nothing
+         * below it, selling walks it UP to `tickUpper` and there is nothing above.
+         *
+         * The first version settled this amount and returned. The difference — the part the pool
+         * would not take — simply stayed, in a contract with no owner, no sweep and no way to reach
+         * it again. Measured against the live pool the day this was written: a 20 ETH buy against a
+         * pool that could absorb 11.4 left 8 ETH here forever, and reverted nothing.
+         *
+         * `spent` covers the hook's 300 bps too: the fee is taken inside `beforeSwap` and carried on
+         * this delta, so the subtraction below is exactly the untouched remainder.
+         */
         uint256 out;
         if (isBuy) {
-            pm.settle{value: uint256(uint128(-delta.amount0()))}();
+            uint256 spent = uint256(uint128(-delta.amount0()));
+            pm.settle{value: spent}();
             out = uint256(uint128(delta.amount1()));
             if (out < minOut) revert Slippage(out, minOut);
             pm.take(key.currency1, user, out);
+
+            // Reentering through here is not a way in: `buy` would call `unlock` on a manager that
+            // is still unlocked, and the manager refuses that itself.
+            uint256 unspent = uint256(amountIn) - spent;
+            if (unspent != 0) {
+                (bool ok,) = user.call{value: unspent}("");
+                if (!ok) revert RefundFailed();
+            }
         } else {
             // `sync` before transferring is what tells the manager how much of currency1 arrived —
             // without it the settle credits nothing and the swap reverts on an unpaid delta.
+            uint256 spent = uint256(uint128(-delta.amount1()));
             pm.sync(key.currency1);
-            IERC20(token).safeTransfer(address(pm), uint256(uint128(-delta.amount1())));
+            IERC20(token).safeTransfer(address(pm), spent);
             pm.settle();
             out = uint256(uint128(delta.amount0()));
             if (out < minOut) revert Slippage(out, minOut);
             pm.take(key.currency0, user, out);
+
+            uint256 unspent = uint256(amountIn) - spent;
+            if (unspent != 0) IERC20(token).safeTransfer(user, unspent);
         }
         return abi.encode(out);
     }

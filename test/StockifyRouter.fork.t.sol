@@ -16,7 +16,7 @@ import {StockifyRouter} from "../src/StockifyRouter.sol";
  */
 contract StockifyRouterForkTest is Test {
     IPoolManager constant PM = IPoolManager(0x498581fF718922c3f8e6A244956aF099B2652b2b);
-    address constant TOKEN = 0x0ac61d67420f980B8a5324B0E52C8375736d36C9;
+    address constant TOKEN = 0xC6405D7a226e1C18E559Be2F335F74C01Ad07bF5;
     address constant HOOK = 0x47Ec48C74f3069e9Ae69406197821996d80200cC;
     uint24 constant FEE = 10_000;
     int24 constant TICK_SPACING = 200;
