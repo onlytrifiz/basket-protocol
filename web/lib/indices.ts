@@ -472,18 +472,89 @@ async function loadRows(): Promise<{ rows: IndexRow[]; totals: IndexTotals }> {
     };
   });
 
-  // Biggest payer first. An index that has paid nothing yet is real but is not the headline.
-  rows.sort((a, b) => (b.paidUsd ?? -1) - (a.paidUsd ?? -1));
+  /**
+   * A treasury with no coin bound is not something anyone can look at yet.
+   *
+   * It has no name, no holders and nothing to show, and it is the state every index passes through
+   * between being deployed and its launch actually pointing fees at it. Half-built things crowding
+   * the list make the finished ones harder to find.
+   *
+   * Hidden from the LIST only. Its own page still works — whoever deployed it has the link and needs
+   * to watch it bind — so this changes what the set advertises, not what exists.
+   */
+  const bound = rows.filter((r) => r.coin && BigInt(r.coin) !== 0n);
+
+  // Biggest payer first: the list is a record of what has actually worked, not of what exists.
+  bound.sort((a, b) => (b.paidUsd ?? -1) - (a.paidUsd ?? -1) || b.rounds - a.rounds);
 
   const totals: IndexTotals = {
-    paidUsd: rows.some((r) => r.paidUsd !== null)
-      ? rows.reduce((sum, r) => sum + (r.paidUsd ?? 0), 0)
+    paidUsd: bound.some((r) => r.paidUsd !== null)
+      ? bound.reduce((sum, r) => sum + (r.paidUsd ?? 0), 0)
       : null,
-    count: rows.length,
-    withRounds: rows.filter((r) => r.rounds > 0).length,
-    rounds: rows.reduce((sum, r) => sum + r.rounds, 0),
-    payments: rows.reduce((sum, r) => sum + r.payments, 0),
+    count: bound.length,
+    withRounds: bound.filter((r) => r.rounds > 0).length,
+    rounds: bound.reduce((sum, r) => sum + r.rounds, 0),
+    payments: bound.reduce((sum, r) => sum + r.payments, 0),
   };
 
-  return { rows, totals };
+  return { rows: bound, totals };
+}
+
+
+/** One index's own history, priced. Null when the range could not be read. */
+export async function readIndexHistory(address: string): Promise<{
+  paidUsd: number | null;
+  paidUnits: Array<{ token: string; symbol: string; units: number }>;
+  feesUsd: number | null;
+  feesUnits: number | null;
+  creatorUsd: number | null;
+  rounds: number;
+  payments: number;
+  events: IndexEvent[];
+} | null> {
+  const [index, activity] = await Promise.all([readIndex(address), readActivity()]);
+  if (!index || !activity) return null;
+  const a = activity.get(address.toLowerCase());
+  if (!a) return null;
+
+  const tokens = [index.quote.toLowerCase(), ...[...a.distributed.keys()]];
+  const tickers = tokens.map((t) => stockByAddress(t)?.ticker).filter(Boolean) as string[];
+  const [decimals, board] = await Promise.all([
+    readDecimals(tokens),
+    tickers.length ? marketBoard(tickers) : Promise.resolve({ quotes: {} as Record<string, never> }),
+  ]);
+  const quotes = board.quotes as Record<string, { price: number }>;
+
+  const priced = new Map<string, number | null>();
+  await Promise.all(tokens.map(async (t) => priced.set(t, await priceOf(t, quotes))));
+
+  const units = (token: string, raw: bigint) => {
+    const d = decimals.get(token.toLowerCase());
+    return d === null || d === undefined ? null : Number(raw) / 10 ** d;
+  };
+  const value = (token: string, raw: bigint) => {
+    const u = units(token, raw);
+    const p = priced.get(token.toLowerCase());
+    return u === null || p === null || p === undefined ? null : u * p;
+  };
+
+  const paidUnits: Array<{ token: string; symbol: string; units: number }> = [];
+  let paidUsd: number | null = null;
+  for (const [token, raw] of a.distributed) {
+    const u = units(token, raw);
+    if (u !== null) paidUnits.push({ token, symbol: stockByAddress(token)?.symbol ?? `${token.slice(0, 6)}…`, units: u });
+    const v = value(token, raw);
+    if (v !== null) paidUsd = (paidUsd ?? 0) + v;
+  }
+
+  return {
+    paidUsd,
+    paidUnits,
+    feesUsd: a.feesRaw === 0n ? 0 : value(index.quote, a.feesRaw),
+    feesUnits: units(index.quote, a.feesRaw),
+    creatorUsd: a.creatorRaw === 0n ? 0 : value(index.quote, a.creatorRaw),
+    rounds: a.rounds,
+    payments: a.payments,
+    events: a.events,
+  };
 }

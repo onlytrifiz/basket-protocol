@@ -64,10 +64,8 @@ export default async function StocksPage() {
             <p className="eyebrow">BASE · B20 UNIVERSE</p>
             <h1>Every tokenized stock on Base.</h1>
             <p className="hub-lede">
-              Coinbase issues these equities directly on Base as B20 tokens. Supply, splits and icons
-              on this page are read from the tokens themselves; the markets come from live Aerodrome
-              and Uniswap pools. The column worth reading is the last one — how far a token trades
-              from the share it represents.
+              Coinbase issues these equities directly on Base as B20 tokens. The column worth reading
+              is the last one — how far a token trades from the share it represents.
             </p>
           </div>
           {/* The same coins the table lists, which is the point: the render is the universe and the
@@ -163,8 +161,8 @@ export default async function StocksPage() {
 
           {market.degraded && (
             <p className="hub-note-degraded">
-              Share prices are unavailable right now, so the premium column is blank. On-chain figures
-              are unaffected.
+              Share prices are unavailable right now, so the premium column is blank. Everything else
+              is unaffected.
             </p>
           )}
         </section>
@@ -173,10 +171,9 @@ export default async function StocksPage() {
           <article>
             <h2>Why most of these have no supply</h2>
             <p>
-              Base&apos;s equities are new and most have not been issued yet — <code>totalSupply()</code>{" "}
-              returns zero for the majority. That is read live here rather than assumed, and a token
-              whose supply could not be read is shown as <b>—</b>, never as a zero. The two are very
-              different claims and only one of them is ours to make.
+              Base&apos;s equities are new and most have not been issued yet: for the majority, no
+              shares exist at all. A token whose supply we could not check shows <b>—</b>, never a
+              zero. Those are very different claims and only one of them is ours to make.
             </p>
           </article>
           <article>

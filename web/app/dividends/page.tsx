@@ -122,10 +122,10 @@ export default async function DividendPage({ searchParams }: PageProps<"/dividen
             <p className="eyebrow">DIVIDEND DESK</p>
             <h1>See the assets leave the vault.</h1>
             <p className="hub-lede">
-              What has actually reached holders, read from the vault&apos;s own events — which equities
-              it bought, in what proportion, and how much of each has been pushed out. The vault is
-              drained every cycle, so its balance is not the story; what left it is. Nothing here is a
-              projection, and there is no yield counter.
+              What has actually reached holders: which equities the vault bought, in what proportion,
+              and how much of each has been pushed out. The vault is drained every cycle, so its
+              balance is not the story — what left it is. Nothing here is a projection, and there is
+              no yield counter.
             </p>
           </div>
           <BrandRender className="hub-render" priority size={340} src="/distributions.png" />
@@ -306,10 +306,8 @@ export default async function DividendPage({ searchParams }: PageProps<"/dividen
             )}
 
             <p className="desk-note">
-              Cycles are rebuilt from the vault&apos;s own events and kept, so this is the complete
-              record since the vault was deployed rather than a recent window — the keeper reports
-              each settlement, and every block between one report and the next is read exactly once.
-              Each row links to its settlement transaction.
+              The complete record since the vault was deployed, not a recent window. Each row links
+              to its settlement transaction.
             </p>
           </div>
         </section>
@@ -317,11 +315,10 @@ export default async function DividendPage({ searchParams }: PageProps<"/dividen
         <section className="section wrap hub-section">
           <div className="section-head">
             <p className="eyebrow">THE ACTIVE INDEX</p>
-            <h2>{vault.holdings.length || "No"} stocks, straight from the vault.</h2>
+            <h2>{vault.holdings.length || "No"} stocks in the index.</h2>
             <p>
-              Ownership can change this set and its weights between cycles, so it is read from{" "}
-              <code>stockAt()</code> rather than listed here — the page cannot drift from what the
-              contract will actually buy.
+              Ownership can change this set and its weights between cycles, so what you see here is
+              whatever the vault will actually buy next.
             </p>
           </div>
 
@@ -385,8 +382,8 @@ export default async function DividendPage({ searchParams }: PageProps<"/dividen
             </div>
           ) : (
             <p className="detail-empty">
-              The dividend vault did not answer, so its index cannot be shown. On-chain figures are
-              never substituted with an assumed set here.
+              The dividend vault did not answer, so its index cannot be shown. Nothing is filled in
+              with an assumed set.
             </p>
           )}
 
@@ -424,9 +421,8 @@ export default async function DividendPage({ searchParams }: PageProps<"/dividen
             <p className="eyebrow">ELIGIBILITY</p>
             <h2>Start with<br />{threshold === null ? "100,000" : fmtShares(threshold)} STFY.</h2>
             <p>
-              The minimum balance is read from the token contract, not published here: ownership can
-              set it anywhere from 10,000 to 100,000 STFY, and can exclude selected addresses from
-              rewards.
+              Ownership can set the minimum anywhere from 10,000 to 100,000 STFY, and can exclude
+              selected addresses from rewards.
             </p>
           </div>
           <dl>

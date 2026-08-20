@@ -2973,3 +2973,101 @@ a.pool-row:hover { background: var(--surface-2); }
 
 .hub-head-cta { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 22px; }
 .page-cta-note { color: var(--ink-3); font-size: .82rem; line-height: 1.6; margin: 10px 0 0; max-width: 46ch; }
+
+/* ── Indices: the live set, and one index ──────────────────────────────────────────────────────
+   Its own table rather than `hub-table`, because the columns are different in kind: a coin, a row
+   of marks, and three figures that are all money or counts. */
+.idx-table { display: flex; flex-direction: column; }
+.idx-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 1.3fr) minmax(120px, 1fr) minmax(130px, 1.2fr) minmax(90px, .8fr) minmax(90px, .8fr) 18px;
+  gap: 18px;
+  align-items: center;
+  padding: 16px 18px;
+  border-top: 1px solid var(--line);
+  color: inherit;
+  text-decoration: none;
+}
+.idx-row:last-child { border-bottom: 1px solid var(--line); }
+a.idx-row:hover { background: var(--panel); }
+.idx-row-head {
+  border-top: none;
+  font-size: .74rem;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.idx-row-holds { grid-template-columns: minmax(160px, 2fr) minmax(90px, .7fr) minmax(120px, 1fr); }
+
+.idx-coin { display: flex; flex-direction: column; min-width: 0; }
+.idx-coin b { font-size: .98rem; }
+.idx-coin small, .idx-coin span small { color: var(--muted); font-size: .78rem; }
+.idx-coin-logo { flex-direction: row; align-items: center; gap: 10px; }
+.idx-coin-logo > span { display: flex; flex-direction: column; min-width: 0; }
+
+.idx-holds { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.idx-holds em { color: var(--muted); font-size: .82rem; font-style: normal; }
+.idx-more { color: var(--muted); font-size: .78rem; }
+
+.idx-num { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.idx-num b { font-size: .95rem; }
+.idx-num small {
+  color: var(--muted);
+  font-size: .74rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.idx-more-row { display: flex; justify-content: center; margin-top: 26px; }
+
+/* The activity feed: one row per thing the index did, each opening its transaction. */
+.idx-feed { display: flex; flex-direction: column; }
+.idx-feed-row {
+  display: grid;
+  grid-template-columns: 92px 1fr auto;
+  gap: 16px;
+  align-items: center;
+  padding: 13px 18px;
+  border-top: 1px solid var(--line);
+  color: inherit;
+  text-decoration: none;
+}
+.idx-feed-row:last-child { border-bottom: 1px solid var(--line); }
+.idx-feed-row:hover { background: var(--panel); }
+.idx-kind {
+  font-size: .7rem;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.idx-feed-row.is-paid .idx-kind { color: var(--lime); }
+.idx-feed-what { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.idx-feed-what small { color: var(--muted); font-size: .8rem; }
+.idx-feed-when { color: var(--muted); font-size: .8rem; white-space: nowrap; }
+
+.idx-addrs { display: flex; flex-direction: column; }
+.idx-addr {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 13px 18px;
+  border-top: 1px solid var(--line);
+}
+.idx-addr:last-child { border-bottom: 1px solid var(--line); }
+.idx-addr > span { color: var(--muted); font-size: .82rem; }
+.idx-addr a { font-family: var(--font-mono), monospace; font-size: .82rem; word-break: break-all; }
+
+@media (max-width: 860px) {
+  .idx-row, .idx-row-holds { grid-template-columns: 1fr 1fr; gap: 12px; }
+  .idx-row-head { display: none; }
+  .idx-num::before {
+    content: attr(data-label);
+    color: var(--muted);
+    font-size: .7rem;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+  }
+  .idx-feed-row { grid-template-columns: 1fr auto; }
+  .idx-kind { grid-column: 1 / -1; }
+}

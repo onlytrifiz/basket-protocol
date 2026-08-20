@@ -3,20 +3,18 @@ import Link from "next/link";
 
 import { readAssets } from "../../lib/b20";
 import {
-  INDEX_FACTORY,
   LAUNCHPAD,
   MIN_BUY_ETH,
   MIN_HOLDER_COINS,
-  MODE,
   indicesLive,
-  readIndices,
+  readIndexRows,
   readPlatformFeeBps,
-  splitOf,
 } from "../../lib/indices";
 import { BrandRender } from "../components/brand-render";
 import { RingMarker } from "../components/segment-ring";
 import { SiteFooter, SiteHeader } from "../components/site-chrome";
-import { StockLogo } from "../components/stock-logo";
+import { IndexStats } from "../components/index-stats";
+import { IndexTable } from "../components/index-table";
 
 export const metadata: Metadata = {
   title: "Indices — Stockify",
@@ -42,16 +40,17 @@ const cadence = (seconds: number) => {
   return `${Math.round(seconds / 60)}m`;
 };
 
+/** The overview leads with the three biggest payers; the rest live on their own page. */
+const FEATURED = 3;
+
 export default async function IndicesPage() {
-  const [indices, platformBps, assets] = await Promise.all([
-    readIndices(),
+  const [{ rows, totals }, platformBps, assets] = await Promise.all([
+    readIndexRows(),
     readPlatformFeeBps(),
     readAssets(),
   ]);
   const byAddress = new Map(assets.map((a) => [a.address.toLowerCase(), a]));
-
-  const distributing = indices.filter((i) => i.mode === MODE.distribute).length;
-  const burning = indices.filter((i) => i.mode === MODE.buyback).length;
+  const featured = rows.slice(0, FEATURED);
 
   return (
     <div className="site-shell">
@@ -78,114 +77,42 @@ export default async function IndicesPage() {
           <BrandRender className="hub-render" priority size={340} src="/baskets.png" />
         </header>
 
-        <section className="stats-band" aria-label="Index service">
-          <div className="stats-inner">
-            <div>
-              <span>Live indices</span>
-              <strong>{indicesLive ? indices.length : "—"}</strong>
-              <small>{indicesLive ? "created by launches" : "service not deployed yet"}</small>
-            </div>
-            <div>
-              <span>Paying equity</span>
-              <strong>{indicesLive ? distributing : "—"}</strong>
-              <small>bought and pushed to holders</small>
-            </div>
-            <div>
-              <span>Buying back</span>
-              <strong>{indicesLive ? burning : "—"}</strong>
-              <small>supply destroyed instead</small>
-            </div>
-            <div>
-              <span>Protocol fee</span>
-              <strong>{(platformBps / 100).toFixed(0)}%</strong>
-              <small>off the top of every collection</small>
-            </div>
-          </div>
-        </section>
+        <IndexStats totals={totals} />
 
         <section className="section wrap hub-section" id="live">
           <div className="section-head">
             <p className="eyebrow">THE LIVE SET</p>
-            <h2>{indices.length === 0 ? "Nothing has pointed its fees here yet." : `${indices.length} ${indices.length === 1 ? "index" : "indices"}, read from the chain.`}</h2>
+            <h2>
+              {totals.count === 0
+                ? "Nothing has pointed its fees here yet."
+                : totals.count <= FEATURED
+                  ? `${totals.count} ${totals.count === 1 ? "index" : "indices"} running.`
+                  : `The ${FEATURED} biggest payers.`}
+            </h2>
             <p>
-              Every row is a contract answering for itself — what it holds, what it pays, and whether
-              the stream behind it can still be taken back. Made here, or inside a launch on{" "}
+              What each one holds, what it has handed to holders, and how often it has done it.
+              Ordered by what has actually reached people. Made here, or inside a launch on{" "}
               <a href={LAUNCHPAD.url} rel="noreferrer" target="_blank">{LAUNCHPAD.name} ↗</a>; an index
               does not care which launchpad its coin came from.
             </p>
           </div>
 
-          {indices.length > 0 ? (
-            <div className="hub-table" role="table" aria-label="Live indices">
-              <div className="hub-row dist-row hub-row-head" role="row">
-                <span role="columnheader">Coin</span>
-                <span role="columnheader">What it does</span>
-                <span role="columnheader">Holds</span>
-                <span role="columnheader">Pays</span>
-                <span role="columnheader">Creator keeps</span>
-                <span aria-hidden="true" />
-              </div>
-
-              {indices.map((index) => {
-                const split = splitOf(index.creatorShareBps, platformBps);
-                const burns = index.mode === MODE.buyback;
-                return (
-                  <Link className="hub-row dist-row" href={`/indices/${index.address}`} key={index.address} role="row">
-                    <span className="hub-asset" role="cell">
-                      <span className="hub-asset-id">
-                        <strong>{index.coinSymbol ?? `${index.coin.slice(0, 6)}…${index.coin.slice(-4)}`}</strong>
-                        <small>{index.paused ? "paused" : index.permanent ? "irrevocable" : "revocable by creator"}</small>
-                      </span>
-                    </span>
-
-                    <span className="hub-num" data-label="What it does" role="cell">
-                      <b>{burns ? "Burns" : "Pays equity"}</b>
-                      <small>{burns ? "buys the coin back" : `${index.basket.length} ${index.basket.length === 1 ? "name" : "names"}`}</small>
-                    </span>
-
-                    {/* The composition, as marks rather than a comma list — four near-identical rows
-                        of tickers are impossible to scan. */}
-                    <span className="hub-num" data-label="Holds" role="cell">
-                      {burns ? (
-                        <b>—</b>
-                      ) : (
-                        <span className="cycle-assets">
-                          {index.basket.map((token) => {
-                            const asset = byAddress.get(token.toLowerCase());
-                            return (
-                              <span className="cycle-asset" key={token} title={asset?.symbol ?? token}>
-                                {asset?.logo
-                                  ? <img alt="" className="cycle-mark" loading="lazy" src={asset.logo} />
-                                  : <span className="cycle-mark cycle-mark-blank" />}
-                              </span>
-                            );
-                          })}
-                        </span>
-                      )}
-                    </span>
-
-                    <span className="hub-num" data-label="Pays" role="cell">
-                      <b>{burns ? "on demand" : cadence(index.interval)}</b>
-                      <small>{burns ? "burn is open to anyone" : "at the earliest"}</small>
-                    </span>
-
-                    <span className="hub-num" data-label="Creator keeps" role="cell">
-                      <b>{(split.creator / 100).toFixed(0)}%</b>
-                      <small>{(split.holders / 100).toFixed(0)}% to holders</small>
-                    </span>
-
-                    <svg aria-hidden="true" className="hub-go" viewBox="0 0 6 10" focusable="false">
-                      <path d="M1 1l4 4-4 4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6" />
-                    </svg>
+          {featured.length > 0 ? (
+            <>
+              <IndexTable assets={byAddress} rows={featured} />
+              {totals.count > FEATURED && (
+                <div className="idx-more-row">
+                  <Link className="button button-ghost" href="/indices/all">
+                    All {totals.count} indices <span>→</span>
                   </Link>
-                );
-              })}
-            </div>
+                </div>
+              )}
+            </>
           ) : (
             <p className="detail-empty">
               {indicesLive
-                ? "The first index appears here the moment a launch creates one — this table is the factory's own register, not a list we keep."
-                : "The index factory is not deployed on this network, so there is nothing to read. No address is invented here."}
+                ? "The first index appears here the moment a launch points its fees at one. Yours could be it."
+                : "The index factory is not deployed on this network, so there is nothing to show."}
             </p>
           )}
         </section>
@@ -266,12 +193,6 @@ export default async function IndicesPage() {
           </Link>
         </section>
 
-        {indicesLive && (
-          <p className="desk-note wrap" style={{ paddingBottom: "3rem" }}>
-            Index factory <code>{INDEX_FACTORY}</code> — every figure on this page is read from it and
-            from the treasuries it minted, at request time.
-          </p>
-        )}
       </main>
       <SiteFooter />
     </div>

@@ -110,7 +110,7 @@ export function IndexUniverse({ slices }: { slices: IndexSlice[] }) {
           ))}
         </div>
       </div>
-      <p>Target weights read from the vault — the index can change between cycles.</p>
+      <p>Target weights. The index can change between cycles.</p>
     </aside>
   );
 }
