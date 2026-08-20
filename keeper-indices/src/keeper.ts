@@ -1,0 +1,935 @@
+/**
+ * Stockify Indices keeper — runs the cycle for every index the factory has minted.
+ *
+ * Per index, per cycle:
+ *   1. harvest()      pull the launch's creator fees (permissionless, but nobody else will)
+ *   2. swap()         turn each name's slice of those fees into equity, on a 0x quote
+ *   3. distribute()   push what's been bought to the coin's holders, pro-rata on balance
+ *
+ * The treasury bounds what this process can do with funds, and the code below is written to match:
+ * it can only reach a venue the factory has allowlisted, it can only buy what is already in the
+ * basket, and it never decides who is owed what — balances do. What it CAN get wrong is who gets
+ * *included* in a round and when a round is worth running, which is what most of this file is about.
+ *
+ * Run one instance. Two racing on the same round both open batches against the same cursor and one
+ * of them simply burns gas on reverts.
+ */
+import {
+  ContractFunctionRevertedError,
+  createPublicClient,
+  createWalletClient,
+  formatEther,
+  formatUnits,
+  getAddress,
+  http,
+  parseUnits,
+  type Address,
+  type Hex,
+} from "viem";
+import { privateKeyToAccount } from "viem/accounts";
+
+import { creatorSplitSetAbi, erc20Abi, factoryAbi, lockerAbi, treasuryAbi, v3FactoryAbi } from "./abi.js";
+import {
+  BALANCE_CHUNK,
+  DEAD,
+  DRY_RUN,
+  ETH_CUSHION,
+  EXTRA_EXCLUDES,
+  FACTORY,
+  FEE_LOCKER,
+  GAS_BASE,
+  GAS_PER_HOLDER,
+  INTERVAL_SEC,
+  KEEPER_PRIVATE_KEY,
+  LOG_CHUNK,
+  MAX_HOLDERS_PER_TX,
+  MIN_PAYOUT_UNITS,
+  MIN_ROUND_ETH,
+  MIN_ROUND_QUOTE,
+  ONLY_INDEXES,
+  PAYOUT_COST_MAX_BPS,
+  POSITION_MANAGER,
+  RPC_TIMEOUT_MS,
+  RPC_URL,
+  RUN_ONCE,
+  SPLIT_CANDIDATES,
+  SPLIT_LOOKBACK,
+  V3_FACTORY,
+  LAUNCH_FEE_TIER,
+  WETH,
+  ZERO,
+  chain,
+} from "./config.js";
+import { quote } from "./venue.js";
+import { fetchHolders } from "./holders.js";
+import { announce } from "./notify.js";
+
+
+const account = privateKeyToAccount(KEEPER_PRIVATE_KEY);
+const publicClient = createPublicClient({ chain, transport: http(RPC_URL, { batch: true, timeout: RPC_TIMEOUT_MS }) });
+const wallet = createWalletClient({ account, chain, transport: http(RPC_URL, { timeout: RPC_TIMEOUT_MS }) });
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+/** Treasuries whose implementation predates `allocate()`: asked once, then never again. */
+const noAllocatePath = new Set<Address>();
+const eq = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
+const now = () => Math.floor(Date.now() / 1000);
+const short = (a: string) => `${a.slice(0, 8)}…${a.slice(-4)}`;
+/** viem wraps the useful part; "unknown RPC error" on its own is never enough to act on. */
+const why = (e: unknown) => {
+  const x = e as { details?: string; shortMessage?: string; message?: string; cause?: { message?: string } };
+  return x?.details ?? x?.cause?.message ?? x?.shortMessage ?? x?.message ?? String(e);
+};
+
+/**
+ * The name of the custom error a call reverted with, or null if it did not revert at all — a
+ * timeout, a dropped connection, a node having a bad minute.
+ *
+ * The distinction is the whole point: a contract saying no will say no again, and anything else is
+ * worth another try.
+ */
+function revertName(e: unknown): string | null {
+  const err = e as { walk?: (fn: (x: unknown) => boolean) => unknown };
+  if (typeof err?.walk !== "function") return null;
+  const reverted = err.walk((x) => x instanceof ContractFunctionRevertedError) as
+    | ContractFunctionRevertedError
+    | null;
+  if (!reverted) return null;
+  // A revert we cannot name is still a revert, and still deterministic.
+  return reverted.data?.errorName ?? reverted.reason ?? "an error it does not declare";
+}
+
+/**
+ * Sends a transaction, and asks the chain again if the nonce has moved underneath it.
+ *
+ * This keeper is not the only thing that can hold its key. A redeploy overlaps two containers for a
+ * few seconds; the vault keeper runs on the same account; and a human sending one transaction by
+ * hand moves the account too. All three look identical from here — the node rejects a nonce viem
+ * worked out moments earlier — and all three are fixed the same way, by asking what the nonce is
+ * now and sending again. Anything that is not a nonce complaint is a real failure and is rethrown.
+ */
+async function send(tx: (nonce?: number) => Promise<Hex>): Promise<Hex> {
+  try {
+    return await tx();
+  } catch (e) {
+    const msg = why(e).toLowerCase();
+    if (!msg.includes("nonce")) throw e;
+    const nonce = await publicClient.getTransactionCount({ address: account.address, blockTag: "pending" });
+    console.log(`      nonce moved under us — resending at ${nonce}`);
+    return tx(nonce);
+  }
+}
+
+/**
+ * Baskets whose bind the chain has already refused, with the reason.
+ *
+ * Without this, a basket the keeper cannot bind costs a log scan and a failed simulation every
+ * cycle, forever, and prints the same error each time. Nothing is lost by giving up: if the owner
+ * binds it themselves, `coin` stops being zero and the basket never reaches this branch again.
+ */
+const unbindable = new Map<Address, string>();
+
+/** Curves resolved once per process — a coin's curve never changes. */
+const curveCache = new Map<Address, Address | null>();
+const partyPoolCache = new Map<Address, Address | null>();
+/**
+ * Coin lookups, including the misses.
+ *
+ * A basket that is not bound yet costs a log scan to work out, and without remembering the miss the
+ * keeper would redo that scan every single cycle — which is how a public RPC starts answering 429 to
+ * everything, payouts included. A miss is retried, just not on every pass.
+ */
+const coinCache = new Map<Address, { coin: Address | null; at: number }>();
+const COIN_MISS_TTL = Number(process.env.COIN_MISS_TTL_SEC ?? "1800");
+/** Baskets whose static exclusions have been checked this process. */
+const exclusionsDone = new Set<Address>();
+
+/**
+ * The soonest a round comes due anywhere, as a unix time — the cycle fills this in as it goes.
+ *
+ * Polling on a fixed interval means a round that ripens one second after a cycle waits a whole
+ * cycle to be noticed: with a 15-minute basket and a 5-minute poll, payouts land up to five minutes
+ * late for no reason. The keeper already learns every readyAt on its way past, so it can simply
+ * sleep until the first one instead.
+ */
+let soonestReady: number | null = null;
+const noteReady = (at: number) => {
+  if (soonestReady === null || at < soonestReady) soonestReady = at;
+};
+
+// ─────────────────────────────────────────────────────────────────────── exclusions
+
+/**
+ * The pons bonding curve for a coin, from the launch event. Not every coin has one (a treasury can
+ * be bound to any ERC20), so a miss is normal and not an error.
+ */
+/**
+ * The pool that holds a coin's launch liquidity — never a holder in any meaningful sense.
+ *
+ * The whole supply is minted into one Uniswap V3 position at launch, so the pool is the largest
+ * balance on nearly every coin and paying it would hand the round straight back to the pool. It is
+ * derived rather than looked up: the coin, the quote it was launched against and the fee tier fix
+ * the address, and `tokenQuote` on the locker is the authority on the second.
+ */
+async function liquidityHolders(coin: Address): Promise<Address[]> {
+  try {
+    const quoteAsset = (await publicClient.readContract({
+      address: FEE_LOCKER,
+      abi: lockerAbi,
+      functionName: "tokenQuote",
+      args: [coin],
+    })) as Address;
+    if (!quoteAsset || quoteAsset === ZERO) return [POSITION_MANAGER];
+
+    const pool = (await publicClient.readContract({
+      address: V3_FACTORY,
+      abi: v3FactoryAbi,
+      functionName: "getPool",
+      args: [coin, quoteAsset, LAUNCH_FEE_TIER],
+    })) as Address;
+
+    return pool && pool !== ZERO ? [pool, POSITION_MANAGER] : [POSITION_MANAGER];
+  } catch {
+    // The position manager alone is still worth excluding; a missed pool costs accuracy, not safety.
+    return [POSITION_MANAGER];
+  }
+}
+
+/**
+ * Which coin an unbound treasury collects for, read off the locker rather than assumed.
+ *
+ * The sibling protocol needed two hops — an escrow credit naming a curve, then a launch record
+ * turning that curve into a coin. Here it is one: `CreatorSplitSet` says a coin's split changed, and
+ * `splitsOf` says whether this treasury is what it now points at. Nobody can forge that pair without
+ * actually pointing a real launch's fees here, which is what makes it safe for the keeper to bind
+ * rather than asking the creator to.
+ *
+ * The scan is bounded and walks backwards from the tip. A basket is created within hours of the
+ * launch it collects for, so the first chunk normally answers — and an unbounded scan from block
+ * zero is exactly what ran a sibling project's RPC bill up once before.
+ *
+ * Returns null when nothing points here yet: the ordinary case for a basket created ahead of its
+ * launch, and a reason to wait rather than to guess.
+ */
+async function resolveCoinFor(treasury: Address, _quoteToken: Address): Promise<Address | null> {
+  const seen = coinCache.get(treasury);
+  if (seen?.coin) return seen.coin;
+  if (seen && now() - seen.at < COIN_MISS_TTL) return null;
+
+  const found = await _resolveCoinFor(treasury);
+  coinCache.set(treasury, { coin: found, at: now() });
+  return found;
+}
+
+async function _resolveCoinFor(treasury: Address): Promise<Address | null> {
+  try {
+    const tip = await publicClient.getBlockNumber();
+    const floor = tip > SPLIT_LOOKBACK ? tip - SPLIT_LOOKBACK : 0n;
+    const candidates: Address[] = [];
+
+    for (let to = tip; to >= floor && candidates.length < SPLIT_CANDIDATES; to -= LOG_CHUNK) {
+      const from = to - LOG_CHUNK + 1n > floor ? to - LOG_CHUNK + 1n : floor;
+      const logs = await publicClient.getLogs({
+        address: FEE_LOCKER,
+        event: creatorSplitSetAbi[0],
+        fromBlock: from,
+        toBlock: to,
+      });
+      // Newest first: a coin whose split was repointed twice should be judged on the latest state,
+      // and `splitsOf` below reads exactly that.
+      for (const l of logs.reverse()) {
+        const token = (l.args as Record<string, unknown>)?.token as Address | undefined;
+        if (token && !candidates.includes(token)) candidates.push(token);
+      }
+      if (from === floor) break;
+    }
+
+    for (const coin of candidates) {
+      const splits = (await publicClient.readContract({
+        address: FEE_LOCKER,
+        abi: lockerAbi,
+        functionName: "splitsOf",
+        args: [coin],
+      })) as readonly { to: Address; bps: bigint }[];
+      // The treasury binds on a whole stream only, so anything else is not its coin.
+      if (splits.length === 1 && splits[0].bps === 10_000n && eq(splits[0].to, treasury)) return coin;
+    }
+    return null;
+  } catch (e) {
+    console.error(`    coin lookup failed: ${(e as Error).message.split("\n")[0]}`);
+    return null;
+  }
+}
+
+async function ensureExclusions(treasury: Address, coin: Address) {
+  if (exclusionsDone.has(treasury)) return;
+  exclusionsDone.add(treasury);
+
+  const candidates: Address[] = [POSITION_MANAGER, ...EXTRA_EXCLUDES, ...(await liquidityHolders(coin))];
+
+  const missing: Address[] = [];
+  for (const a of candidates) {
+    const [already, code] = await Promise.all([
+      publicClient.readContract({ address: treasury, abi: treasuryAbi, functionName: "excluded", args: [a] }),
+      publicClient.getBytecode({ address: a }),
+    ]);
+    if (!already && code && code !== "0x") missing.push(a);
+  }
+  if (missing.length === 0) return;
+
+  console.log(`    excluding ${missing.map(short).join(", ")}`);
+  if (DRY_RUN) return;
+  const hash = await send((nonce) =>
+    wallet.writeContract({
+      address: treasury,
+      abi: treasuryAbi,
+      functionName: "setExcludedBatch",
+      args: [missing, true],
+      nonce,
+    })
+  );
+  await publicClient.waitForTransactionReceipt({ hash });
+}
+
+// ─────────────────────────────────────────────────────────────────────── the cycle
+
+async function harvest(treasury: Address) {
+  try {
+    const { result } = await publicClient.simulateContract({
+      address: treasury,
+      abi: treasuryAbi,
+      functionName: "harvest",
+      account,
+    });
+    if ((result as bigint) === 0n) return 0n; // nothing pending: don't pay gas to learn that again
+    console.log(`    harvest ${formatEther(result as bigint)} ETH`);
+    if (DRY_RUN) return result as bigint;
+    const hash = await send((nonce) =>
+      wallet.writeContract({ address: treasury, abi: treasuryAbi, functionName: "harvest", nonce })
+    );
+    await publicClient.waitForTransactionReceipt({ hash });
+    return result as bigint;
+  } catch (e) {
+    console.error(`    harvest skipped: ${(e as Error).message.split("\n")[0]}`);
+    return 0n;
+  }
+}
+
+/**
+ * Buys each name whose slice is worth a round of its own.
+ *
+ * Slices come off ONE snapshot of the spendable balance taken up front, and what has already been
+ * spent is tracked against it — sizing each buy off a freshly-read balance would let the last names
+ * in the basket quietly spend the first ones' money.
+ */
+/**
+ * What MIN_ROUND_ETH is worth in some other quote asset, priced once per cycle per token.
+ *
+ * pons launches pair against whatever the creator chose — a fifth of recent ones pair against a
+ * stock rather than ether — and "is this slice worth a round" is a question about value, not about
+ * a count of units. A single number in quote units cannot answer it for both a dollar stablecoin
+ * and a $250 share: the same 20 means twenty dollars in one and five thousand in the other.
+ *
+ * So the rate is asked of the venue, which is already the thing that decides what anything is worth
+ * here. A miss falls back to the configured unit count, which is wrong in the same way it always
+ * was, rather than blocking the round.
+ */
+const quoteRate = new Map<Address, bigint>(); // quote token -> units worth 1 ETH
+
+/**
+ * An amount of some quote asset expressed in ether, or null if it cannot be priced.
+ *
+ * Only used to compare against gas, which is always in wei. Comparing a token amount directly
+ * against a gas cost is out by however many orders of magnitude separate the two units — for a
+ * six-decimal stablecoin that is twelve, which is enough to make every round look uneconomic
+ * forever.
+ */
+function valueInEth(quoteToken: Address, amount: bigint): bigint | null {
+  const unitsPerEth = quoteRate.get(quoteToken);
+  if (unitsPerEth === undefined || unitsPerEth === 0n) return null;
+  return (amount * 10n ** 18n) / unitsPerEth;
+}
+
+/**
+ * The per-name spend gate, in the units of the quote the basket is actually paid in.
+ *
+ * The sibling protocol converted this to ETH through its RFQ desk's price feed. There is no such
+ * feed here — and pricing the gate would mean the treasury could only buy names something quotes,
+ * which is the exact dependency this design refuses. So an ERC20-quoted basket states its floor in
+ * its own quote (`MIN_ROUND_QUOTE`) and a native one in ether, and neither needs a conversion.
+ */
+async function thresholdIn(_quoteToken: Address, decimals: number): Promise<bigint> {
+  return parseUnits(MIN_ROUND_QUOTE, decimals);
+}
+
+async function allocate(treasury: Address, index: number, size: bigint, decimals: number): Promise<bigint> {
+  if (noAllocatePath.has(treasury)) return 0n;
+
+  const args = [BigInt(index), size] as const;
+  console.log(`    allocate ${formatUnits(size, decimals)} (the fees are already the right asset)`);
+  if (DRY_RUN) return size;
+
+  try {
+    await publicClient.simulateContract({
+      address: treasury, abi: treasuryAbi, functionName: "allocate", args, account,
+    });
+  } catch (e) {
+    if (!revertName(e)) {
+      noAllocatePath.add(treasury);
+      console.log("      this basket predates allocate() — its quote asset cannot be paid out");
+    } else {
+      console.error(`      allocate would revert: ${why(e)}`);
+    }
+    return 0n;
+  }
+
+  try {
+    const hash = await send((nonce) =>
+      wallet.writeContract({ address: treasury, abi: treasuryAbi, functionName: "allocate", args, nonce })
+    );
+    await publicClient.waitForTransactionReceipt({ hash });
+    return size;
+  } catch (e) {
+    console.error(`    allocate failed: ${why(e)}`);
+    return 0n;
+  }
+}
+
+async function buy(
+  treasury: Address,
+  quoteToken: Address,
+  basket: readonly Address[],
+  weights: readonly number[]
+): Promise<bigint> {
+  let spentTotal = 0n;
+  const isNative = quoteToken === ZERO;
+  const spendableRaw = (await publicClient.readContract({
+    address: treasury,
+    abi: treasuryAbi,
+    functionName: "spendableQuote",
+  })) as bigint;
+
+  let decimals = 18;
+  let threshold = MIN_ROUND_ETH;
+  if (!isNative) {
+    decimals = Number(
+      await publicClient.readContract({ address: quoteToken, abi: erc20Abi, functionName: "decimals" })
+    );
+    threshold = await thresholdIn(quoteToken, decimals);
+  }
+
+  // The treasury pays no gas, but leaving it bone dry means an owner rescue has nothing to work with.
+  const spendable = isNative
+    ? spendableRaw > ETH_CUSHION ? spendableRaw - ETH_CUSHION : 0n
+    : spendableRaw;
+  if (spendable === 0n) return 0n;
+
+  let left = spendable;
+  for (let i = 0; i < basket.length; i++) {
+    const slice = (spendable * BigInt(weights[i])) / 10_000n;
+    const size = slice > left ? left : slice;
+    if (size < threshold) continue;
+
+    /**
+     * The basket entry that IS the quote asset needs no venue at all.
+     *
+     * A coin paired against NVDA is paid its fees in NVDA, so that slice is already the right asset:
+     * buying it would mean selling it to itself and paying a spread to stand still. The treasury
+     * moves it across its own books instead, and the round pays it out like anything else.
+     */
+    if (!isNative && basket[i].toLowerCase() === quoteToken.toLowerCase()) {
+      const moved = await allocate(treasury, i, size, decimals);
+      if (moved > 0n) {
+        left -= moved;
+        spentTotal += moved;
+      }
+      continue;
+    }
+
+    /**
+     * Ask both venues and take the better fill.
+     *
+     * Rialto looked like the obvious first choice and measurement says otherwise: on the same size
+     * at the same moment, Uniswap came out ahead on Take-Two by 1.9%, on Roblox by 0.05% and on
+     * Trump Media by 0.11%, and never behind. They price differently — one an inventory, the other
+     * public pools — so which is better is a question about this token at this size right now, not a
+     * standing preference. Asking twice costs one HTTP request and can only improve the fill.
+     *
+     * Uniswap is asked only for native-quoted baskets: it pulls ERC20s through Permit2 rather than
+     * an allowance, and the treasury deliberately does not implement that.
+     */
+    /**
+     * One venue, asked once.
+     *
+     * The sibling protocol raced two integrations here because its chain had an RFQ desk with its
+     * own inventory and a public-pool fallback for the names that desk would not carry. Base has no
+     * such split: 0x already prices across Aerodrome, Uniswap and the rest in one request, so a
+     * second route would be another way to get the same answer rather than a fallback.
+     */
+    // Equities on Base carry 8 decimals, not 18 — the quote is priced in the units each side
+    // actually uses, and getting that wrong would ask for a route a billion times the size.
+    const q = await quote(treasury, isNative ? ZERO : quoteToken, size, decimals, basket[i], 8);
+    if (!q) continue;
+
+    /**
+     * The treasury refuses any venue its factory has not allowlisted, so this check only turns a
+     * wasted transaction into a log line — but that matters: 0x rotates its Settler deployments, and
+     * learning about it from a revert costs gas and says nothing about the cause.
+     */
+    const allowed = (await publicClient.readContract({
+      address: FACTORY,
+      abi: factoryAbi,
+      functionName: "venue",
+      args: [q.venue],
+    })) as boolean;
+    if (!allowed) {
+      console.error(`    quote targets ${short(q.venue)}, which the factory has not allowlisted — skipped`);
+      continue;
+    }
+
+    console.log(
+      `    buy ${formatUnits(q.sellAmount, decimals)} → ${short(basket[i])}`
+        + ` (min ${formatUnits(q.minBuyAmount, 8)} via ${q.venues.join("+") || "velora"})`
+    );
+    if (DRY_RUN) {
+      left -= q.sellAmount;
+      spentTotal += q.sellAmount;
+      continue;
+    }
+    try {
+      const hash = await send((nonce) =>
+        wallet.writeContract({
+          address: treasury,
+          abi: treasuryAbi,
+          functionName: "swap",
+          // A native-quoted basket sells WETH: the treasury wraps just-in-time and approves exactly
+          // what it declares, which is what an allowance-based venue expects.
+          args: [q.venue, q.sellToken, q.sellAmount, basket[i], q.minBuyAmount, q.data],
+          nonce,
+        })
+      );
+      await publicClient.waitForTransactionReceipt({ hash });
+      left -= q.sellAmount;
+      spentTotal += q.sellAmount;
+    } catch (e) {
+      console.error(`    swap failed: ${(e as Error).message.split("\n")[0]}`);
+    }
+  }
+  return spentTotal;
+}
+
+/**
+ * Coin balances for a list of addresses, in chunks.
+ *
+ * Firing several hundred eth_calls as one batch is how you find out what a node's limits are, and a
+ * single dropped read here would silently drop a holder from the round. Chunked, retried, and null
+ * on real failure so the caller can skip the round instead of paying an incomplete list.
+ */
+async function balancesOf(coin: Address, addrs: Address[]): Promise<bigint[] | null> {
+  const out: bigint[] = [];
+  for (let i = 0; i < addrs.length; i += BALANCE_CHUNK) {
+    const slice = addrs.slice(i, i + BALANCE_CHUNK);
+    let done = false;
+    for (let attempt = 1; attempt <= 3 && !done; attempt++) {
+      try {
+        const bals = await Promise.all(
+          slice.map((a) =>
+            publicClient.readContract({ address: coin, abi: erc20Abi, functionName: "balanceOf", args: [a] })
+          )
+        );
+        out.push(...(bals as bigint[]));
+        done = true;
+      } catch (e) {
+        if (attempt === 3) {
+          console.error(`    balance reads failed: ${(e as Error).message.split("\n")[0]}`);
+          return null;
+        }
+        await sleep(400 * attempt);
+      }
+    }
+  }
+  return out;
+}
+
+/** Eligible holders, ascending — the order the contract requires so no address can appear twice. */
+async function eligibleHolders(coin: Address, treasury: Address, floor: bigint): Promise<Address[] | null> {
+  const raw = await fetchHolders(coin);
+  if (!raw) return null;
+
+  const skip = new Set<string>(
+    [ZERO, DEAD, POSITION_MANAGER, treasury, coin, ...EXTRA_EXCLUDES].map((a) => a.toLowerCase())
+  );
+  for (const a of await liquidityHolders(coin)) skip.add(a.toLowerCase());
+
+  const candidates = raw.filter((a) => !skip.has(a.toLowerCase()));
+  if (candidates.length === 0) return [];
+
+  const balances = await balancesOf(coin, candidates);
+  if (!balances) return null;
+
+  return candidates
+    .filter((_, i) => balances[i] >= floor)
+    .sort((a, b) => (BigInt(a) < BigInt(b) ? -1 : 1));
+}
+
+/**
+ * Pays out one name.
+ *
+ * Everything in one transaction when it fits, because `distribute()` pays the whole balance and
+ * needs no arithmetic from us. When it doesn't fit, the round is split — and each batch is given its
+ * share of the round's total, computed off the same snapshot, so the proportions survive the split.
+ * The contract fixes the round's budget when the first batch opens it, which is what stops a swap
+ * landing mid-round from being paid out as if it had been there all along.
+ */
+async function payOut(
+  treasury: Address,
+  coin: Address,
+  index: number,
+  amount: bigint,
+  holders: Address[]
+) {
+  const gas = (n: number) => GAS_BASE + GAS_PER_HOLDER * BigInt(n);
+
+  if (holders.length <= MAX_HOLDERS_PER_TX) {
+    console.log(`    pay [${index}] ${formatUnits(amount, 18)} to ${holders.length} holders`);
+    if (DRY_RUN) return;
+    const hash = await send((nonce) =>
+      wallet.writeContract({
+        address: treasury,
+        abi: treasuryAbi,
+        functionName: "distribute",
+        args: [BigInt(index), holders],
+        gas: gas(holders.length),
+        nonce,
+      })
+    );
+    const receipt = await publicClient.waitForTransactionReceipt({ hash });
+    await announce(`Paid out ${formatUnits(amount, 18)} to ${holders.length} holders`, receipt.transactionHash);
+    return;
+  }
+
+  /**
+   * Read what is actually there, as late as possible.
+   *
+   * `distribute()` reads the balance itself, so the single-batch path cannot get this wrong. The
+   * batched path has to name an amount, and an amount read before the buy it was meant to hand out
+   * is an amount that pays the previous round's dust instead: one round moved 61 wei to ten holders
+   * while 2.23 shares sat untouched in the treasury.
+   */
+  const [onHand] = (await publicClient.readContract({
+    address: treasury,
+    abi: treasuryAbi,
+    functionName: "pending",
+    args: [BigInt(index)],
+  })) as [bigint, bigint];
+  if (onHand !== amount) {
+    console.log(`    pay [${index}] balance moved since the round was sized: ${formatUnits(amount, 18)} → ${formatUnits(onHand, 18)}`);
+    amount = onHand;
+  }
+  if (amount === 0n) return;
+
+  const batches: Address[][] = [];
+  for (let i = 0; i < holders.length; i += MAX_HOLDERS_PER_TX) {
+    batches.push(holders.slice(i, i + MAX_HOLDERS_PER_TX));
+  }
+
+  const weights: bigint[] = [];
+  let grand = 0n;
+  for (const batch of batches) {
+    const bals = await balancesOf(coin, batch);
+    if (!bals) return; // an incomplete weighting would skew every batch that follows
+    const sum = bals.reduce((s, b) => s + b, 0n);
+    weights.push(sum);
+    grand += sum;
+  }
+  if (grand === 0n) return;
+
+  console.log(`    pay [${index}] ${formatUnits(amount, 18)} to ${holders.length} holders in ${batches.length} batches`);
+  if (DRY_RUN) return;
+
+  let spent = 0n;
+  for (let k = 0; k < batches.length; k++) {
+    // The last batch takes the remainder rather than its own rounded share, so the batches add up to
+    // exactly the round's budget and never one wei over it.
+    const share = k === batches.length - 1 ? amount - spent : (amount * weights[k]) / grand;
+    if (share <= 0n) continue;
+    const hash = await send((nonce) =>
+      wallet.writeContract({
+        address: treasury,
+        abi: treasuryAbi,
+        functionName: "distributeAmount",
+        args: [BigInt(index), share, batches[k]],
+        gas: gas(batches[k].length),
+        nonce,
+      })
+    );
+    await publicClient.waitForTransactionReceipt({ hash });
+    spent += share;
+    console.log(`      batch ${k + 1}/${batches.length}: ${formatUnits(share, 18)}`);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────── per basket
+
+async function runIndex(treasury: Address) {
+  let [coin, quoteToken, paused] = (await Promise.all([
+    publicClient.readContract({ address: treasury, abi: treasuryAbi, functionName: "coin" }),
+    publicClient.readContract({ address: treasury, abi: treasuryAbi, functionName: "quote" }),
+    publicClient.readContract({ address: treasury, abi: treasuryAbi, functionName: "paused" }),
+  ])) as [Address, Address, boolean];
+
+  if (paused) return console.log(`  ${short(treasury)} paused`);
+
+  if (coin === ZERO) {
+    const refused = unbindable.get(treasury);
+    if (refused) return console.log(`  ${short(treasury)} ${refused}`);
+
+    const found = await resolveCoinFor(treasury, quoteToken);
+    if (!found) return console.log(`  ${short(treasury)} not bound, and no launch has paid it yet`);
+    console.log(`  ${short(treasury)} binding ${short(found)} (from the launchpad's own events)`);
+    if (DRY_RUN) return;
+    // Simulate first: a basket cloned from an older implementation will refuse, and sending anyway
+    // would burn gas on the same revert every cycle.
+    try {
+      await publicClient.simulateContract({
+        address: treasury, abi: treasuryAbi, functionName: "bind", args: [found], account,
+      });
+    } catch (e) {
+      const name = revertName(e);
+      if (!name) return console.error(`    bind failed: ${why(e)} — retrying next cycle`);
+      /**
+       * The permissionless bind — the one that proves itself against pons' launch registry — only
+       * exists on the current implementation. A basket cloned from an earlier one keeps that one
+       * forever, and there the call is owner-only, so this is the creator's to make, not ours.
+       */
+      const owner = await publicClient
+        .readContract({ address: treasury, abi: treasuryAbi, functionName: "owner" })
+        .catch(() => null);
+      const note =
+        name === "NotOwner"
+          ? `cannot be bound by the keeper: it was cloned from an older implementation, where bind is owner-only${owner ? ` — only ${short(owner as string)} can call it` : ""}`
+          : `cannot be bound: the treasury refuses with ${name}`;
+      unbindable.set(treasury, note);
+      return console.error(`    ${note}`);
+    }
+    const hash = await send((nonce) =>
+      wallet.writeContract({ address: treasury, abi: treasuryAbi, functionName: "bind", args: [found], nonce })
+    );
+    await publicClient.waitForTransactionReceipt({ hash });
+    coin = found;
+  }
+
+  const symbol = await publicClient
+    .readContract({ address: coin, abi: erc20Abi, functionName: "symbol" })
+    .catch(() => short(coin));
+  console.log(`  ${short(treasury)} · ${symbol}`);
+
+  await ensureExclusions(treasury, coin);
+  await harvest(treasury);
+
+  const [tokens, weights] = (await publicClient.readContract({
+    address: treasury,
+    abi: treasuryAbi,
+    functionName: "basketAll",
+  })) as [Address[], number[]];
+
+  const stockSymbols = await Promise.all(
+    tokens.map((t) =>
+      publicClient.readContract({ address: t, abi: erc20Abi, functionName: "symbol" }).catch(() => short(t))
+    )
+  );
+
+  // Which names' rounds have come due — on time alone, because the buy happens after this.
+  const ready: number[] = [];
+  const waiting: string[] = [];
+  for (let i = 0; i < tokens.length; i++) {
+    const [, readyAt] = (await publicClient.readContract({
+      address: treasury,
+      abi: treasuryAbi,
+      functionName: "pending",
+      args: [BigInt(i)],
+    })) as [bigint, bigint];
+    if (Number(readyAt) <= now()) ready.push(i);
+    else {
+      noteReady(Number(readyAt));
+      waiting.push(`${stockSymbols[i] ?? short(tokens[i])} in ${Math.ceil((Number(readyAt) - now()) / 60)}m`);
+    }
+  }
+
+  // Saying nothing when a round has not come round yet reads exactly like a failure — and it is the
+  // most common thing the keeper does.
+  if (ready.length === 0) {
+    if (waiting.length) console.log(`    holding: next round ${waiting.join(", ")}`);
+    return;
+  }
+
+  /**
+   * Buy immediately before paying out, not on every cycle that finds fees.
+   *
+   * The fees arrive continuously and the round is periodic, so buying eagerly meant several small
+   * fills per payout — and each fill pays the spread on its own size. One larger fill per round is
+   * strictly cheaper on a venue that quotes per trade, and the stock spends the same time held
+   * either way, because it leaves in the very next transaction.
+   */
+  const spent = await buy(treasury, quoteToken, tokens, weights);
+  const bought = spent > 0n;
+
+  // Holders are fetched once and reused across the names, because it is the same list for all.
+  const due: { index: number; amount: bigint }[] = [];
+  for (const i of ready) {
+    const [amount] = (await publicClient.readContract({
+      address: treasury,
+      abi: treasuryAbi,
+      functionName: "pending",
+      args: [BigInt(i)],
+    })) as [bigint, bigint];
+    // What survives a round is rounding dust: a few wei that divided into nothing. Paying it out
+    // costs a full distribution's gas to move a millionth of a cent, and reads as a real payout in
+    // the history. A round pays what it bought, or waits.
+    if (amount > (bought ? 0n : MIN_PAYOUT_UNITS)) due.push({ index: i, amount });
+  }
+  if (due.length === 0) {
+    console.log(bought ? "    nothing to pay out" : "    holding: under the buy threshold, nothing bought this round");
+    return;
+  }
+
+  const floor = (await publicClient.readContract({
+    address: treasury,
+    abi: treasuryAbi,
+    functionName: "minHolderBalance",
+  })) as bigint;
+
+  const holders = await eligibleHolders(coin, treasury, floor);
+  if (holders === null) return console.error("    holder list unavailable — round skipped");
+  if (holders.length === 0) return console.log("    no eligible holders");
+
+  /**
+   * A payout costs gas per holder, so whether it is worth running depends on the holder count as
+   * much as on the amount. The value of a round is what it just spent buying; if moving it would
+   * cost more than PAYOUT_COST_MAX_BPS of that, the stock waits for the next round instead — the
+   * holders keep it either way, and they keep more of it by not paying for the trip twice.
+   */
+  if (spent > 0n) {
+    // Gas is quoted in wei, so the round has to be too. A basket paid in something other than ether
+    // is worth whatever the venue says it is; if that cannot be priced the gate is skipped rather
+    // than guessed, since guessing wrong here means never paying out at all.
+    const worth = quoteToken === ZERO ? spent : valueInEth(quoteToken, spent);
+    const gasPrice = await publicClient.getGasPrice().catch(() => 0n);
+    const gasCost = gasPrice * (GAS_BASE + GAS_PER_HOLDER * BigInt(holders.length));
+    if (worth !== null && gasCost * 10_000n > worth * BigInt(PAYOUT_COST_MAX_BPS)) {
+      return console.log(
+        `    holding: paying ${holders.length} holders would cost ${formatEther(gasCost)} ETH ` +
+          `against a round worth ${formatEther(worth)} — waiting for a bigger one`
+      );
+    }
+  }
+
+  for (const d of due) {
+    try {
+      await payOut(treasury, coin, d.index, d.amount, holders);
+    } catch (e) {
+      console.error(`    payout [${d.index}] failed: ${(e as Error).message.split("\n")[0]}`);
+    }
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────── main
+
+async function cycle() {
+  soonestReady = null;
+  const count = (await publicClient.readContract({
+    address: FACTORY,
+    abi: factoryAbi,
+    functionName: "indexCount",
+  })) as bigint;
+
+  if (count === 0n) return console.log("no indexes yet");
+
+  const all = (await publicClient.readContract({
+    address: FACTORY,
+    abi: factoryAbi,
+    functionName: "indexesPaged",
+    args: [0n, count],
+  })) as Address[];
+
+  const baskets = ONLY_INDEXES.size === 0 ? all : all.filter((b) => ONLY_INDEXES.has(b.toLowerCase()));
+
+  console.log(
+    `${baskets.length} index(es)${ONLY_INDEXES.size ? ` of ${all.length} (ONLY_INDEXES)` : ""}`
+  );
+  for (const b of baskets) {
+    try {
+      await runIndex(b);
+    } catch (e) {
+      console.error(`  ${short(b)} failed: ${(e as Error).message.split("\n")[0]}`);
+    }
+  }
+}
+
+async function main() {
+  // The poll interval belongs in the banner: "nothing happened" and "nothing happened yet" look the
+  // same in a log, and only one of them is a problem.
+  console.log(
+    `indices keeper · ${account.address} · factory ${short(FACTORY)} · every ${INTERVAL_SEC}s${DRY_RUN ? " · DRY RUN" : ""}`
+  );
+
+  // The single operational mistake worth failing loudly on: an unauthorised wallet reverts every
+  // swap and every payout, one at a time, forever, while looking perfectly healthy in the logs.
+  const authorised = (await publicClient.readContract({
+    address: FACTORY,
+    abi: factoryAbi,
+    functionName: "keeper",
+    args: [account.address],
+  })) as boolean;
+  if (!authorised) {
+    throw new Error(`${account.address} is not an authorised keeper — run factory.setKeeper(${account.address}, true)`);
+  }
+
+  const balance = await publicClient.getBalance({ address: account.address });
+  console.log(`gas balance ${formatEther(balance)} ETH`);
+  if (balance === 0n) throw new Error("keeper wallet has no ETH for gas");
+
+  /**
+   * WETH is one ether, by construction. Seeding the rate says so rather than asking a venue.
+   *
+   * Everything else quoted in an ERC20 has to be priced, and a price that cannot be fetched falls
+   * back to `MIN_ROUND_QUOTE` whole units — which for a token worth an ether apiece is a threshold of
+   * twenty ether, and a basket that never buys anything. That is the shape the USDG threshold bug
+   * already took once. A WETH-quoted basket is reachable now that pools.fun pays its paired leg
+   * wrapped, so the one rate nobody should ever have to ask for is put in up front.
+   */
+  const weth = (await publicClient.readContract({
+    address: FACTORY,
+    abi: factoryAbi,
+    functionName: "weth",
+  })) as Address;
+  quoteRate.set(getAddress(weth), 10n ** 18n);
+
+  for (;;) {
+    const started = Date.now();
+    try {
+      await cycle();
+    } catch (e) {
+      console.error(`cycle failed: ${(e as Error).message.split("\n")[0]}`);
+    }
+    if (RUN_ONCE) return;
+    const elapsed = Math.floor((Date.now() - started) / 1000);
+    /**
+     * Wake for the next round, or for the routine pass, whichever comes first.
+     *
+     * The routine pass still matters — fees arrive between rounds and a new basket can appear at any
+     * time — but a round that ripens just after a cycle should not wait a whole cycle to be noticed.
+     * The extra second is so the chain's clock is unambiguously past readyAt when the call lands.
+     */
+    const routine = Math.max(5, INTERVAL_SEC - elapsed);
+    const untilRound = soonestReady === null ? routine : Math.max(5, soonestReady - now() + 1);
+    const wait = Math.min(routine, untilRound);
+    if (wait < routine) console.log(`sleeping ${wait}s — a round comes due before the next pass`);
+    await sleep(wait * 1000);
+  }
+}
+
+main().catch((e) => {
+  console.error(e.message ?? e);
+  process.exit(1);
+});

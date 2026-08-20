@@ -2777,3 +2777,130 @@ a.pool-row:hover { background: var(--surface-2); }
   }
   .page-intro-render { transform: none !important; }
 }
+
+/* ---------- 21. Index builder ---------------------------------------------- */
+
+.builder-head { padding-bottom: 0; }
+.builder-head h1 { font-size: clamp(2rem, 3.4vw, 2.7rem); letter-spacing: -.03em; margin: 12px 0 0; }
+.builder-agnostic { color: var(--ink-3); font-size: .84rem; line-height: 1.6; margin: 14px 0 0; max-width: 58ch; }
+
+.builder { margin: 0 auto; max-width: 760px; }
+
+/* The path already walked stays clickable: changing one weight after the summary must not cost five
+   clicks forward. */
+.builder-steps { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 18px; }
+.builder-steps button {
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  color: var(--ink-3);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: .74rem;
+  gap: 7px;
+  padding: 7px 13px;
+  transition: border-color .16s var(--ease), color .16s var(--ease);
+}
+.builder-steps button b {
+  background: var(--chip); border-radius: 50%; color: var(--chip-fg);
+  display: grid; font-size: .66rem; height: 17px; place-items: center; width: 17px;
+}
+.builder-steps button:disabled { cursor: not-allowed; opacity: .5; }
+.builder-steps .is-done { color: var(--ink-2); }
+.builder-steps .is-current { border-color: var(--blue); color: var(--ink); }
+.builder-steps .is-current b { background: var(--blue); color: #fff; }
+
+.builder-panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-1);
+  padding: 22px;
+}
+
+.builder-choices { display: grid; gap: 10px; grid-template-columns: repeat(3, 1fr); }
+.builder-choices.is-tight { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); }
+.builder-choices button {
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  cursor: pointer;
+  display: grid;
+  gap: 7px;
+  padding: 15px;
+  text-align: left;
+  transition: border-color .16s var(--ease), background .16s var(--ease);
+}
+.builder-choices button:hover { border-color: var(--line-2); }
+.builder-choices .is-picked { background: var(--surface); border-color: var(--blue); }
+.builder-choices strong { font-size: .92rem; }
+.builder-choices span { color: var(--ink-2); font-size: .8rem; line-height: 1.45; }
+.builder-choices small { color: var(--ink-3); font-size: .73rem; line-height: 1.5; }
+
+.builder-search {
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-sm);
+  color: var(--ink); font-family: var(--ui-stack); font-size: .88rem; padding: 10px 13px; width: 100%;
+}
+.builder-search:focus { border-color: var(--blue); outline: none; }
+
+.builder-grid {
+  display: grid; gap: 7px; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  margin-top: 14px; max-height: 268px; overflow-y: auto;
+}
+.builder-grid button {
+  align-items: center; background: var(--surface-2); border: 1px solid var(--line);
+  border-radius: var(--r-sm); cursor: pointer; display: flex; gap: 8px; padding: 9px 10px;
+}
+.builder-grid .is-picked { border-color: var(--blue); }
+.builder-grid span { font-size: .8rem; }
+
+.builder-weights { display: grid; gap: 9px; margin-top: 18px; }
+.builder-weights label { align-items: center; display: grid; gap: 11px; grid-template-columns: 62px 1fr 46px; }
+.builder-weights span { color: var(--ink-2); font-size: .8rem; }
+.builder-weights b { font-size: .8rem; font-variant-numeric: tabular-nums; text-align: right; }
+.builder-actions { align-items: center; display: flex; gap: 12px; justify-content: space-between; margin-top: 4px; }
+.builder-actions button {
+  background: none; border: 1px solid var(--line); border-radius: var(--r-sm); color: var(--ink-2);
+  cursor: pointer; font-size: .76rem; padding: 6px 11px;
+}
+.builder-actions .is-ok { color: var(--lime); }
+.builder-actions .is-off { color: var(--warn-fg); }
+
+.builder-range { width: 100%; }
+.builder-split { display: grid; gap: 9px; grid-template-columns: repeat(3, 1fr); margin-top: 18px; }
+.builder-split > div {
+  background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--r-md);
+  padding: 13px; text-align: center;
+}
+.builder-split .is-lit { border-color: var(--blue); }
+.builder-split span { color: var(--ink-3); display: block; font-size: .7rem; text-transform: uppercase; letter-spacing: .08em; }
+.builder-split strong { display: block; font-size: 1.45rem; letter-spacing: -.04em; margin-top: 5px; }
+
+.builder-note { color: var(--ink-3); font-size: .8rem; line-height: 1.6; margin: 16px 0 0; }
+.builder-note strong { color: var(--ink); }
+
+.builder-address {
+  background: var(--surface-2); border: 1px solid var(--blue); border-radius: var(--r-md); padding: 15px;
+}
+.builder-address span { color: var(--ink-3); display: block; font-size: .72rem; letter-spacing: .08em; text-transform: uppercase; }
+.builder-address code { display: block; font-family: var(--mono-stack); font-size: .82rem; margin-top: 7px; word-break: break-all; }
+.builder-address button { background: none; border: 0; color: var(--link); cursor: pointer; font-size: .74rem; margin-top: 8px; padding: 0; }
+
+.builder-after { color: var(--ink-2); display: grid; font-size: .84rem; gap: 9px; line-height: 1.55; margin: 18px 0 0; padding-left: 19px; }
+.builder-error { color: var(--warn-fg); font-size: .8rem; margin: 14px 0 0; }
+.builder-ok { color: var(--lime); font-size: .84rem; margin: 14px 0 0; }
+
+.builder-nav { display: flex; gap: 10px; justify-content: space-between; margin-top: 18px; }
+.builder-nav button:first-child {
+  background: none; border: 1px solid var(--line); border-radius: var(--r-sm); color: var(--ink-2);
+  cursor: pointer; font-size: .84rem; padding: 9px 17px;
+}
+.builder-nav button:disabled { cursor: not-allowed; opacity: .45; }
+.builder-who { color: var(--ink-3); font-size: .74rem; margin-top: 12px; text-align: right; }
+
+@media (max-width: 720px) {
+  .builder-choices { grid-template-columns: 1fr; }
+  .builder-split { grid-template-columns: 1fr; }
+  .builder-weights label { grid-template-columns: 54px 1fr 42px; }
+}

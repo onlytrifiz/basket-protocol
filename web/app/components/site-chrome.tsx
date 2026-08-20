@@ -3,7 +3,7 @@ import Link from "next/link";
 import { ConnectWalletButton } from "./wallet";
 
 
-type ActivePage = "overview" | "stocks" | "dividends" | "docs";
+type ActivePage = "overview" | "stocks" | "dividends" | "indices" | "docs";
 
 /** The 3D coin render at UI scale — the brand's material world in miniature. */
 export function StockifyMark({ small = false }: { small?: boolean }) {
@@ -26,6 +26,7 @@ export function SiteHeader({ active }: { active: ActivePage }) {
           <Link className={active === "overview" ? "active" : ""} href="/">Overview</Link>
           <Link className={active === "stocks" ? "active" : ""} href="/stocks">Stocks</Link>
           <Link className={active === "dividends" ? "active" : ""} href="/dividends">Dividends</Link>
+          <Link className={active === "indices" ? "active" : ""} href="/indices">Indices</Link>
           <Link className={active === "docs" ? "active" : ""} href="/docs">Docs</Link>
         </div>
         <ConnectWalletButton />
