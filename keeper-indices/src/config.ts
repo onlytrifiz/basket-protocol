@@ -87,6 +87,20 @@ export const MIN_ROUND_USD = Number(process.env.MIN_ROUND_USD ?? "10");
 export const MIN_PAYOUT_USD = Number(process.env.MIN_PAYOUT_USD ?? "20");
 
 /**
+ * What must have accrued before the fees are collected at all, in dollars.
+ *
+ * A collect measured 335,000-449,000 gas on the live index — about one and a half swaps — and a
+ * creator fee stream arrives as a trickle, so without a floor the keeper cranks every five minutes
+ * to move fractions of a cent.
+ *
+ * Matched to the buy floor because money collected below it cannot be spent on anything anyway:
+ * harvesting it moves it from the locker to the treasury and pays gas for the privilege. Nothing is
+ * lost by waiting — the fees sit in the locker, and `harvest()` reports everything unsplit rather
+ * than what one call brought in, so a skipped collect is added to the next one.
+ */
+export const MIN_HARVEST_USD = Number(process.env.MIN_HARVEST_USD ?? "10");
+
+/**
  * The floor used when a quote asset cannot be priced at all.
  *
  * Permissive on purpose. The previous fallback was "20 whole units", which for anything valuable

@@ -47,6 +47,7 @@ import {
   MIN_ROUND_UNPRICED,
   MIN_ROUND_USD,
   MIN_PAYOUT_USD,
+  MIN_HARVEST_USD,
   ONLY_INDEXES,
   PAYOUT_COST_MAX_BPS,
   POSITION_MANAGER,
@@ -331,7 +332,24 @@ async function ensureExclusions(treasury: Address, coin: Address) {
 
 // ─────────────────────────────────────────────────────────────────────── the cycle
 
-async function harvest(treasury: Address) {
+/**
+ * Pull the launch's fees in — when there are enough of them to be worth the trip.
+ *
+ * `harvest()` RETURNS what it would collect, so a simulation answers the question for free and the
+ * decision costs nothing. It already refused a literal zero; the floor is the same idea carried to
+ * its conclusion, because a collect measured 335,000-449,000 gas on the live index and a fee stream
+ * arrives as a trickle. Cranking every five minutes to move a tenth of a cent is a real cost paid
+ * against no benefit.
+ *
+ * NOTHING IS LOST BY WAITING. The fees sit in the launchpad's locker either way, and `received` is
+ * everything held that has not been split yet rather than what one call brought in — so a skipped
+ * harvest is added to the next one instead of forgotten. If somebody else cranks the locker in the
+ * meantime, the watermark counts that too.
+ *
+ * The floor matches the buy floor on purpose: money collected below it cannot be spent on anything
+ * anyway, so harvesting it only moves it from one address to another and pays gas to do it.
+ */
+async function harvest(treasury: Address, quoteToken: Address, quoteDecimals: number) {
   try {
     const { result } = await publicClient.simulateContract({
       address: treasury,
@@ -339,8 +357,21 @@ async function harvest(treasury: Address) {
       functionName: "harvest",
       account,
     });
-    if ((result as bigint) === 0n) return 0n; // nothing pending: don't pay gas to learn that again
-    console.log(`    harvest ${formatEther(result as bigint)} ETH`);
+    const received = result as bigint;
+    if (received === 0n) return 0n; // nothing pending: don't pay gas to learn that again
+
+    // Priced, because "is this worth a transaction" is a question about dollars. An unpriced quote
+    // falls through and harvests, which is the permissive direction the rest of these gates take.
+    const worth = await usdValue(quoteToken, received, quoteDecimals);
+    if (worth !== null && worth < MIN_HARVEST_USD) {
+      console.log(
+        `    holding: $${worth.toFixed(4)} of fees waiting, under the $${MIN_HARVEST_USD} floor — they keep accruing`
+      );
+      return 0n;
+    }
+
+    // The quote's own scale, not ether's. An 8-decimal quote printed as ether reads 10^10 too small.
+    console.log(`    harvest ${fmt(received, quoteDecimals)}${worth === null ? "" : ` ($${worth.toFixed(2)})`}`);
     if (DRY_RUN) return result as bigint;
     const hash = await send((nonce) =>
       wallet.writeContract({ address: treasury, abi: treasuryAbi, functionName: "harvest", nonce })
@@ -789,7 +820,8 @@ async function runIndex(treasury: Address) {
   console.log(`  ${short(treasury)} · ${symbol}`);
 
   await ensureExclusions(treasury, coin);
-  await harvest(treasury);
+  const quoteDecimals = quoteToken === ZERO ? 18 : (await decimalsOf(quoteToken)) ?? 18;
+  await harvest(treasury, quoteToken, quoteDecimals);
 
   const [tokens, weights] = (await publicClient.readContract({
     address: treasury,
@@ -836,8 +868,6 @@ async function runIndex(treasury: Address) {
    * either way, because it leaves in the very next transaction.
    */
   const spent = await buy(treasury, quoteToken, tokens, weights);
-  // The quote's own scale, for pricing what that spend was worth below.
-  const quoteDecimals = quoteToken === ZERO ? 18 : (await decimalsOf(quoteToken)) ?? 18;
   const bought = spent > 0n;
 
   // Holders are fetched once and reused across the names, because it is the same list for all.
@@ -987,7 +1017,10 @@ async function main() {
    * WETH-quoted basket would not stall. Every asset is priced now, so there is nothing to seed and
    * nothing left that only works for ether.
    */
-  console.log(`buy at $${MIN_ROUND_USD}+ per name · pay out at $${MIN_PAYOUT_USD}+ per round · gas capped at ${PAYOUT_COST_MAX_BPS / 100}% of it`);
+  console.log(
+    `collect at $${MIN_HARVEST_USD}+ · buy at $${MIN_ROUND_USD}+ per name · pay out at $${MIN_PAYOUT_USD}+ per round` +
+      ` · gas capped at ${PAYOUT_COST_MAX_BPS / 100}% of it`
+  );
 
   for (;;) {
     const started = Date.now();
