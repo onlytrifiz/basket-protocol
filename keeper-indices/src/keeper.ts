@@ -62,7 +62,7 @@ import {
   ZERO,
   chain,
 } from "./config.js";
-import { quote } from "./venue.js";
+import { directQuote, quote } from "./venue.js";
 import { unitsForUsd, usdPrice, usdValue } from "./prices.js";
 import { fetchHolders } from "./holders.js";
 import { announce } from "./notify.js";
@@ -518,7 +518,9 @@ async function buy(
   treasury: Address,
   quoteToken: Address,
   basket: readonly Address[],
-  weights: readonly number[]
+  weights: readonly number[],
+  /** True only for a buyback, whose single 'basket' entry is the coin and has one known pool. */
+  isBuybackTarget = false
 ): Promise<bigint> {
   let spentTotal = 0n;
   const isNative = quoteToken === ZERO;
@@ -599,7 +601,19 @@ async function buy(
       continue;
     }
 
-    const q = await quote(treasury, isNative ? ZERO : quoteToken, size, decimals, basket[i], buyDecimals);
+    let q = await quote(treasury, isNative ? ZERO : quoteToken, size, decimals, basket[i], buyDecimals);
+    /**
+     * The launch coin, and only it, has somewhere else to go.
+     *
+     * A buyback's target has one pool at a known tier — the same pool the aggregator would route to
+     * — so pricing it directly costs nothing but the dependency. An equity does not get this: its
+     * depth is spread across venues, and choosing one by hand is how a buy fills against the thin
+     * one. There, `quote()` has already asked again, and a refusal is the answer.
+     */
+    if (!q && isBuybackTarget) {
+      console.log("    velora unavailable — pricing the launch pool directly");
+      q = await directQuote(publicClient, treasury, isNative ? WETH : quoteToken, size, basket[i], LAUNCH_FEE_TIER);
+    }
     if (!q) continue;
 
     /**
@@ -895,7 +909,7 @@ async function runIndex(treasury: Address) {
    * floor inside `buy()` is the only thing that needs to hold.
    */
   if (mode === MODE_BUYBACK) {
-    await buy(treasury, quoteToken, tokens, weights);
+    await buy(treasury, quoteToken, tokens, weights, true);
     // Pinned: the buy landed a moment ago, and this is what it bought.
     const held = await pinnedRead<bigint>({
       address: coin, abi: erc20Abi, functionName: "balanceOf", args: [treasury],

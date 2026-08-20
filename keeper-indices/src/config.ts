@@ -139,6 +139,24 @@ export const POSITION_MANAGER =
 export const V3_FACTORY = "0x33128a8fC17869897dcE68Ed026d694621f6FDfD" as Address;
 
 /**
+ * Uniswap's router and quoter on Base — the fallback route for a buyback, and only for a buyback.
+ *
+ * The equities are deliberately NOT routed this way. B20 depth is split across venues, so a
+ * single-venue route is a good way to fill against whichever pool happens to be thin; the whole
+ * point of an aggregator there is that it looks at all of them. When it will not answer for an
+ * equity the right move is to ask it again, not to guess a venue.
+ *
+ * A launch coin is the opposite case. It has exactly one pool, at the tier the launchpad opened it
+ * at, and that is the pool an aggregator would route to anyway — so pricing it directly is not a
+ * worse answer, it is the same answer without the dependency.
+ */
+/** How many times a quote is asked for when the aggregator does not answer. Refusals are not retried. */
+export const RETRIES = Number(process.env.VELORA_RETRIES ?? "3");
+
+export const SWAP_ROUTER = "0x2626664c2603336E57B271c5C0b26F421741e481" as Address;
+export const QUOTER = "0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a" as Address;
+
+/**
  * How far back to look for the split that names a treasury.
  *
  * A bounded scan, and deliberately so: an unbounded `getLogs` from block zero is what ran a sibling

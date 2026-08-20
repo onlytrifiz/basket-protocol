@@ -1,5 +1,5 @@
-import { type Address, type Hex } from "viem";
-import { SLIPPAGE_BPS, WETH, ZERO, CHAIN_ID } from "./config.js";
+import { encodeFunctionData, type Address, type Hex } from "viem";
+import { CHAIN_ID, QUOTER, RETRIES, SLIPPAGE_BPS, SWAP_ROUTER, WETH, ZERO } from "./config.js";
 
 /**
  * Where a buy is routed — Velora (formerly ParaSwap) Market API.
@@ -100,21 +100,43 @@ export async function quote(
     return { ok: res.ok, status: res.status, body: await res.json().catch(() => null) as any };
   };
 
+  /**
+   * Asked again when the answer was not an answer.
+   *
+   * This matters most for the equities, which have no fallback and must not have one: B20 depth is
+   * split across venues, so routing them by hand would mean picking a venue and hoping it is the
+   * deep one. When the aggregator will not answer for an equity the correct move is to ask it
+   * again — a timeout, a 502 or a rate limit says nothing about whether a route exists.
+   *
+   * A refusal with a reason is not retried. "No routes found" will say the same thing in two
+   * seconds, and spending three attempts to hear it delays every other index in the cycle.
+   */
   let payload: any;
-  try {
-    let r = await ask(false);
-    if (!r.ok && /bad usd price/i.test(String(r.body?.error ?? ""))) {
-      console.log("    velora cannot price this pair — retrying without its USD impact check");
-      r = await ask(true);
+  const attempts = Math.max(1, RETRIES);
+  for (let attempt = 1; ; attempt++) {
+    try {
+      let r = await ask(false);
+      if (!r.ok && /bad usd price/i.test(String(r.body?.error ?? ""))) {
+        console.log("    velora cannot price this pair — retrying without its USD impact check");
+        r = await ask(true);
+      }
+      if (r.ok) { payload = r.body; break; }
+
+      // A 4xx carrying a reason is Velora's answer. Anything else is Velora not answering.
+      const reason = String(r.body?.error ?? "");
+      const definitive = r.status >= 400 && r.status < 500 && r.status !== 429 && reason !== "";
+      if (definitive || attempt >= attempts) {
+        console.error(`    velora → HTTP ${r.status}${reason ? `: ${reason.slice(0, 90)}` : ""}`);
+        return null;
+      }
+    } catch (e) {
+      if (attempt >= attempts) {
+        console.error(`    velora → ${why(e)}`);
+        return null;
+      }
     }
-    if (!r.ok) {
-      console.error(`    velora → HTTP ${r.status}${r.body?.error ? `: ${String(r.body.error).slice(0, 90)}` : ""}`);
-      return null;
-    }
-    payload = r.body;
-  } catch (e) {
-    console.error(`    velora → ${why(e)}`);
-    return null;
+    console.log(`    velora did not answer, asking again (${attempt}/${attempts - 1})`);
+    await new Promise((r) => setTimeout(r, 900 * attempt));
   }
   if (payload.error || !payload.priceRoute || !payload.txParams) {
     console.error(`    velora → ${String(payload?.error ?? "no route").slice(0, 100)}`);
@@ -170,3 +192,107 @@ export async function quote(
     venues: [...venues],
   };
 }
+
+/**
+ * The launch pool, priced and encoded directly — the buyback's fallback when Velora will not answer.
+ *
+ * ONLY FOR THE COIN. An equity is not routed this way on purpose: B20 depth is fragmented across
+ * venues, and picking one by hand is how you fill against the thin one. There the answer to a
+ * refusal is to ask the aggregator again.
+ *
+ * A launch coin has one pool, at the tier its launchpad opened it at, and that is the pool Velora
+ * routes to anyway. Measured on the live pair, Velora quoted 14.71M against this route's 14.28M —
+ * about 3% better, which is why this is the fallback and not the default.
+ */
+export async function directQuote(
+  client: { readContract: (args: any) => Promise<any> },
+  taker: Address,
+  sellToken: Address,
+  sellAmount: bigint,
+  buyToken: Address,
+  feeTier: number
+): Promise<Quote | null> {
+  let out: bigint;
+  try {
+    // QuoterV2 is declared non-view because it reverts to return, so it is called rather than read.
+    const result = (await client.readContract({
+      address: QUOTER,
+      abi: quoterAbi,
+      functionName: "quoteExactInputSingle",
+      args: [{ tokenIn: sellToken, tokenOut: buyToken, amountIn: sellAmount, fee: feeTier, sqrtPriceLimitX96: 0n }],
+    })) as [bigint, bigint, number, bigint];
+    out = result[0];
+  } catch (e) {
+    console.error(`    direct route → ${why(e)}`);
+    return null;
+  }
+  if (out === 0n) return null;
+
+  const minBuyAmount = (out * BigInt(10_000 - SLIPPAGE_BPS)) / 10_000n;
+  if (minBuyAmount === 0n) return null;
+
+  return {
+    venue: SWAP_ROUTER,
+    sellToken,
+    sellAmount,
+    buyToken,
+    minBuyAmount,
+    // SwapRouter02 carries no deadline in the struct — it lives in its multicall wrapper, which this
+    // does not use. The treasury's own measured fill is the protection either way.
+    data: encodeFunctionData({
+      abi: routerAbi,
+      functionName: "exactInputSingle",
+      args: [{
+        tokenIn: sellToken,
+        tokenOut: buyToken,
+        fee: feeTier,
+        recipient: taker,
+        amountIn: sellAmount,
+        amountOutMinimum: minBuyAmount,
+        sqrtPriceLimitX96: 0n,
+      }],
+    }),
+    venues: [`uniswap v3 ${feeTier / 10_000}%`],
+  };
+}
+
+const quoterAbi = [{
+  type: "function",
+  name: "quoteExactInputSingle",
+  stateMutability: "nonpayable",
+  inputs: [{
+    type: "tuple",
+    components: [
+      { name: "tokenIn", type: "address" },
+      { name: "tokenOut", type: "address" },
+      { name: "amountIn", type: "uint256" },
+      { name: "fee", type: "uint24" },
+      { name: "sqrtPriceLimitX96", type: "uint160" },
+    ],
+  }],
+  outputs: [
+    { name: "amountOut", type: "uint256" },
+    { name: "sqrtPriceX96After", type: "uint160" },
+    { name: "initializedTicksCrossed", type: "uint32" },
+    { name: "gasEstimate", type: "uint256" },
+  ],
+}] as const;
+
+const routerAbi = [{
+  type: "function",
+  name: "exactInputSingle",
+  stateMutability: "payable",
+  inputs: [{
+    type: "tuple",
+    components: [
+      { name: "tokenIn", type: "address" },
+      { name: "tokenOut", type: "address" },
+      { name: "fee", type: "uint24" },
+      { name: "recipient", type: "address" },
+      { name: "amountIn", type: "uint256" },
+      { name: "amountOutMinimum", type: "uint256" },
+      { name: "sqrtPriceLimitX96", type: "uint160" },
+    ],
+  }],
+  outputs: [{ type: "uint256" }],
+}] as const;
