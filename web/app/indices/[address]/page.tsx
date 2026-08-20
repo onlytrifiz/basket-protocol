@@ -250,6 +250,7 @@ export default async function IndexPage({
               {visible.map((event) => {
                 const asset = event.token ? byAddress.get(event.token.toLowerCase()) : undefined;
                 const scale = event.kind === "fees" ? quoteDecimals : asset ? 8 : null;
+                const spent = event.spentRaw ? toUnits(event.spentRaw, quoteDecimals) : null;
                 const value = toUnits(event.amountRaw, scale);
                 return (
                   <a
@@ -260,7 +261,13 @@ export default async function IndexPage({
                     target="_blank"
                   >
                     <span className="idx-kind">
-                      {event.kind === "fees" ? "Fees in" : event.kind === "burn" ? "Burned" : "Paid out"}
+                      {event.kind === "fees"
+                        ? "Fees in"
+                        : event.kind === "bought"
+                          ? "Bought"
+                          : event.kind === "burn"
+                            ? "Burned"
+                            : "Paid out"}
                     </span>
                     <span className="idx-feed-what">
                       <b>
@@ -270,6 +277,8 @@ export default async function IndexPage({
                       {event.holders !== undefined && (
                         <small>to {event.holders.toLocaleString("en-US")} holder{event.holders === 1 ? "" : "s"}</small>
                       )}
+                      {/* What the buy cost, so the feed reads as one motion: fee in, equity out. */}
+                      {spent !== null && <small>for {amount(spent)} {quoteLabel}</small>}
                     </span>
                     <span className="idx-feed-when">{since(event.timestamp)}</span>
                   </a>

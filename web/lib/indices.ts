@@ -255,6 +255,8 @@ const TOPIC = {
   distributed: "0xebfe46b2b9627430364d1cff67d061f2e2f59dfedbd307f28a227b9ba08ad807",
   /** Burned(address indexed coin, uint256 amount) */
   burned: "0x696de425f79f4a40bc6d2122ca50507f0efbeabbff86a84871b7196ab8ea8df7",
+  /** Swapped(address indexed sellToken, uint256 spent, address indexed buyToken, uint256 bought) */
+  swapped: "0xdb587d878116df0bdd4fe154699aa2c5f439da001cc811dfd05d9f589fc5a8ee",
 } as const;
 
 /** The block the factory was created in — nothing it minted can predate it. */
@@ -267,16 +269,20 @@ const dataWord = (data: string, i: number) => {
 
 /** One thing an index did, for the activity feed. */
 export type IndexEvent = {
-  kind: "fees" | "paid" | "burn";
+  /** `bought` sits between the other two: the fee arrives, becomes equity, then leaves. */
+  kind: "fees" | "bought" | "paid" | "burn";
   treasury: string;
   blockNumber: number;
   timestamp: number;
   txHash: string;
   /** Raw units — of the quote for `fees`, of the paid token for `paid`, of the coin for `burn`. */
   amountRaw: string;
-  /** Only on `paid`: which basket entry, and how many wallets it reached. */
+  /** On `paid` and `bought`: which equity. */
   token?: string;
+  /** Only on `paid`: how many wallets it reached. */
   holders?: number;
+  /** Only on `bought`: raw quote units it cost. */
+  spentRaw?: string;
 };
 
 export type IndexActivity = {
@@ -352,6 +358,13 @@ async function loadActivity(): Promise<Map<string, IndexActivity> | null> {
       entry.events.push({
         kind: "paid", treasury: key, blockNumber: log.blockNumber, timestamp: log.timestamp,
         txHash: log.transactionHash, amountRaw: amount.toString(), token, holders,
+      });
+    } else if (topic === TOPIC.swapped) {
+      // topics: [sig, sellToken, buyToken] · data: [spent, bought]
+      entry.events.push({
+        kind: "bought", treasury: key, blockNumber: log.blockNumber, timestamp: log.timestamp,
+        txHash: log.transactionHash, amountRaw: dataWord(log.data, 1).toString(),
+        token: `0x${(log.topics[2] ?? "").slice(-40)}`, spentRaw: dataWord(log.data, 0).toString(),
       });
     } else if (topic === TOPIC.burned) {
       entry.events.push({

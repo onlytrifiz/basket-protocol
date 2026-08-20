@@ -125,7 +125,92 @@ export async function batchCall(calls: RpcCall[]): Promise<CallResult[]> {
 export type Log = { address: string; topics: string[]; data: string; blockNumber: number; timestamp: number; transactionHash: string };
 
 /**
- * Logs for one address over an explicit block range, in `SPAN`-sized requests.
+ * Logs from Etherscan's V2 API, when a key is configured.
+ *
+ * WHY A SECOND SOURCE AT ALL. A public Base endpoint refuses an `eth_getLogs` covering more than
+ * 10,000 blocks, so reading a contract's whole history means walking it in chunks — and the number
+ * of chunks grows with the contract's AGE, forever. Measured against the index factory: one request
+ * the week it was deployed, 137 a month later, 1,660 after a year. Every one of them for history
+ * that has not changed since the last time it was asked for.
+ *
+ * Etherscan has no range cap. The same history is one request, whatever the range: `fromBlock=0` to
+ * the head answered for the vault's entire life in a single call. What it will not do is take more
+ * than one address, which `eth_getLogs` will — so the cost moves from "grows with time" to "grows
+ * with how many contracts we watch", and the second is a number that changes slowly and on purpose.
+ *
+ * Returns null when the explorer cannot answer, so the caller falls back to the chunked path rather
+ * than reporting an empty history. "No records found" is NOT that case: it is a real, empty answer.
+ */
+const EXPLORER = "https://api.etherscan.io/v2/api";
+const EXPLORER_KEY = process.env.ETHERSCAN_API_KEY;
+/** The API's own page size. A contract busier than this is paged, not truncated. */
+const EXPLORER_PAGE = 1_000;
+/** Below this many chunks the public RPC is measurably quicker; above it, it stops being bounded. */
+const EXPLORER_FROM_CHUNKS = Math.max(1, Number(process.env.BASE_RPC_EXPLORER_AFTER) || 4);
+
+async function explorerLogs(
+  addresses: string[],
+  topics: (string | null)[],
+  fromBlock: number,
+  toBlock: number,
+): Promise<Log[] | null> {
+  if (!EXPLORER_KEY) return null;
+  const collected: Log[] = [];
+
+  for (const address of addresses) {
+    for (let page = 1; page <= 50; page++) {
+      const query = new URLSearchParams({
+        chainid: "8453",
+        module: "logs",
+        action: "getLogs",
+        address,
+        fromBlock: String(fromBlock),
+        toBlock: String(toBlock),
+        page: String(page),
+        offset: String(EXPLORER_PAGE),
+        apikey: EXPLORER_KEY,
+      });
+      // Only topic0 is worth passing: everything else this app filters on is cheaper to do here
+      // than to encode, and a wrong topic slot silently returns nothing.
+      if (typeof topics[0] === "string") query.set("topic0", topics[0]);
+
+      let payload: { status?: string; message?: string; result?: unknown };
+      try {
+        const response = await fetch(`${EXPLORER}?${query}`, { cache: "no-store" });
+        if (!response.ok) return null;
+        payload = await response.json() as typeof payload;
+      } catch {
+        return null;
+      }
+
+      if (!Array.isArray(payload.result)) {
+        // An empty window is an answer; anything else means we did not get one.
+        if (payload.status === "0" && /no records found/i.test(String(payload.message ?? ""))) break;
+        return null;
+      }
+
+      for (const entry of payload.result as Array<Record<string, unknown>>) {
+        collected.push({
+          address: String(entry.address ?? ""),
+          topics: Array.isArray(entry.topics) ? entry.topics as string[] : [],
+          data: String(entry.data ?? "0x"),
+          blockNumber: Number(BigInt(String(entry.blockNumber ?? "0x0"))),
+          // Etherscan spells it `timeStamp`, and always sends it — so dating a row costs nothing.
+          timestamp: Number(BigInt(String(entry.timeStamp ?? "0x0"))),
+          transactionHash: String(entry.transactionHash ?? ""),
+        });
+      }
+      if (payload.result.length < EXPLORER_PAGE) break;
+    }
+  }
+
+  return collected;
+}
+
+/**
+ * Logs for one or more addresses over an explicit block range.
+ *
+ * Served by the explorer above when a key is set, and walked in `SPAN`-sized requests when not.
  *
  * THE SPAN IS A REQUEST SIZE, NOT A HORIZON. Public endpoints cap what one `eth_getLogs` may cover
  * — `mainnet.base.org` refuses a range over 10,000 blocks outright, and publicnode calls anything
@@ -148,7 +233,26 @@ export async function getLogs(
   toBlock: number,
 ): Promise<Log[] | null> {
   const SPAN = Math.max(1, Number(process.env.BASE_RPC_LOG_SPAN) || 9_500);
-  if (Array.isArray(address) && address.length === 0) return [];
+  const addresses = Array.isArray(address) ? address : [address];
+  if (addresses.length === 0) return [];
+
+  /**
+   * The explorer only once the range is wide enough to be worth it.
+   *
+   * Measured on the vault's own history: ten chunks over the public RPC took 220ms, the same window
+   * from the explorer one request and 757ms. Per request the explorer is slower, and for a top-up
+   * covering minutes of blocks the chunked path is simply better. What it cannot do is stay bounded
+   * — that same walk is 137 requests after a month and 1,660 after a year, and there the single slow
+   * request wins by any measure.
+   *
+   * So: narrow ranges keep the fast path, wide ones stop growing. A null from the explorer means it
+   * would not answer, and the chunked walk below still can.
+   */
+  const chunksNeeded = Math.ceil((toBlock - fromBlock + 1) / SPAN);
+  if (chunksNeeded > EXPLORER_FROM_CHUNKS) {
+    const viaExplorer = await explorerLogs(addresses, topics, fromBlock, toBlock);
+    if (viaExplorer !== null) return viaExplorer;
+  }
 
   for (const rpc of RPCS) {
     const collected: Log[] = [];
