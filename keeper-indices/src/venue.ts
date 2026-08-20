@@ -69,14 +69,49 @@ export async function quote(
     partner: "stonks",
   });
 
+  /**
+   * Velora refuses a pair it cannot price in dollars, and a freshly launched coin is exactly that.
+   *
+   *   "Bad USD price. Pass ignoreBadUsdPrice=true as a query param to bypass the USD impact check"
+   *
+   * IT IS ABOUT THE PAIR, NOT THE SIZE, which is worth knowing before treating it as a thin-pool
+   * problem. Measured against the live buyback coin, every amount from three cents to three hundred
+   * dollars was refused identically, and every one of them routed once the flag was set:
+   *
+   *   $0.03  Bad USD price      $0.03  ok
+   *   $3.12  Bad USD price      $55    ok, through a plain Uniswap v3 pool
+   *   $312   Bad USD price
+   *
+   * So it is not a liquidity floor. Velora's impact check needs a dollar price for both sides, a
+   * coin minted an hour ago has none anywhere, and the check cannot run — so it refuses and hands
+   * back the flag to skip it. Every freshly launched coin meets this. For a buyback index it is not
+   * an edge case, it is the ordinary state of the thing it exists to buy.
+   *
+   * Retried rather than waived up front, so the check still applies wherever it can run.
+   *
+   * WHAT STILL PROTECTS THE FILL: `minBuyAmount`, derived from the route's own quoted output at our
+   * slippage and enforced by the treasury against its own measured balance delta. A floor on what
+   * actually arrives, owing nothing to whether anyone can price either side.
+   */
+  const ask = async (bypass: boolean) => {
+    const q = new URLSearchParams(query);
+    if (bypass) q.set("ignoreBadUsdPrice", "true");
+    const res = await fetch(`${ENDPOINT}?${q}`, { signal: AbortSignal.timeout(25_000) });
+    return { ok: res.ok, status: res.status, body: await res.json().catch(() => null) as any };
+  };
+
   let payload: any;
   try {
-    const res = await fetch(`${ENDPOINT}?${query}`, { signal: AbortSignal.timeout(25_000) });
-    if (!res.ok) {
-      console.error(`    velora → HTTP ${res.status}`);
+    let r = await ask(false);
+    if (!r.ok && /bad usd price/i.test(String(r.body?.error ?? ""))) {
+      console.log("    velora cannot price this pair — retrying without its USD impact check");
+      r = await ask(true);
+    }
+    if (!r.ok) {
+      console.error(`    velora → HTTP ${r.status}${r.body?.error ? `: ${String(r.body.error).slice(0, 90)}` : ""}`);
       return null;
     }
-    payload = await res.json();
+    payload = r.body;
   } catch (e) {
     console.error(`    velora → ${why(e)}`);
     return null;

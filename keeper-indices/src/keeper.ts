@@ -78,6 +78,8 @@ const noAllocatePath = new Set<Address>();
 const eq = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
 const now = () => Math.floor(Date.now() / 1000);
 const short = (a: string) => `${a.slice(0, 8)}…${a.slice(-4)}`;
+/** `mode` on the treasury: 0 buys the basket and pays it out, 1 buys the coin back and destroys it. */
+const MODE_BUYBACK = 1;
 
 /**
  * A token's decimals, asked once and kept.
@@ -767,11 +769,12 @@ async function payOut(
 // ─────────────────────────────────────────────────────────────────────── per basket
 
 async function runIndex(treasury: Address) {
-  let [coin, quoteToken, paused] = (await Promise.all([
+  let [coin, quoteToken, paused, mode] = (await Promise.all([
     publicClient.readContract({ address: treasury, abi: treasuryAbi, functionName: "coin" }),
     publicClient.readContract({ address: treasury, abi: treasuryAbi, functionName: "quote" }),
     publicClient.readContract({ address: treasury, abi: treasuryAbi, functionName: "paused" }),
-  ])) as [Address, Address, boolean];
+    publicClient.readContract({ address: treasury, abi: treasuryAbi, functionName: "mode" }),
+  ])) as [Address, Address, boolean, number];
 
   if (paused) return console.log(`  ${short(treasury)} paused`);
 
@@ -823,12 +826,52 @@ async function runIndex(treasury: Address) {
   const quoteDecimals = quoteToken === ZERO ? 18 : (await decimalsOf(quoteToken)) ?? 18;
   await harvest(treasury, quoteToken, quoteDecimals);
 
-  const [tokens, weights] = (await publicClient.readContract({
-    address: treasury,
-    abi: treasuryAbi,
-    functionName: "basketAll",
-  })) as [Address[], number[]];
+  /**
+   * A buyback has no basket by construction — what it buys is the coin, fixed when it bound. Read as
+   * a one-name basket at 100% so it goes through the SAME buy as everything else: same dollar gate,
+   * same venue, same measured fill. Buying a coin is not different from buying an equity, and the
+   * treasury already permits it (`_swap` accepts `buyToken == coin` in this mode).
+   */
+  const [tokens, weights] = (mode === MODE_BUYBACK
+    ? [[coin], [10_000]]
+    : await publicClient.readContract({
+        address: treasury,
+        abi: treasuryAbi,
+        functionName: "basketAll",
+      })) as [Address[], number[]];
 
+  /**
+   * A buyback is a buy and a burn, and nothing else.
+   *
+   * It returns here rather than falling through, because everything below is about a payout ROUND —
+   * `pending()`, the interval, the holder list — and a buyback has none of that. Reading `pending(0)`
+   * on a treasury whose basket is empty by construction simply reverts, which is how this path
+   * announced itself.
+   *
+   * No round gate either: `swap()` and `burn()` carry no interval on the treasury, and the dollar
+   * floor inside `buy()` is the only thing that needs to hold.
+   */
+  if (mode === MODE_BUYBACK) {
+    await buy(treasury, quoteToken, tokens, weights);
+    const held = (await publicClient.readContract({
+      address: coin, abi: erc20Abi, functionName: "balanceOf", args: [treasury],
+    })) as bigint;
+    if (held === 0n) return console.log("    nothing bought back to burn");
+
+    const coinDecimals = (await decimalsOf(coin)) ?? 18;
+    console.log(`    burn ${fmt(held, coinDecimals)}`);
+    if (DRY_RUN) return;
+    try {
+      const hash = await send((nonce) =>
+        wallet.writeContract({ address: treasury, abi: treasuryAbi, functionName: "burn", nonce })
+      );
+      const receipt = await publicClient.waitForTransactionReceipt({ hash });
+      await announce(`Burned ${fmt(held, coinDecimals)} ${symbol}`, receipt.transactionHash);
+    } catch (e) {
+      console.error(`    burn failed: ${why(e)}`);
+    }
+    return;
+  }
   const stockSymbols = await Promise.all(
     tokens.map((t) =>
       publicClient.readContract({ address: t, abi: erc20Abi, functionName: "symbol" }).catch(() => short(t))
@@ -868,6 +911,7 @@ async function runIndex(treasury: Address) {
    * either way, because it leaves in the very next transaction.
    */
   const spent = await buy(treasury, quoteToken, tokens, weights);
+
   const bought = spent > 0n;
 
   // Holders are fetched once and reused across the names, because it is the same list for all.

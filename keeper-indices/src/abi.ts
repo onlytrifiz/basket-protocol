@@ -49,6 +49,13 @@ export const treasuryAbi = [
   { type: "function", name: "coin", stateMutability: "view", inputs: [], outputs: [{ type: "address" }] },
   { type: "function", name: "quote", stateMutability: "view", inputs: [], outputs: [{ type: "address" }] },
   { type: "function", name: "paused", stateMutability: "view", inputs: [], outputs: [{ type: "bool" }] },
+  /** 0 = buy the basket and pay it to holders · 1 = buy the coin back and destroy it. */
+  { type: "function", name: "mode", stateMutability: "view", inputs: [], outputs: [{ type: "uint8" }] },
+  /**
+   * Destroys the coin the treasury holds. Permissionless — it has one destination and cannot be
+   * pointed anywhere — so the keeper calls it, but so can anybody if the keeper is down.
+   */
+  { type: "function", name: "burn", stateMutability: "nonpayable", inputs: [], outputs: [{ type: "uint256" }] },
   { type: "function", name: "interval", stateMutability: "view", inputs: [], outputs: [{ type: "uint32" }] },
   { type: "function", name: "batchWindow", stateMutability: "view", inputs: [], outputs: [{ type: "uint32" }] },
   { type: "function", name: "minHolderBalance", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
