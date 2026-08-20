@@ -1,3 +1,4 @@
+import { B20_DECIMALS } from "../../lib/decimals";
 import { stocks } from "../../lib/stocks";
 
 /**
@@ -27,7 +28,10 @@ const TOKENS: RoutableToken[] = [
   { address: NATIVE_ETH, symbol: "ETH", decimals: 18, isAsset: false },
   { address: USDC, symbol: "USDC", decimals: 6, isAsset: false },
   // Every B20 equity carries 8 DECIMALS — not the 6 or 18 an ERC-20 integration usually assumes.
-  ...stocks.map((s) => ({ address: s.address, symbol: s.symbol, decimals: 8, isAsset: true })),
+  // The constant is safe HERE and only here: this list is built from `lib/stocks`, which is what
+  // makes the eight a fact rather than an assumption. Anywhere the address comes from the chain
+  // instead, read it — see `lib/decimals`.
+  ...stocks.map((s) => ({ address: s.address, symbol: s.symbol, decimals: B20_DECIMALS, isAsset: true })),
   ...(/^0x[a-fA-F0-9]{40}$/.test(STFY) ? [{ address: STFY, symbol: "STFY", decimals: 18, isAsset: true }] : []),
 ];
 

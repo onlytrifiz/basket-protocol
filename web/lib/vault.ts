@@ -147,12 +147,17 @@ async function loadVault(): Promise<VaultState> {
     return { address, weightBps: Number(BigInt(`0x${word.slice(64, 128)}`)) };
   }).filter(Boolean) as Array<{ address: string; weightBps: number }>;
 
-  // Stage 3 — what the vault holds of each, and what it already owes.
+  // Stage 3 — what the vault holds of each, what it already owes, and the scale to read both at.
+  // The decimals ride along in the same round: `readDecimals` answers from the seed list without a
+  // call for every asset this repo knows, so an all-B20 index costs nothing extra here.
   const holdingCalls: RpcCall[] = entries.flatMap((entry) => [
     { to: entry.address, data: SIG.balanceOf + pad(VAULT) },
     { to: VAULT, data: SIG.unpaidTotal + pad(entry.address) },
   ]);
-  const holdingResults = await batchCall(holdingCalls);
+  const [holdingResults, decimals] = await Promise.all([
+    batchCall(holdingCalls),
+    readDecimals(entries.map((entry) => entry.address)),
+  ]);
 
   const holdings: IndexHolding[] = entries.map((entry, i) => {
     const known = stockByAddress(entry.address);
@@ -168,7 +173,7 @@ async function loadVault(): Promise<VaultState> {
       weightBps: entry.weightBps,
       heldRaw: held.state === "unavailable" ? null : (toBigInt(held) ?? 0n).toString(),
       unpaidRaw: unpaid.state === "unavailable" ? null : (toBigInt(unpaid) ?? 0n).toString(),
-      decimals: 8,
+      decimals: decimals.get(entry.address.toLowerCase()) ?? null,
     };
   });
 

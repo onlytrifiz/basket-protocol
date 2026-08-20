@@ -75,6 +75,42 @@ const noAllocatePath = new Set<Address>();
 const eq = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
 const now = () => Math.floor(Date.now() / 1000);
 const short = (a: string) => `${a.slice(0, 8)}…${a.slice(-4)}`;
+
+/**
+ * A token's decimals, asked once and kept.
+ *
+ * NOT A CONSTANT 8. Every Base equity carries eight, and the buy leg was written against that — but
+ * `basket` is whatever `createIndex` was given, and the treasury only requires each entry to hold
+ * code. It never checks that an entry is a B20, because it has no way to: they are Rust precompiles.
+ * So an eighteen-decimal token in a basket asked Velora to route a trade 10^10 the intended size,
+ * which either fails to quote or quotes something absurd, and printed every figure about it wrong.
+ *
+ * `null` means the read did not land. Callers must SKIP the name rather than assume — a wrong scale
+ * on a swap is not a display bug, it is the wrong amount of money through a router.
+ *
+ * Decimals are immutable, so a value that landed is cached for the life of the process, and only a
+ * failure is retried.
+ */
+const decimalsCache = new Map<Address, number>();
+
+async function decimalsOf(token: Address): Promise<number | null> {
+  const hit = decimalsCache.get(token);
+  if (hit !== undefined) return hit;
+  try {
+    const value = Number(
+      await publicClient.readContract({ address: token, abi: erc20Abi, functionName: "decimals" })
+    );
+    if (!Number.isInteger(value) || value < 0 || value > 36) return null;
+    decimalsCache.set(token, value);
+    return value;
+  } catch {
+    return null;
+  }
+}
+
+/** An amount rendered at its own scale, or in raw units when that scale could not be read. */
+const fmt = (amount: bigint, decimals: number | null) =>
+  decimals === null ? `${amount} (raw)` : formatUnits(amount, decimals);
 /** viem wraps the useful part; "unknown RPC error" on its own is never enough to act on. */
 const why = (e: unknown) => {
   const x = e as { details?: string; shortMessage?: string; message?: string; cause?: { message?: string } };
@@ -466,9 +502,21 @@ async function buy(
      * such split: 0x already prices across Aerodrome, Uniswap and the rest in one request, so a
      * second route would be another way to get the same answer rather than a fallback.
      */
-    // Equities on Base carry 8 decimals, not 18 — the quote is priced in the units each side
-    // actually uses, and getting that wrong would ask for a route a billion times the size.
-    const q = await quote(treasury, isNative ? ZERO : quoteToken, size, decimals, basket[i], 8);
+    /**
+     * Both sides priced in the units they actually use, READ rather than assumed.
+     *
+     * Equities on Base carry 8 decimals and not 18, which is what the literal here used to say. It
+     * was right about every asset the builder offers and wrong as a rule: `basket` is whatever
+     * `createIndex` was handed, and `initialize` only requires an entry to hold code. Getting this
+     * wrong does not fail loudly — it asks for a route 10^10 off and takes whatever comes back.
+     */
+    const buyDecimals = await decimalsOf(basket[i]);
+    if (buyDecimals === null) {
+      console.error(`    ${short(basket[i])}: decimals unreadable, skipping rather than guessing a scale`);
+      continue;
+    }
+
+    const q = await quote(treasury, isNative ? ZERO : quoteToken, size, decimals, basket[i], buyDecimals);
     if (!q) continue;
 
     /**
@@ -489,7 +537,7 @@ async function buy(
 
     console.log(
       `    buy ${formatUnits(q.sellAmount, decimals)} → ${short(basket[i])}`
-        + ` (min ${formatUnits(q.minBuyAmount, 8)} via ${q.venues.join("+") || "velora"})`
+        + ` (min ${formatUnits(q.minBuyAmount, buyDecimals)} via ${q.venues.join("+") || "velora"})`
     );
     if (DRY_RUN) {
       left -= q.sellAmount;
@@ -586,12 +634,21 @@ async function payOut(
   coin: Address,
   index: number,
   amount: bigint,
-  holders: Address[]
+  holders: Address[],
+  /**
+   * The scale of the token being handed out — which is the BASKET entry, not the coin and not ether.
+   *
+   * Every figure below used to be printed at 18. For an equity that is eight orders out: a round
+   * moving 2.23 shares announced 0.00000000000000000223, and the Telegram post said the same. The
+   * transfers were always right; only the account of them was wrong, which is the kind of error that
+   * survives because nothing reverts.
+   */
+  decimals: number | null
 ) {
   const gas = (n: number) => GAS_BASE + GAS_PER_HOLDER * BigInt(n);
 
   if (holders.length <= MAX_HOLDERS_PER_TX) {
-    console.log(`    pay [${index}] ${formatUnits(amount, 18)} to ${holders.length} holders`);
+    console.log(`    pay [${index}] ${fmt(amount, decimals)} to ${holders.length} holders`);
     if (DRY_RUN) return;
     const hash = await send((nonce) =>
       wallet.writeContract({
@@ -604,7 +661,7 @@ async function payOut(
       })
     );
     const receipt = await publicClient.waitForTransactionReceipt({ hash });
-    await announce(`Paid out ${formatUnits(amount, 18)} to ${holders.length} holders`, receipt.transactionHash);
+    await announce(`Paid out ${fmt(amount, decimals)} to ${holders.length} holders`, receipt.transactionHash);
     return;
   }
 
@@ -623,7 +680,7 @@ async function payOut(
     args: [BigInt(index)],
   })) as [bigint, bigint];
   if (onHand !== amount) {
-    console.log(`    pay [${index}] balance moved since the round was sized: ${formatUnits(amount, 18)} → ${formatUnits(onHand, 18)}`);
+    console.log(`    pay [${index}] balance moved since the round was sized: ${fmt(amount, decimals)} → ${fmt(onHand, decimals)}`);
     amount = onHand;
   }
   if (amount === 0n) return;
@@ -644,7 +701,7 @@ async function payOut(
   }
   if (grand === 0n) return;
 
-  console.log(`    pay [${index}] ${formatUnits(amount, 18)} to ${holders.length} holders in ${batches.length} batches`);
+  console.log(`    pay [${index}] ${fmt(amount, decimals)} to ${holders.length} holders in ${batches.length} batches`);
   if (DRY_RUN) return;
 
   let spent = 0n;
@@ -665,7 +722,7 @@ async function payOut(
     );
     await publicClient.waitForTransactionReceipt({ hash });
     spent += share;
-    console.log(`      batch ${k + 1}/${batches.length}: ${formatUnits(share, 18)}`);
+    console.log(`      batch ${k + 1}/${batches.length}: ${fmt(share, decimals)}`);
   }
 }
 
@@ -826,7 +883,9 @@ async function runIndex(treasury: Address) {
 
   for (const d of due) {
     try {
-      await payOut(treasury, coin, d.index, d.amount, holders);
+      // The scale of the entry being paid out, not the coin's and not ether's. Cached after the
+      // first name, so a basket of twelve costs at most twelve reads for the life of the process.
+      await payOut(treasury, coin, d.index, d.amount, holders, await decimalsOf(tokens[d.index]));
     } catch (e) {
       console.error(`    payout [${d.index}] failed: ${(e as Error).message.split("\n")[0]}`);
     }

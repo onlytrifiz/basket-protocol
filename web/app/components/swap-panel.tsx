@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { B20_DECIMALS } from "../../lib/decimals";
 import { stocks, type IndexStock } from "../../lib/stocks";
 import { SegmentRing } from "./segment-ring";
 import { StockifyMark } from "./site-chrome";
@@ -112,8 +113,10 @@ export function SwapPanel() {
   const assets = useMemo<TradeAsset[]>(() => [
     { address: NATIVE_ETH, name: "Ether", symbol: "ETH", decimals: 18 },
     { address: stockifyAddress, name: "Stockify protocol token", symbol: "STFY", decimals: 18 },
+    // Straight from `lib/stocks`, which is what entitles this to the constant rather than a read:
+    // the panel only ever offers assets from the seed list. See `lib/decimals`.
     ...stocks.filter((stock) => stock.inIndex)
-      .map((stock) => ({ address: stock.address, name: stock.name, stock, symbol: stock.symbol, decimals: 8 })),
+      .map((stock) => ({ address: stock.address, name: stock.name, stock, symbol: stock.symbol, decimals: B20_DECIMALS })),
   ], []);
   const { account, connect, provider } = useWallet();
   const [amount, setAmount] = useState("0.10");

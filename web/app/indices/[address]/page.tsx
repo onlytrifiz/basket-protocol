@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { readAssets } from "../../../lib/b20";
+import { readDecimalsOf, toUnits } from "../../../lib/decimals";
 import { MIN_HOLDER_COINS, MODE, readIndexDetail, readPlatformFeeBps, splitOf } from "../../../lib/indices";
 import { shares as fmtShares } from "../../../lib/format";
 import { IndexActions } from "../../components/index-actions";
@@ -61,6 +62,16 @@ export default async function IndexPage({ params }: { params: Promise<{ address:
     ? "ETH"
     : byAddress.get(index.quote.toLowerCase())?.symbol ?? "the quote";
 
+  /**
+   * The quote's own scale, asked rather than assumed to be eighteen.
+   *
+   * `IndexTreasury` takes ANY ERC-20 as its quote — a coin paired against NVDA is the ordinary case
+   * its `allocate()` path exists for, and that is an 8-decimal token. Both figures below are
+   * denominated in the quote, so a fixed 1e18 rendered every equity-quoted index as zero.
+   * `readDecimalsOf` answers 18 for native without a call.
+   */
+  const quoteDecimals = await readDecimalsOf(index.quote);
+
   return (
     <div className="site-shell">
       <SiteHeader active="indices" />
@@ -104,7 +115,7 @@ export default async function IndexPage({ params }: { params: Promise<{ address:
             </div>
             <div>
               <span>Ready to spend</span>
-              <strong>{fmtShares(Number(index.spendable) / 1e18)}</strong>
+              <strong>{fmtShares(toUnits(index.spendable.toString(), quoteDecimals))}</strong>
               <small>collected and already split</small>
             </div>
             <div>
@@ -174,7 +185,7 @@ export default async function IndexPage({ params }: { params: Promise<{ address:
             <div><dt>Creator</dt><dd>{(split.creator / 100).toFixed(0)}%</dd></div>
             <div>
               <dt>Waiting for the creator</dt>
-              <dd>{fmtShares(Number(index.creatorClaimable) / 1e18)} {quoteLabel}</dd>
+              <dd>{fmtShares(toUnits(index.creatorClaimable.toString(), quoteDecimals))} {quoteLabel}</dd>
             </div>
           </dl>
         </section>
