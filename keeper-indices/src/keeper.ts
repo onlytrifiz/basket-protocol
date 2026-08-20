@@ -141,6 +141,47 @@ function revertName(e: unknown): string | null {
 }
 
 /**
+ * The block of our most recent transaction this cycle, or undefined before the first one.
+ *
+ * Reads that follow a write are pinned to it. Without that the keeper decides on state older than
+ * its own transaction: RPC endpoints load-balance across nodes, and one a block behind reports the
+ * fees we just harvested as not yet arrived, or the stock we just bought as not yet there.
+ *
+ * It is not hypothetical — it is what the live logs looked like. Harvest in one cycle, allocate in
+ * the next, pay out in the third: each step read the state from before the step before it and did
+ * nothing, so a payout landed forty-five minutes after the fees instead of in the same pass. The
+ * vault keeper already solved this; this one did not have it.
+ */
+let pinBlock: bigint | undefined;
+
+/** Wait for a transaction, and remember its block so nothing after it reads older than it. */
+async function confirm(hash: Hex) {
+  const receipt = await publicClient.waitForTransactionReceipt({ hash });
+  if (pinBlock === undefined || receipt.blockNumber > pinBlock) pinBlock = receipt.blockNumber;
+  return receipt;
+}
+
+/**
+ * Read a contract, never older than our own last transaction, retrying a node that lags.
+ *
+ * A node that has not caught up rejects the pinned block. Waiting is the point — falling back to
+ * "latest" would hand back exactly the stale answer this exists to refuse.
+ */
+async function pinnedRead<T>(args: Record<string, unknown>): Promise<T> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return (await publicClient.readContract({
+        ...args,
+        ...(pinBlock === undefined ? {} : { blockNumber: pinBlock }),
+      } as never)) as T;
+    } catch (e) {
+      if (attempt >= 4) throw e;
+      await sleep(700 * (attempt + 1));
+    }
+  }
+}
+
+/**
  * Sends a transaction, and asks the chain again if the nonce has moved underneath it.
  *
  * This keeper is not the only thing that can hold its key. A redeploy overlaps two containers for a
@@ -329,7 +370,7 @@ async function ensureExclusions(treasury: Address, coin: Address) {
       nonce,
     })
   );
-  await publicClient.waitForTransactionReceipt({ hash });
+  await confirm(hash);
 }
 
 // ─────────────────────────────────────────────────────────────────────── the cycle
@@ -378,7 +419,7 @@ async function harvest(treasury: Address, quoteToken: Address, quoteDecimals: nu
     const hash = await send((nonce) =>
       wallet.writeContract({ address: treasury, abi: treasuryAbi, functionName: "harvest", nonce })
     );
-    await publicClient.waitForTransactionReceipt({ hash });
+    await confirm(hash);
     return result as bigint;
   } catch (e) {
     console.error(`    harvest skipped: ${(e as Error).message.split("\n")[0]}`);
@@ -465,7 +506,7 @@ async function allocate(treasury: Address, index: number, size: bigint, decimals
     const hash = await send((nonce) =>
       wallet.writeContract({ address: treasury, abi: treasuryAbi, functionName: "allocate", args, nonce })
     );
-    await publicClient.waitForTransactionReceipt({ hash });
+    await confirm(hash);
     return size;
   } catch (e) {
     console.error(`    allocate failed: ${why(e)}`);
@@ -481,11 +522,13 @@ async function buy(
 ): Promise<bigint> {
   let spentTotal = 0n;
   const isNative = quoteToken === ZERO;
-  const spendableRaw = (await publicClient.readContract({
+  // Pinned: this runs immediately after `harvest()`, and the whole question is whether what it
+  // just collected is visible yet.
+  const spendableRaw = await pinnedRead<bigint>({
     address: treasury,
     abi: treasuryAbi,
     functionName: "spendableQuote",
-  })) as bigint;
+  });
 
   // One rule for both: ether is priced like anything else, so the native branch only decides where
   // the decimals come from.
@@ -596,7 +639,7 @@ async function buy(
           nonce,
         })
       );
-      await publicClient.waitForTransactionReceipt({ hash });
+      await confirm(hash);
       left -= q.sellAmount;
       spentTotal += q.sellAmount;
     } catch (e) {
@@ -700,7 +743,7 @@ async function payOut(
         nonce,
       })
     );
-    const receipt = await publicClient.waitForTransactionReceipt({ hash });
+    const receipt = await confirm(hash);
     await announce(`Paid out ${fmt(amount, decimals)} to ${holders.length} holders`, receipt.transactionHash);
     return;
   }
@@ -760,7 +803,7 @@ async function payOut(
         nonce,
       })
     );
-    await publicClient.waitForTransactionReceipt({ hash });
+    await confirm(hash);
     spent += share;
     console.log(`      batch ${k + 1}/${batches.length}: ${fmt(share, decimals)}`);
   }
@@ -813,7 +856,7 @@ async function runIndex(treasury: Address) {
     const hash = await send((nonce) =>
       wallet.writeContract({ address: treasury, abi: treasuryAbi, functionName: "bind", args: [found], nonce })
     );
-    await publicClient.waitForTransactionReceipt({ hash });
+    await confirm(hash);
     coin = found;
   }
 
@@ -853,9 +896,10 @@ async function runIndex(treasury: Address) {
    */
   if (mode === MODE_BUYBACK) {
     await buy(treasury, quoteToken, tokens, weights);
-    const held = (await publicClient.readContract({
+    // Pinned: the buy landed a moment ago, and this is what it bought.
+    const held = await pinnedRead<bigint>({
       address: coin, abi: erc20Abi, functionName: "balanceOf", args: [treasury],
-    })) as bigint;
+    });
     if (held === 0n) return console.log("    nothing bought back to burn");
 
     const coinDecimals = (await decimalsOf(coin)) ?? 18;
@@ -865,7 +909,7 @@ async function runIndex(treasury: Address) {
       const hash = await send((nonce) =>
         wallet.writeContract({ address: treasury, abi: treasuryAbi, functionName: "burn", nonce })
       );
-      const receipt = await publicClient.waitForTransactionReceipt({ hash });
+      const receipt = await confirm(hash);
       await announce(`Burned ${fmt(held, coinDecimals)} ${symbol}`, receipt.transactionHash);
     } catch (e) {
       console.error(`    burn failed: ${why(e)}`);
@@ -917,12 +961,13 @@ async function runIndex(treasury: Address) {
   // Holders are fetched once and reused across the names, because it is the same list for all.
   const due: { index: number; amount: bigint }[] = [];
   for (const i of ready) {
-    const [amount] = (await publicClient.readContract({
+    // Pinned: the buy or allocate that filled this entry landed in this same pass.
+    const [amount] = await pinnedRead<[bigint, bigint]>({
       address: treasury,
       abi: treasuryAbi,
       functionName: "pending",
       args: [BigInt(i)],
-    })) as [bigint, bigint];
+    });
     // What survives a round is rounding dust: a few wei that divided into nothing. Paying it out
     // costs a full distribution's gas to move a millionth of a cent, and reads as a real payout in
     // the history. A round pays what it bought, or waits.
@@ -1001,6 +1046,7 @@ async function runIndex(treasury: Address) {
 // ─────────────────────────────────────────────────────────────────────── main
 
 async function cycle() {
+  pinBlock = undefined;
   soonestReady = null;
   const count = (await publicClient.readContract({
     address: FACTORY,
