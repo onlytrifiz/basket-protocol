@@ -38,6 +38,9 @@ const SEL = {
   bindIsPermanent: "0x6fe1e2d7",
   basketAll: "0x415bdc42",
   symbol: "0x95d89b41",
+  creatorClaimable: "0x9e5f358a",
+  feeRecipientNow: "0x31b8dc20",
+  spendableQuote: "0x97fe6127",
 } as const;
 
 export type Index = {
@@ -189,4 +192,41 @@ export function splitOf(creatorShareBps: number, platformBps: number) {
   const rest = 10_000 - platformBps;
   const creator = Math.round((rest * creatorShareBps) / 10_000);
   return { platform: platformBps, creator, holders: rest - creator };
+}
+
+export type IndexDetail = Index & {
+  /** Quote set aside for the creator, in wei of the quote asset. */
+  creatorClaimable: bigint;
+  /** Quote a round may still spend — what has been through the split and is not promised elsewhere. */
+  spendable: bigint;
+  /**
+   * Who the launchpad pays for this coin RIGHT NOW.
+   *
+   * `permanent` is a snapshot taken when the index bound and never revised, so a split that has since
+   * been pointed away would still read as bound. This is the live answer, and the only way the page
+   * can stop telling holders a programme is running when it is not.
+   */
+  paidNow: string | null;
+  stillCollecting: boolean;
+};
+
+/** One index with the figures the list does not need. Null when nothing there answers as one. */
+export async function readIndexDetail(address: string): Promise<IndexDetail | null> {
+  const base = await readIndex(address);
+  if (!base) return null;
+
+  const [claimable, spendable, recipient] = await batchCall([
+    { to: base.address, data: SEL.creatorClaimable },
+    { to: base.address, data: SEL.spendableQuote },
+    { to: base.address, data: SEL.feeRecipientNow },
+  ]);
+
+  const paidNow = recipient.state === "ok" && recipient.data ? `0x${word(recipient.data, 0).slice(24)}` : null;
+  return {
+    ...base,
+    creatorClaimable: toBigInt(claimable) ?? 0n,
+    spendable: toBigInt(spendable) ?? 0n,
+    paidNow,
+    stillCollecting: !!paidNow && paidNow.toLowerCase() === base.address.toLowerCase(),
+  };
 }
