@@ -138,8 +138,11 @@ export default async function Home() {
           <div className="product-grid">
             {products.map((product) => (
               <Link className="product-card" href={product.href} key={product.name}>
-                <span className="product-name">{product.name}</span>
-                <strong>{product.line}</strong>
+                {/* The NAME leads. It was the small label above the description, which made three
+                    cards read as three sentences that happened to be filed under something — and
+                    the thing a visitor has to leave with is what the three things are called. */}
+                <strong className="product-name">{product.name}</strong>
+                <span className="product-line">{product.line}</span>
                 <p>{product.copy}</p>
                 <b aria-hidden="true">→</b>
               </Link>

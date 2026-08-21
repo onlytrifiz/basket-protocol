@@ -9,11 +9,15 @@ type ActivePage = "home" | "stocks" | "dividends" | "indices" | "docs";
  * The account the site links to, and why it is not written here.
  *
  * A header icon is the most trusted link on a page — it is read as "this is us" — and an X handle
- * that has not been verified can belong to anybody. `updates-pill.tsx` hardcodes its channel only
- * because that one was checked first. This one has not been, so it is configuration: set it and the
- * icon appears, leave it and there is no icon rather than a link to a stranger.
+ * that has not been verified can belong to anybody. So this one was checked before it went in, the
+ * same rule `updates-pill.tsx` applies to its Telegram channel: x.com/Stockify_fi answers 200 and
+ * does not redirect elsewhere.
+ *
+ * Hardcoded rather than env-only for the reason that file gives: `.env.local` is gitignored, so a
+ * link configured only there works in development and quietly vanishes in production.
+ * `NEXT_PUBLIC_X_URL` still overrides, and setting it empty removes the icon.
  */
-const X_URL = process.env.NEXT_PUBLIC_X_URL ?? "";
+const X_URL = process.env.NEXT_PUBLIC_X_URL ?? "https://x.com/Stockify_fi";
 
 function XIcon() {
   return (
