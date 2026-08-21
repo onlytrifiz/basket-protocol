@@ -1,3 +1,5 @@
+import { createHash, timingSafeEqual } from "node:crypto";
+
 import { ingestCycles } from "../../../lib/ledger";
 import { apiError } from "../shared";
 
@@ -21,6 +23,16 @@ export const dynamic = "force-dynamic";
 
 const SECRET = process.env.CYCLES_INGEST_SECRET;
 
+/**
+ * Compared in constant time, and through a digest so the lengths always match.
+ *
+ * `!==` on a secret leaks how much of it was right in how long it took to say no, and
+ * `timingSafeEqual` refuses two buffers of different sizes — which would leak the length instead.
+ * Hashing both first makes every comparison 32 bytes against 32 bytes, whatever was offered.
+ */
+const digest = (value: string) => createHash("sha256").update(value).digest();
+const isTheSecret = (offered: string, secret: string) => timingSafeEqual(digest(offered), digest(secret));
+
 export async function POST(request: Request) {
   // No secret configured means no ingest, never an open one. An unauthenticated writer here does
   // not corrupt the ledger — the chain is still the source — but it does hand anyone a lever on the
@@ -28,7 +40,7 @@ export async function POST(request: Request) {
   if (!SECRET) return apiError("Ingest is not configured.", 503);
 
   const offered = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
-  if (offered !== SECRET) return apiError("Not authorised.", 401);
+  if (!offered || !isTheSecret(offered, SECRET)) return apiError("Not authorised.", 401);
 
   const body = await request.json().catch(() => ({})) as { from?: unknown };
   const from = typeof body.from === "number" && Number.isSafeInteger(body.from) && body.from >= 0

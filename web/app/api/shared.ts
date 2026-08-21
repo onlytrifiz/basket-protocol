@@ -6,6 +6,7 @@ const integerPattern = /^\d+$/;
 const rateWindowMs = 60_000;
 const requestLimit = 15;
 const requestBuckets = new Map<string, { count: number; startedAt: number }>();
+let lastSweep = 0;
 
 export { nativeEth };
 
@@ -30,6 +31,22 @@ export function isSupportedOutput(value: unknown): value is string {
 export function isRateLimited(request: Request) {
   const client = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "local";
   const now = Date.now();
+
+  /**
+   * Drop the buckets nobody is using, once per window.
+   *
+   * A bucket is created per distinct client and revisited only if that client comes back, so on a
+   * long-lived instance the map grew with every IP that ever made one request and was never read
+   * again. Swept here because this is the only function that writes it — a timer would keep the
+   * process awake to tidy a cache.
+   */
+  if (now - lastSweep > rateWindowMs) {
+    for (const [key, entry] of requestBuckets) {
+      if (now - entry.startedAt > rateWindowMs) requestBuckets.delete(key);
+    }
+    lastSweep = now;
+  }
+
   const bucket = requestBuckets.get(client);
 
   if (!bucket || now - bucket.startedAt > rateWindowMs) {
