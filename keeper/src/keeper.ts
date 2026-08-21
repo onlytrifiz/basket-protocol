@@ -107,6 +107,8 @@ const vaultAbi = [
 ] as const;
 
 type Stock = { token: Address; weightBps: bigint };
+/** A stock plus the scale its quotes have to be asked in. See `decimalsOf`. */
+type PricedStock = Stock & { decimals: number };
 type WriteFunction = "buyStocks" | "snapshotHolders" | "startCycle" | "distributeBatch";
 
 const sleep = (milliseconds: number) => new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -222,6 +224,56 @@ async function readStocks(): Promise<Stock[]> {
   return stocks;
 }
 
+/**
+ * A token's decimals, asked once and kept.
+ *
+ * NOT A CONSTANT 8. Every Base equity carries eight and the Velora leg was written against that —
+ * but the index is whatever `setIndex` was handed, and `DividendVault._setIndex` deliberately
+ * admits anything that answers `totalSupply()`. It cannot check for a B20, because B20s are Rust
+ * precompiles with no bytecode to inspect. So an eighteen-decimal entry asked the aggregator to
+ * price a trade 10^10 the intended size, which does not fail loudly: it quotes something absurd and
+ * derives `minOut` from it.
+ *
+ * `null` means the read did not land — never a guess. Decimals are immutable, so a value that
+ * landed is cached for the life of the process and only a failure is retried.
+ */
+const decimalsCache = new Map<Address, number>();
+
+async function decimalsOf(token: Address): Promise<number | null> {
+  const hit = decimalsCache.get(token);
+  if (hit !== undefined) return hit;
+  try {
+    const value = Number(
+      await publicClient.readContract({ address: token, abi: erc20Abi, functionName: "decimals" }),
+    );
+    if (!Number.isInteger(value) || value < 0 || value > 36) return null;
+    decimalsCache.set(token, value);
+    return value;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The index with every entry's scale resolved, or null when one of them would not say.
+ *
+ * ALL OR NOTHING, because `buyStocks` is: it requires one leg per index entry and reverts on any
+ * other length, so a name whose scale is unreadable cannot simply be dropped the way the indices
+ * keeper drops one. Skipping the whole buy is the same thing this function's caller already does
+ * when a single leg has no route — the ETH stays in the vault and the next cycle tries again.
+ */
+async function pricedStocks(stocks: Stock[]): Promise<PricedStock[] | null> {
+  const resolved = await Promise.all(
+    stocks.map(async (stock) => ({ stock, decimals: await decimalsOf(stock.token) })),
+  );
+  const unread = resolved.filter((entry) => entry.decimals === null);
+  if (unread.length > 0) {
+    console.log(`  buy skipped: decimals unreadable for ${unread.map((e) => e.stock.token).join(", ")}`);
+    return null;
+  }
+  return resolved.map(({ stock, decimals }) => ({ ...stock, decimals: decimals as number }));
+}
+
 async function buy(stocks: Stock[]): Promise<void> {
   let gross = await read<bigint>("availableEth");
   const cap = await read<bigint>("maxGrossSpendPerCycle");
@@ -249,18 +301,23 @@ async function buy(stocks: Stock[]): Promise<void> {
     console.log(`  ${formatEther(gross)} ETH below the ${formatEther(cap)} cap: direct route only`);
   }
 
+  // Every entry's scale before anything is quoted: a wrong one is not a display bug, it is the
+  // wrong amount of money through a router. See `decimalsOf`.
+  const priced = await pricedStocks(stocks);
+  if (!priced) return;
+
   const stockBudget = (gross * (BPS - PLATFORM_FEE_BPS)) / BPS;
   const nowSeconds = Math.floor(Date.now() / 1_000);
   const legs = await Promise.all(
-    stocks.map(async (stock) => {
+    priced.map(async (stock) => {
       const amountIn = (stockBudget * stock.weightBps) / BPS;
       const velora = capBinds
         ? await buildVeloraLeg({
-        srcToken: WETH,
-        srcDecimals: 18,
-        destToken: stock.token,
-        destDecimals: 8,
-        amountIn,
+            srcToken: WETH,
+            srcDecimals: 18,
+            destToken: stock.token,
+            destDecimals: stock.decimals,
+            amountIn,
             vault,
             slippageBps,
           })
@@ -303,7 +360,7 @@ async function buy(stocks: Stock[]): Promise<void> {
 
   const nowRetry = Math.floor(Date.now() / 1_000);
   const direct = await Promise.all(
-    stocks.map((stock) =>
+    priced.map((stock) =>
       buildLeg({
         client: publicClient,
         equity: stock.token,
@@ -335,6 +392,7 @@ async function submitBuy(legs: Leg[]): Promise<void> {
 
 const erc20Abi = [
   { type: "function", name: "balanceOf", stateMutability: "view", inputs: [{ type: "address" }], outputs: [{ type: "uint256" }] },
+  { type: "function", name: "decimals", stateMutability: "view", inputs: [], outputs: [{ type: "uint8" }] },
 ] as const;
 
 /**

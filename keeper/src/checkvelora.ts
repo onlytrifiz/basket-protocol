@@ -3,6 +3,11 @@ import { buildVeloraLeg } from "./velora.js";
 import { WETH } from "./route.js";
 
 const VAULT = "0x4Ee35c658b8032a7577096B60bd51Ae9909E4f98" as const;
+/**
+ * A hand-written list of B20 addresses, which is what entitles this file to the literal 8 below —
+ * the same rule `lib/decimals` states for the site's seed list. `keeper.ts` reads the scale instead,
+ * because there the index comes from the vault and may hold anything `setIndex` was handed.
+ */
 const assets: [string, `0x${string}`][] = [
   ["NVDAc", "0xb20000000000000000000078ee7ce2fE4908108C"],
   ["AAPLc", "0xb200000000000000000000C2e324d24d7eEcd1fb"],
