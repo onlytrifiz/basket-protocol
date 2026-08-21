@@ -22,7 +22,7 @@ declare global {
   }
 }
 
-const BASE_CHAIN_HEX = "0x2105";
+export const BASE_CHAIN_HEX = "0x2105";
 
 type WalletState = {
   account?: string;
@@ -42,7 +42,19 @@ export function useWallet(): WalletState {
 
 export const truncateAddress = (value: string) => `${value.slice(0, 6)}…${value.slice(-4)}`;
 
-async function ensureBase(provider: Eip1193Provider) {
+/**
+ * Put the wallet on Base, and confirm it is there.
+ *
+ * EXPORTED BECAUSE CONNECTING IS NOT THE ONLY MOMENT THIS MATTERS. A wallet can be moved to another
+ * chain at any point after connecting — the site is never told, because nothing here listens for
+ * `chainChanged` — and every transaction this app builds is Base calldata: a router address, a pool
+ * key, an aggregator route. Sent on Ethereum mainnet that is not a failed trade, it is a call to
+ * whatever happens to live at that address there. So the panels call this immediately before
+ * `eth_sendTransaction` rather than trusting the state left behind by `connect()`.
+ *
+ * Cheap to repeat: on the ordinary path it is one `eth_chainId` and no prompt.
+ */
+export async function ensureBase(provider: Eip1193Provider) {
   if (await provider.request({ method: "eth_chainId" }) === BASE_CHAIN_HEX) return;
   try {
     await provider.request({ method: "wallet_switchEthereumChain", params: [{ chainId: BASE_CHAIN_HEX }] });
@@ -59,6 +71,14 @@ async function ensureBase(provider: Eip1193Provider) {
         rpcUrls: ["https://mainnet.base.org"],
       }],
     });
+  }
+
+  // Asked again, because neither call above promises the switch actually happened: some wallets
+  // resolve `wallet_addEthereumChain` having only ADDED the chain, and a user can dismiss the
+  // prompt without the request rejecting. Returning here on the strength of a resolved promise is
+  // how a Base transaction gets signed on another chain.
+  if (await provider.request({ method: "eth_chainId" }) !== BASE_CHAIN_HEX) {
+    throw new Error("Switch your wallet to Base to continue.");
   }
 }
 

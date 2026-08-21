@@ -22,7 +22,7 @@ function formatUnits(raw: string, decimals: number) {
   if (value > 0 && value < 0.000001) return value.toLocaleString("en-US", { maximumSignificantDigits: 4 });
   return value.toLocaleString("en-US", { maximumFractionDigits: 6 });
 }
-import { truncateAddress, useWallet, type Eip1193Provider } from "./wallet";
+import { ensureBase, truncateAddress, useWallet } from "./wallet";
 
 type TradeAsset = {
   address: string;
@@ -53,15 +53,6 @@ type VeloraQuote = {
   venues: string[];
 };
 
-type SwapTransaction = {
-  chainId: number;
-  data: string;
-  to: string;
-  value: string;
-};
-
-const baseChainHex = "0x2105";
-
 /**
  * Slippage presets, in basis points, opening at 5%.
  *
@@ -74,6 +65,8 @@ const SLIPPAGE_PRESETS = [500, 1000, 1500] as const;
 /** Velora's native-asset sentinel. Paying in ETH needs no wrap and no approval. */
 const NATIVE_ETH = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 const stockifyAddress = process.env.NEXT_PUBLIC_STOCKIFY_TOKEN_ADDRESS ?? "";
+/** Pair quote symbols whose `priceNative` is a price in ETH — the unit `estimateOut` assumes. */
+const ETH_QUOTED = new Set(["ETH", "WETH"]);
 
 function isConfiguredAddress(value: string) {
   return /^0x[a-fA-F0-9]{40}$/.test(value);
@@ -304,13 +297,27 @@ export function SwapPanel() {
     // until the user happened to type.
   }, [account, amount, isDirect, needsStockifyConfig, policyLeg, provider, slippageBps, source, stfyPool, target]);
 
+  /**
+   * The ETH pool specifically, not merely the deepest one.
+   *
+   * `estimateOut` reads `priceNative`, which is the price in the PAIR'S OWN QUOTE TOKEN, and the
+   * number it produces becomes `minOut` on a real transaction. `best` is whichever pool holds the
+   * most liquidity — today that is the only pool STFY has, so the two coincide; the day a deeper
+   * USDC pair exists they stop coinciding silently, and a floor computed in dollars against a trade
+   * settled in ether is not a floor at all. Asking for `full=1` and picking the ETH pair by name
+   * costs one query parameter and removes the coincidence.
+   */
   useEffect(() => {
     if (!isDirect || !isConfiguredAddress(stockifyAddress)) return;
     let cancelled = false;
-    fetch(`/api/pools?addr=${stockifyAddress}&minLiq=0`)
+    fetch(`/api/pools?addr=${stockifyAddress}&minLiq=0&full=1`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error("pool unavailable"))))
-      .then((body: { pools: Record<string, { best: Pool | null }> }) => {
-        if (!cancelled) setStfyPool(body.pools?.[stockifyAddress.toLowerCase()]?.best ?? null);
+      .then((body: { pools: Record<string, { best: Pool | null; pools?: Pool[] }> }) => {
+        if (cancelled) return;
+        const entry = body.pools?.[stockifyAddress.toLowerCase()];
+        // `pools` arrives deepest first, so the first ETH pair is the deepest one.
+        const candidates = entry?.pools ?? (entry?.best ? [entry.best] : []);
+        setStfyPool(candidates.find((p) => ETH_QUOTED.has(p.quoteSymbol?.toUpperCase())) ?? null);
       })
       .catch(() => undefined);
     return () => { cancelled = true; };
@@ -327,11 +334,23 @@ export function SwapPanel() {
     if (!quote?.spender || !account) return;
     setIsBusy(true);
     try {
+      await ensureBase(provider());
+      /**
+       * Exactly what this trade spends, on BOTH paths.
+       *
+       * The aggregator leg used to approve `2^256-1` while the direct leg approved the amount — same
+       * card, two policies, and the unlimited one is a standing right for Velora's transfer proxy to
+       * move this wallet's equity for as long as the token exists. `side: "SELL"` means the route
+       * pulls precisely `raw`, so nothing is bought by approving more than that. Raising the amount
+       * simply re-arms `needsApproval`, which is one extra signature on a trade the user is already
+       * signing twice.
+       */
+      const exact = BigInt(toBaseUnits(amount, source.decimals));
       await provider().request({
         method: "eth_sendTransaction",
         params: [isDirect
-          ? { from: account, ...approveCall(source.address, BigInt(toBaseUnits(amount, source.decimals))) }
-          : { from: account, to: source.address, data: `0x095ea7b3${pad32(quote.spender)}${"f".repeat(64)}` }],
+          ? { from: account, ...approveCall(source.address, exact) }
+          : { from: account, to: source.address, data: `0x095ea7b3${pad32(quote.spender)}${pad32(exact.toString(16))}` }],
       });
       setNeedsApproval(false);
       setNotice("Approval submitted. Confirm the swap once it has been mined.");
@@ -360,6 +379,9 @@ export function SwapPanel() {
     }
     setIsBusy(true);
     try {
+      // Base calldata, so Base or nothing — see `ensureBase`. Checked here rather than trusted from
+      // `connect()`, which may have run an hour and several network switches ago.
+      await ensureBase(provider());
       const transactionHash = await provider().request({
         method: "eth_sendTransaction",
         params: [{

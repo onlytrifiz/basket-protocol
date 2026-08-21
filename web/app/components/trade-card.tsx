@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { CoinMark } from "./coin-mark";
 import { StockLogo } from "./stock-logo";
 import { SegmentRing } from "./segment-ring";
-import { truncateAddress, useWallet } from "./wallet";
+import { ensureBase, truncateAddress, useWallet } from "./wallet";
 
 /**
  * Buy or sell one tokenized equity.
@@ -27,7 +27,6 @@ import { truncateAddress, useWallet } from "./wallet";
 
 const NATIVE_ETH = "0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE";
 const USDC = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
-const MAX_UINT = "0x" + "f".repeat(64);
 
 /** Prices the panel before a wallet exists. Velora rejects placeholder-looking addresses, so the
  *  protocol's own vault stands in — a real address we control whose preview calldata is never sent. */
@@ -202,9 +201,19 @@ export function TradeCard({
     if (!quote?.spender || !account) return;
     setIsBusy(true);
     try {
+      await ensureBase(provider());
+      /**
+       * Exactly what this trade spends, not `2^256-1`.
+       *
+       * An unlimited approval to Velora's transfer proxy is a standing right to move this wallet's
+       * equity, granted once and outliving the trade, the quote and the session. The route is a
+       * `SELL` for precisely `raw`, so approving more buys nothing — it only trades a second
+       * signature on a larger order for a permanent allowance on every order that never happens.
+       */
+      const exact = BigInt(toBaseUnits(amount, pay.decimals));
       await provider().request({
         method: "eth_sendTransaction",
-        params: [{ from: account, to: pay.address, data: "0x095ea7b3" + pad32(quote.spender) + MAX_UINT.slice(2) }],
+        params: [{ from: account, to: pay.address, data: "0x095ea7b3" + pad32(quote.spender) + pad32(exact.toString(16)) }],
       });
       setNeedsApproval(false);
       setNotice("Approval submitted. Confirm the swap once it has been mined.");
@@ -224,6 +233,9 @@ export function TradeCard({
     }
     setIsBusy(true);
     try {
+      // Base calldata, so Base or nothing — see `ensureBase`. Checked here rather than trusted from
+      // `connect()`, which may have run an hour and several network switches ago.
+      await ensureBase(provider());
       const hash = await provider().request({
         method: "eth_sendTransaction",
         params: [{
