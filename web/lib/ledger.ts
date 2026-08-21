@@ -153,6 +153,18 @@ export async function ingestCycles(fromOverride?: number): Promise<IngestResult>
   if (tip === null) throw new Error("no endpoint would report the chain head");
 
   const cursor = found.state === "ok" ? stored.lastBlock : 0;
+  /**
+   * Refused rather than started from genesis.
+   *
+   * With no cursor and no `VAULT_DEPLOY_BLOCK`, `from` was 0 — and a backfill from block 0 is one
+   * `eth_getLogs` per 9,500 blocks over the whole of Base whenever the explorer cannot answer:
+   * thousands of requests to find the first cycle, every one of them for blocks that predate the
+   * contract. The variable is a required input, not a tunable, so an ingest without it stops and
+   * says which one is missing instead of quietly running that.
+   */
+  if (fromOverride === undefined && cursor === 0 && DEPLOY_BLOCK === 0) {
+    throw new Error("VAULT_DEPLOY_BLOCK is unset, so there is no block to backfill the ledger from");
+  }
   const from = fromOverride ?? (cursor > 0 ? cursor + 1 : DEPLOY_BLOCK);
   if (from > tip) return { added: 0, total: stored.cycles.length, fromBlock: from, toBlock: tip };
 

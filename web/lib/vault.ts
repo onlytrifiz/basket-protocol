@@ -210,7 +210,6 @@ async function loadVault(): Promise<VaultState> {
  * is the decoder; `lib/ledger.ts` owns the scanning cursor and keeps the results.
  */
 const TOPIC = {
-  cycleStarted: "0x6fa249767fee0ff570c08e8f07a9030d8fdb125b55f00a47606480a2e1429134",
   cycleCompleted: "0x4576cab8caca8be887c75752f3e3a9f467370cc86ee932348b0717baad90a827",
   stocksBought: "0x1c956e05cfdb7b91baafeb8ae4eababa635d678602068df516c3f9397e69e3b8",
   stockBought: "0x1560b71ca6695825842f12e8721dc7f437286c08deb7c7ebc708bb3bdc3d01c5",

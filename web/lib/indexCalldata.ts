@@ -12,7 +12,7 @@
  *     address
  *   )
  *
- * The encoding is checked against `cast calldata` in `scripts/check-index-calldata.mjs`; if this
+ * The encoding is checked against `cast calldata` in `scripts/check-index-calldata.ts`; if this
  * file is edited, run it. Silently wrong calldata is the failure mode that costs a creator their
  * fee stream, and it is invisible until the transaction reverts or, worse, does not.
  */

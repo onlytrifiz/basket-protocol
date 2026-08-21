@@ -57,6 +57,15 @@ export default async function AllIndicesPage() {
               buys the coin back and destroys it. Biggest payer first. Open one to see what it holds
               and when it next pays.
             </p>
+            {/* A page called "Every index" has to stop calling itself that the moment it is not.
+                Nothing is unreachable — an index off this list still has its own page — but the set
+                below is a page of the registry rather than all of it. */}
+            {totals.truncated && (
+              <p className="hub-note-degraded">
+                This is the most recent page of the registry, not the whole of it. Every index still
+                has its own page at its address.
+              </p>
+            )}
           </div>
         </section>
 

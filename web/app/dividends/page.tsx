@@ -51,8 +51,19 @@ export default async function DividendPage({ searchParams }: PageProps<"/dividen
   const scaleOf = (address: string) => decimals.get(address.toLowerCase()) ?? null;
 
   const byAddress = new Map(assets.map((a) => [a.address.toLowerCase(), a]));
-  const tickers = vault.holdings
-    .map((h) => byAddress.get(h.address.toLowerCase())?.ticker)
+  /**
+   * Priced for every asset this page NAMES, not just the ones still in the index.
+   *
+   * `setIndex` rotates names out, and a cycle that bought one before it left keeps its row in the
+   * ledger forever. Quoting only `vault.holdings` meant the all-time total silently stopped
+   * counting a rotated-out equity in dollars while the share count below it kept counting it — two
+   * headline figures over two different sets of assets, disagreeing more with every rotation.
+   */
+  const tickers = [...new Set([
+    ...vault.holdings.map((h) => h.address.toLowerCase()),
+    ...ledger.cycles.flatMap((cycle) => cycle.bought.map((b) => b.address.toLowerCase())),
+  ])]
+    .map((address) => byAddress.get(address)?.ticker)
     .filter(Boolean) as string[];
   const market = tickers.length ? await marketBoard(tickers) : { quotes: {}, series: {}, degraded: true };
 
@@ -108,8 +119,19 @@ export default async function DividendPage({ searchParams }: PageProps<"/dividen
   // per-asset totals above, so an unread scale is skipped in one place rather than two.
   const distributedShares = [...distributedByAsset.values()].reduce((sum, units) => sum + units, 0);
   const anyHeld = rows.some((r) => (r.held ?? 0) > 0);
-  const distributedValue = rows.reduce((sum, r) => sum + (r.distributedValue ?? 0), 0);
-  const anyDistributed = rows.some((r) => r.distributed > 0);
+  /**
+   * Off the SAME map as the share count above, so the two describe one set of assets.
+   *
+   * This used to sum `rows`, which is the active index — an asset rotated out contributed its units
+   * to the count beside this number and nothing to the number itself. A price we do not have still
+   * contributes nothing, which is the same rule every other figure on this page follows.
+   */
+  const distributedValue = [...distributedByAsset].reduce((sum, [address, units]) => {
+    const ticker = byAddress.get(address)?.ticker;
+    const price = ticker ? market.quotes[ticker]?.price : undefined;
+    return sum + (price ? units * price : 0);
+  }, 0);
+  const anyDistributed = distributedShares > 0;
   const eth = vault.availableEthWei === null ? null : Number(BigInt(vault.availableEthWei)) / 1e18;
   const threshold = vault.minShareBalanceRaw === null ? null : Number(BigInt(vault.minShareBalanceRaw)) / 1e18;
 

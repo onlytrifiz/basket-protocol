@@ -44,6 +44,7 @@ const SEL = {
   creatorClaimable: "0x9e5f358a",
   feeRecipientNow: "0x31b8dc20",
   spendableQuote: "0x97fe6127",
+  isIndex: "0x47cbab9a",
 } as const;
 
 export type Index = {
@@ -110,36 +111,32 @@ export function readIndices(): Promise<Index[]> {
   return cached("indices:all", 60_000, loadIndices).catch(() => []);
 }
 
-async function loadIndices(): Promise<Index[]> {
-  if (!indicesLive) return [];
+/**
+ * The fields of one or more treasuries, or a THROW when the chain would not answer.
+ *
+ * A read that never landed is not a zero. `numOf(undefined)` is 0 and `decodeBasket("")` is an
+ * empty basket, so a throttled batch used to render a live index as "0 names, fixed at creation",
+ * `paused` false and a zero interval — with exactly the confidence of a real read. That is the one
+ * failure `lib/rpc` draws its `unavailable` state to prevent, and the rule the vault reader already
+ * follows: throw, so `cached()` can serve its last good answer instead of a plausible wrong one.
+ *
+ * A REVERT is left alone. It is a real answer — the address does not implement this — and the
+ * caller decides what it means.
+ */
+const FIELDS = ["coin", "quote", "mode", "interval", "creatorShareBps", "paused", "basketAll"] as const;
 
-  const [countRes] = await batchCall([{ to: FACTORY, data: SEL.indexCount }]);
-  const count = Number(toBigInt(countRes) ?? 0n);
-  if (count === 0) return [];
+async function loadIndexRows(addresses: string[]): Promise<Index[]> {
+  if (addresses.length === 0) return [];
 
-  // One page is plenty for a long time. A service past this has earned a real pager.
-  const limit = Math.min(count, 100);
-  const [pageRes] = await batchCall([
-    { to: FACTORY, data: SEL.indexesPaged + pad("0") + pad(limit.toString(16)) },
-  ]);
-  if (pageRes.state !== "ok" || !pageRes.data) return [];
-
-  const body = pageRes.data.replace(/^0x/, "");
-  const n = Number(BigInt(`0x${body.slice(64, 128)}`));
-  const addresses = Array.from(
-    { length: n },
-    (_, i) => `0x${body.slice(128 + i * 64 + 24, 128 + (i + 1) * 64)}`
-  );
-
-  const fields = [
-    "coin", "quote", "mode", "interval", "creatorShareBps", "paused", "basketAll",
-  ] as const;
   const calls: RpcCall[] = [];
-  for (const a of addresses) for (const f of fields) calls.push({ to: a, data: SEL[f] });
+  for (const a of addresses) for (const f of FIELDS) calls.push({ to: a, data: SEL[f] });
   const results = await batchCall(calls);
 
   const rows: Index[] = addresses.map((address, i) => {
-    const at = (f: (typeof fields)[number]) => results[i * fields.length + fields.indexOf(f)];
+    const at = (f: (typeof FIELDS)[number]) => results[i * FIELDS.length + FIELDS.indexOf(f)];
+    const unread = FIELDS.filter((f) => at(f).state === "unavailable");
+    if (unread.length > 0) throw new Error(`indices: ${address} unread (${unread.join(", ")})`);
+
     const { tokens, bps } = decodeBasket(at("basketAll").data ?? "");
     return {
       address,
@@ -155,20 +152,78 @@ async function loadIndices(): Promise<Index[]> {
     };
   });
 
+  // A symbol is decoration: an unbound coin has none to read, so a miss falls back to the address
+  // rather than taking the row down with it.
   const symbols = await batchCall(rows.map((r) => ({ to: r.coin, data: SEL.symbol })));
   rows.forEach((r, i) => {
     r.coinSymbol = stringOf(symbols[i]?.data);
   });
 
-  // Newest first: the factory appends, so the tail is the most recent.
-  return rows.reverse();
+  return rows;
 }
 
-/** One index, or null when nothing at that address answers as one. */
+async function loadIndices(): Promise<Index[]> {
+  if (!indicesLive) return [];
+
+  const [countRes] = await batchCall([{ to: FACTORY, data: SEL.indexCount }]);
+  // Same rule as the fields below: a count nobody would give us is not a count of zero, and
+  // returning [] for it renders the whole service as "no indexes yet".
+  if (countRes.state === "unavailable") throw new Error("indices: indexCount unread");
+  const count = Number(toBigInt(countRes) ?? 0n);
+  if (count === 0) return [];
+
+  // One page. Past this the LIST is truncated — reported as `totals.truncated`, which the set page
+  // says out loud — but no index becomes unreachable: `readIndex` reads a treasury directly when it
+  // is not on the page.
+  const limit = Math.min(count, PAGE_LIMIT);
+  const [pageRes] = await batchCall([
+    { to: FACTORY, data: SEL.indexesPaged + pad("0") + pad(limit.toString(16)) },
+  ]);
+  if (pageRes.state === "unavailable") throw new Error("indices: indexesPaged unread");
+  if (pageRes.state !== "ok" || !pageRes.data) return [];
+
+  const body = pageRes.data.replace(/^0x/, "");
+  const n = Number(BigInt(`0x${body.slice(64, 128)}`));
+  const addresses = Array.from(
+    { length: n },
+    (_, i) => `0x${body.slice(128 + i * 64 + 24, 128 + (i + 1) * 64)}`
+  );
+
+  // Newest first: the factory appends, so the tail is the most recent.
+  return (await loadIndexRows(addresses)).reverse();
+}
+
+/** How many the list reads in one page. The registry itself is not capped — see `readIndex`. */
+export const PAGE_LIMIT = 100;
+
+/** Is this address a treasury this factory minted? The only thing that makes a direct read safe. */
+async function factoryKnows(address: string): Promise<boolean> {
+  const [res] = await batchCall([{ to: FACTORY, data: SEL.isIndex + pad(address) }]);
+  if (res.state === "unavailable") throw new Error("indices: isIndex unread");
+  return (toBigInt(res) ?? 0n) !== 0n;
+}
+
+/**
+ * One index, or null when nothing at that address answers as one.
+ *
+ * Served from the paged list when it is on it, and read DIRECTLY when it is not. The list stops at
+ * `PAGE_LIMIT`, and resolving a detail page out of it meant index 101 rendering as "Nothing at this
+ * address is an index" — the same sentence a wrong address gets, for one that exists and is running.
+ * `isIndex()` on the factory is what makes the direct read safe: without it any address at all
+ * would decode into a row of empty fields.
+ */
 export async function readIndex(address: string): Promise<Index | null> {
   if (!isAddress(address)) return null;
+  const key = address.toLowerCase();
+
   const all = await readIndices();
-  return all.find((i) => i.address.toLowerCase() === address.toLowerCase()) ?? null;
+  const listed = all.find((i) => i.address.toLowerCase() === key);
+  if (listed) return listed;
+
+  return cached(`indices:one:${key}`, 60_000, async () => {
+    if (!indicesLive || !(await factoryKnows(address))) return null;
+    return (await loadIndexRows([address]))[0] ?? null;
+  }).catch(() => null);
 }
 
 /** The service's cut, off the top of every harvest. Read from the factory rather than assumed. */
@@ -412,6 +467,15 @@ export type IndexTotals = {
   withRounds: number;
   rounds: number;
   payments: number;
+  /**
+   * True when the registry has more indexes than one page reads, so this set is not the whole set.
+   *
+   * Surfaced rather than left implicit because a page titled "Every index" is a claim. Nothing goes
+   * missing — `readIndex` reads a treasury directly whichever page it falls on — but the LIST stops
+   * at `PAGE_LIMIT`, and a truncated list that says nothing is the same kind of confident wrong
+   * answer this module refuses everywhere else.
+   */
+  truncated: boolean;
 };
 
 /** Dollar price of one whole unit of a token, or null. ETH from a pool, equities from Nasdaq. */
@@ -440,7 +504,7 @@ const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 export function readIndexRows(): Promise<{ rows: IndexRow[]; totals: IndexTotals }> {
   return cached("indices:rows", 60_000, loadRows).catch(() => ({
     rows: [],
-    totals: { paidUsd: null, count: 0, withRounds: 0, rounds: 0, payments: 0 },
+    totals: { paidUsd: null, count: 0, withRounds: 0, rounds: 0, payments: 0, truncated: false },
   }));
 }
 
@@ -547,6 +611,8 @@ async function loadRows(): Promise<{ rows: IndexRow[]; totals: IndexTotals }> {
     withRounds: bound.filter((r) => r.rounds > 0).length,
     rounds: bound.reduce((sum, r) => sum + r.rounds, 0),
     payments: bound.reduce((sum, r) => sum + r.payments, 0),
+    // A full page is the only signal available here that there may be another one behind it.
+    truncated: all.length >= PAGE_LIMIT,
   };
 
   return { rows: bound, totals };
@@ -572,9 +638,26 @@ export async function readIndexHistory(address: string): Promise<{
   const a = activity.get(address.toLowerCase());
   if (!a) return null;
 
-  // The coin belongs in here too: a buyback denominates everything it does in it.
-  const tokens = [index.quote.toLowerCase(), index.coin.toLowerCase(), ...[...a.distributed.keys()]]
-    .filter((t) => /^0x[a-f0-9]{40}$/.test(t) && BigInt(t) !== 0n);
+  /**
+   * The coin belongs in here too: a buyback denominates everything it does in it.
+   *
+   * THE ZERO ADDRESS IS AN ANSWER, NOT A GAP. A native-quoted index — which is what the builder
+   * creates by default — collects and pays in ether, so `quote` is legitimately `0x0…0`. Excluding
+   * it left `readDecimals` and `priceOf` without the one entry every fee figure on the page is
+   * scaled and priced by, and the detail page reported "Fees collected —" and "Creator earnings —"
+   * for an index that had been harvesting for weeks. Both already know what it means: 18 decimals,
+   * and the ETH price. `loadRows` never filtered it, which is why the list and the detail page
+   * disagreed about the same index.
+   *
+   * Deduped rather than filtered, so an UNBOUND treasury — whose `coin` is also `0x0…0` — costs one
+   * entry instead of two.
+   */
+  const tokens = [
+    ...new Set(
+      [index.quote.toLowerCase(), index.coin.toLowerCase(), ...a.distributed.keys()]
+        .filter((t) => /^0x[a-f0-9]{40}$/.test(t)),
+    ),
+  ];
   const tickers = tokens.map((t) => stockByAddress(t)?.ticker).filter(Boolean) as string[];
   const [decimals, board] = await Promise.all([
     readDecimals(tokens),
