@@ -78,6 +78,18 @@ const noAllocatePath = new Set<Address>();
 const eq = (a: string, b: string) => a.toLowerCase() === b.toLowerCase();
 const now = () => Math.floor(Date.now() / 1000);
 const short = (a: string) => `${a.slice(0, 8)}…${a.slice(-4)}`;
+/** `Burned(address indexed coin, uint256 amount)` — how much a burn transaction actually destroyed. */
+const BURNED_TOPIC = "0x696de425f79f4a40bc6d2122ca50507f0efbeabbff86a84871b7196ab8ea8df7";
+
+function burnedIn(receipt: { logs: readonly { address: string; topics: readonly string[]; data: string }[] }, coin: Address) {
+  for (const log of receipt.logs) {
+    if (log.topics[0] !== BURNED_TOPIC) continue;
+    if (`0x${(log.topics[1] ?? "").slice(-40)}`.toLowerCase() !== coin.toLowerCase()) continue;
+    return BigInt(log.data.slice(0, 66));
+  }
+  return 0n;
+}
+
 /** `mode` on the treasury: 0 buys the basket and pays it out, 1 buys the coin back and destroys it. */
 const MODE_BUYBACK = 1;
 
@@ -909,23 +921,51 @@ async function runIndex(treasury: Address) {
    * floor inside `buy()` is the only thing that needs to hold.
    */
   if (mode === MODE_BUYBACK) {
-    await buy(treasury, quoteToken, tokens, weights, true);
-    // Pinned: the buy landed a moment ago, and this is what it bought.
-    const held = await pinnedRead<bigint>({
-      address: coin, abi: erc20Abi, functionName: "balanceOf", args: [treasury],
-    });
-    if (held === 0n) return console.log("    nothing bought back to burn");
+    const spent = await buy(treasury, quoteToken, tokens, weights, true);
 
+    /**
+     * Burn in the same pass, without asking first.
+     *
+     * The obvious shape is to read the balance and burn if it is non-zero, and that shape was wrong
+     * in a way worth keeping written down: the read follows a swap by milliseconds, an RPC endpoint
+     * load-balances, and a node one block behind answers zero. The keeper then reported "nothing
+     * bought back to burn" and burned it on the NEXT cycle — swap at block 50238695, burn at
+     * 50238836, four minutes and forty-two seconds apart for two transactions that belong together.
+     *
+     * Pinning the read to the swap's block fixes that, and this is better than fixing it: the
+     * question does not need asking. `burn()` reverts `NothingToBurn` on an empty balance, so the
+     * contract already knows the answer and cannot be a block behind itself. One less read, one less
+     * thing that can be stale, and the burn lands seconds after the buy rather than a cycle later.
+     */
+    /**
+     * Attempted only when there is a reason to, which is the other half of not asking.
+     *
+     * After a buy there is definitely something to burn, so it goes straight there. After a cycle
+     * that bought nothing there usually is not, and trying anyway costs a reverting estimate every
+     * five minutes forever — so that case reads the balance first, which is safe precisely because
+     * no write just happened for it to be stale against.
+     */
     const coinDecimals = (await decimalsOf(coin)) ?? 18;
-    console.log(`    burn ${fmt(held, coinDecimals)}`);
-    if (DRY_RUN) return;
+    if (spent === 0n) {
+      const held = (await publicClient.readContract({
+        address: coin, abi: erc20Abi, functionName: "balanceOf", args: [treasury],
+      })) as bigint;
+      if (held === 0n) return;
+      console.log(`    ${fmt(held, coinDecimals)} left unburned from an earlier cycle`);
+    }
+    if (DRY_RUN) return console.log("    dry run: would burn whatever the buy back bought");
     try {
       const hash = await send((nonce) =>
         wallet.writeContract({ address: treasury, abi: treasuryAbi, functionName: "burn", nonce })
       );
       const receipt = await confirm(hash);
-      await announce(`Burned ${fmt(held, coinDecimals)} ${symbol}`, receipt.transactionHash);
+      // The amount comes from the transaction that moved it, so it cannot disagree with it.
+      const burned = burnedIn(receipt, coin);
+      console.log(`    burned ${fmt(burned, coinDecimals)}`);
+      await announce(`Burned ${fmt(burned, coinDecimals)} ${symbol}`, receipt.transactionHash);
     } catch (e) {
+      // An empty balance is the ordinary outcome of a cycle that bought nothing, not a fault.
+      if (revertName(e) === "NothingToBurn") return console.log("    nothing bought back to burn");
       console.error(`    burn failed: ${why(e)}`);
     }
     return;

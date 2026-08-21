@@ -56,6 +56,34 @@ export const treasuryAbi = [
    * pointed anywhere — so the keeper calls it, but so can anybody if the keeper is down.
    */
   { type: "function", name: "burn", stateMutability: "nonpayable", inputs: [], outputs: [{ type: "uint256" }] },
+  /**
+   * The custom errors, so a revert arrives with a name instead of "execution reverted".
+   *
+   * viem can only name what the ABI declares, and several of these are ordinary outcomes rather
+   * than faults — `NothingToBurn` is what a buyback says on a cycle that bought nothing, and telling
+   * it apart from a real failure is the difference between a quiet log and a wall of red.
+   */
+  { type: "error", name: "NothingToBurn", inputs: [] },
+  { type: "error", name: "NothingToDistribute", inputs: [] },
+  { type: "error", name: "NothingToClaim", inputs: [] },
+  { type: "error", name: "NotKeeper", inputs: [] },
+  { type: "error", name: "NotOwner", inputs: [] },
+  { type: "error", name: "Paused", inputs: [] },
+  { type: "error", name: "AlreadyBound", inputs: [] },
+  { type: "error", name: "NotFeeRecipient", inputs: [] },
+  { type: "error", name: "SplitNotWhole", inputs: [{ name: "recipients", type: "uint256" }] },
+  { type: "error", name: "QuoteMismatch", inputs: [{ name: "pairedAsset", type: "address" }, { name: "quote", type: "address" }] },
+  { type: "error", name: "TooSoon", inputs: [{ name: "readyAt", type: "uint256" }] },
+  { type: "error", name: "NoEligibleHolders", inputs: [] },
+  { type: "error", name: "UnsortedHolders", inputs: [] },
+  { type: "error", name: "RoundOverspent", inputs: [] },
+  { type: "error", name: "ExceedsAvailable", inputs: [{ name: "wanted", type: "uint256" }, { name: "available", type: "uint256" }] },
+  { type: "error", name: "InsufficientOutput", inputs: [{ name: "got", type: "uint256" }, { name: "wanted", type: "uint256" }] },
+  { type: "error", name: "VenueNotAllowed", inputs: [{ name: "venue", type: "address" }] },
+  { type: "error", name: "RouterCallFailed", inputs: [] },
+  { type: "error", name: "AllocateInstead", inputs: [] },
+  { type: "error", name: "NotInBasket", inputs: [] },
+  { type: "error", name: "BadConfig", inputs: [] },
   { type: "function", name: "interval", stateMutability: "view", inputs: [], outputs: [{ type: "uint32" }] },
   { type: "function", name: "batchWindow", stateMutability: "view", inputs: [], outputs: [{ type: "uint32" }] },
   { type: "function", name: "minHolderBalance", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
