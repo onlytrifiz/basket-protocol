@@ -93,6 +93,8 @@ export default async function IndexPage({
   const split = splitOf(index.creatorShareBps, platformBps);
   const bound = index.coin !== "0x0000000000000000000000000000000000000000";
   const quoteDecimals = await readDecimalsOf(index.quote);
+  // The coin has its own scale, and the feed moves it on every burn and every buyback purchase.
+  const coinDecimals = bound ? await readDecimalsOf(index.coin) : null;
   const quoteLabel =
     index.quote === "0x0000000000000000000000000000000000000000"
       ? "ETH"
@@ -103,6 +105,7 @@ export default async function IndexPage({
   const pageCount = Math.max(1, Math.ceil(events.length / PER_PAGE));
   const page = Number.isSafeInteger(requested) && requested >= 1 ? Math.min(requested, pageCount) : 1;
   const visible = events.slice((page - 1) * PER_PAGE, page * PER_PAGE);
+  const burnCount = events.filter((e) => e.kind === "burn").length;
 
   const waiting = toUnits(index.spendable.toString(), quoteDecimals);
   const creatorWaiting = toUnits(index.creatorClaimable.toString(), quoteDecimals);
@@ -152,22 +155,35 @@ export default async function IndexPage({
         {/* What it has actually done. */}
         <section className="stats-band" aria-label="What this index has done">
           <div className="stats-inner">
+            {/* What this index produces, which is not the same thing in both modes. */}
             <div>
-              <span>Paid to holders</span>
-              <strong>{history?.paidUsd ? usdCompact(history.paidUsd) : "—"}</strong>
+              <span>{burns ? "Burned" : "Paid to holders"}</span>
+              <strong>
+                {burns
+                  ? history?.burnedUsd ? usdCompact(history.burnedUsd) : "—"
+                  : history?.paidUsd ? usdCompact(history.paidUsd) : "—"}
+              </strong>
               <small>
-                {history?.paidUnits.length
-                  ? history.paidUnits.map((p) => `${amount(p.units)} ${p.symbol}`).join(" · ")
-                  : "nothing yet"}
+                {burns
+                  ? history?.burnedUnits
+                    ? `${fmtShares(history.burnedUnits)} ${index.coinSymbol ?? "coins"} destroyed`
+                    : "nothing yet"
+                  : history?.paidUnits.length
+                    ? history.paidUnits.map((p) => `${amount(p.units)} ${p.symbol}`).join(" · ")
+                    : "nothing yet"}
               </small>
             </div>
+            {/* "Rounds paid: 0" beside "$60 burned" reads as an index that has done nothing. A
+                buyback has no rounds — it has burns, and that is the count worth showing. */}
             <div>
-              <span>Rounds paid</span>
-              <strong>{history ? history.rounds : "—"}</strong>
+              <span>{burns ? "Burns run" : "Rounds paid"}</span>
+              <strong>{history ? (burns ? burnCount : history.rounds) : "—"}</strong>
               <small>
-                {history && history.rounds > 0
-                  ? `${history.payments.toLocaleString("en-US")} wallet payments`
-                  : "none yet"}
+                {burns
+                  ? burnCount > 0 ? "supply destroyed each time" : "none yet"
+                  : history && history.rounds > 0
+                    ? `${history.payments.toLocaleString("en-US")} wallet payments`
+                    : "none yet"}
               </small>
             </div>
             <div>
@@ -267,7 +283,21 @@ export default async function IndexPage({
             <div className="idx-feed">
               {visible.map((event) => {
                 const asset = event.token ? byAddress.get(event.token.toLowerCase()) : undefined;
-                const scale = event.kind === "fees" ? quoteDecimals : asset ? 8 : null;
+                /**
+                 * The scale of whatever this row moved, and it is three different tokens.
+                 *
+                 * Fees arrive in the quote. A payout is an equity, which is eight. A burn and a
+                 * buyback's purchase are the COIN — not a B20, so looking it up in the asset map
+                 * found nothing and every one of those rows rendered an em dash.
+                 */
+                const isCoin = !!event.token && event.token.toLowerCase() === index.coin.toLowerCase();
+                const scale = event.kind === "fees"
+                  ? quoteDecimals
+                  : isCoin
+                    ? coinDecimals
+                    : asset
+                      ? 8
+                      : null;
                 const spent = event.spentRaw ? toUnits(event.spentRaw, quoteDecimals) : null;
                 const value = toUnits(event.amountRaw, scale);
                 return (
@@ -290,7 +320,11 @@ export default async function IndexPage({
                     <span className="idx-feed-what">
                       <b>
                         {value === null ? "—" : amount(value)}{" "}
-                        {event.kind === "fees" ? quoteLabel : asset?.symbol ?? ""}
+                        {event.kind === "fees"
+                          ? quoteLabel
+                          : isCoin
+                            ? index.coinSymbol ?? ""
+                            : asset?.symbol ?? ""}
                       </b>
                       {event.holders !== undefined && (
                         <small>to {event.holders.toLocaleString("en-US")} holder{event.holders === 1 ? "" : "s"}</small>

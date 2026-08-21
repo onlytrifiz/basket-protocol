@@ -1,7 +1,7 @@
 import { cached } from "./cache";
 import { readDecimals } from "./decimals";
 import { marketBoard } from "./market";
-import { ethUsd } from "./pools";
+import { ethUsd, poolsFor } from "./pools";
 import { stockByAddress } from "./stocks";
 import { batchCall, blockNumber, getLogs, pad, toBigInt, type RpcCall } from "./rpc";
 
@@ -289,6 +289,8 @@ export type IndexActivity = {
   creatorRaw: bigint;
   /** Raw units pushed to holders, per token. */
   distributed: Map<string, bigint>;
+  /** Raw units of the coin destroyed. A buyback's whole output, and the only thing it produces. */
+  burnedRaw: bigint;
   /** Rounds that actually paid, and the wallet payments inside them. */
   rounds: number;
   payments: number;
@@ -300,6 +302,7 @@ const emptyActivity = (): IndexActivity => ({
   feesRaw: 0n,
   creatorRaw: 0n,
   distributed: new Map(),
+  burnedRaw: 0n,
   rounds: 0,
   payments: 0,
   events: [],
@@ -364,9 +367,13 @@ async function loadActivity(): Promise<Map<string, IndexActivity> | null> {
         token: `0x${(log.topics[2] ?? "").slice(-40)}`, spentRaw: dataWord(log.data, 0).toString(),
       });
     } else if (topic === TOPIC.burned) {
+      entry.burnedRaw += dataWord(log.data, 0);
       entry.events.push({
         kind: "burn", treasury: key, blockNumber: log.blockNumber, timestamp: log.timestamp,
         txHash: log.transactionHash, amountRaw: dataWord(log.data, 0).toString(),
+        // `Burned(address indexed coin, uint256 amount)` — the token is in the topic, and without
+        // it the feed has nothing to scale the amount by and renders an em dash.
+        token: `0x${(log.topics[1] ?? "").slice(-40)}`,
       });
     }
   }
@@ -390,6 +397,9 @@ export type IndexRow = Index & {
   paidUnits: Array<{ token: string; symbol: string; units: number }>;
   /** Dollars collected in fees, ever. */
   feesUsd: number | null;
+  /** For a buyback, what has been destroyed — the figure that stands where a payout would. */
+  burnedUsd: number | null;
+  burnedUnits: number | null;
   rounds: number;
   payments: number;
   /** True when the history could not be read; the row shows dashes rather than zeros. */
@@ -405,11 +415,23 @@ export type IndexTotals = {
 };
 
 /** Dollar price of one whole unit of a token, or null. ETH from a pool, equities from Nasdaq. */
+/**
+ * A token in dollars: Nasdaq for the equities, a pool for everything else.
+ *
+ * The seed list answers for anything this repo ships, which is every equity and ether. It does not
+ * answer for a LAUNCH COIN, and a buyback's entire output is denominated in one — so without the
+ * fallback a buyback index reports what it burned as nothing at all.
+ */
 async function priceOf(token: string, quotes: Record<string, { price: number }>): Promise<number | null> {
   if (token === ZERO_ADDRESS) return ethUsd();
   const known = stockByAddress(token);
   const price = known?.ticker ? quotes[known.ticker]?.price : undefined;
-  return typeof price === "number" && Number.isFinite(price) ? price : null;
+  if (typeof price === "number" && Number.isFinite(price)) return price;
+
+  // No minimum: a coin minutes old trades in one small pool, and that pool is its price.
+  const pools = await poolsFor(token.toLowerCase(), 0, false);
+  const fromPool = pools.best?.priceUsd;
+  return typeof fromPool === "number" && Number.isFinite(fromPool) && fromPool > 0 ? fromPool : null;
 }
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
@@ -430,6 +452,8 @@ async function loadRows(): Promise<{ rows: IndexRow[]; totals: IndexTotals }> {
   for (const index of all) {
     tokens.add(index.quote.toLowerCase());
     for (const t of index.basket) tokens.add(t.toLowerCase());
+    // The coin too: a buyback's only output is denominated in it.
+    if (index.coin && BigInt(index.coin) !== 0n) tokens.add(index.coin.toLowerCase());
   }
   const tickers = [...tokens].map((t) => stockByAddress(t)?.ticker).filter(Boolean) as string[];
   const [decimals, board] = await Promise.all([
@@ -453,7 +477,10 @@ async function loadRows(): Promise<{ rows: IndexRow[]; totals: IndexTotals }> {
   const rows: IndexRow[] = all.map((index) => {
     const a = activity?.get(index.address.toLowerCase());
     if (!a) {
-      return { ...index, paidUsd: null, paidUnits: [], feesUsd: null, rounds: 0, payments: 0, unread: true };
+      return {
+        ...index, paidUsd: null, paidUnits: [], feesUsd: null,
+        burnedUsd: null, burnedUnits: null, rounds: 0, payments: 0, unread: true,
+      };
     }
 
     const paidUnits: IndexRow["paidUnits"] = [];
@@ -471,11 +498,23 @@ async function loadRows(): Promise<{ rows: IndexRow[]; totals: IndexTotals }> {
       if (value !== null) paidUsd = (paidUsd ?? 0) + value;
     }
 
+    // A buyback pays nobody: everything it does ends at the burn, so that is the figure that has to
+    // stand where a payout would, or its row reads as an index that has never done anything.
+    const coinDecimals = decimals.get(index.coin.toLowerCase());
+    const burnedUnits = a.burnedRaw === 0n || coinDecimals === null || coinDecimals === undefined
+      ? (a.burnedRaw === 0n ? 0 : null)
+      : Number(a.burnedRaw) / 10 ** coinDecimals;
+    const coinPrice = priced.get(index.coin.toLowerCase());
+
     return {
       ...index,
       paidUsd,
       paidUnits,
       feesUsd: a.feesRaw === 0n ? 0 : usd(index.quote, a.feesRaw),
+      burnedUnits,
+      burnedUsd: burnedUnits === null || coinPrice === null || coinPrice === undefined
+        ? null
+        : burnedUnits * coinPrice,
       rounds: a.rounds,
       payments: a.payments,
       unread: false,
@@ -498,6 +537,9 @@ async function loadRows(): Promise<{ rows: IndexRow[]; totals: IndexTotals }> {
   bound.sort((a, b) => (b.paidUsd ?? -1) - (a.paidUsd ?? -1) || b.rounds - a.rounds);
 
   const totals: IndexTotals = {
+    // Deliberately payouts only. A burn is value returned to every holder at once by making the
+    // supply smaller, which is a real thing and not the same thing, and adding them would be one
+    // number describing two mechanisms.
     paidUsd: bound.some((r) => r.paidUsd !== null)
       ? bound.reduce((sum, r) => sum + (r.paidUsd ?? 0), 0)
       : null,
@@ -518,6 +560,9 @@ export async function readIndexHistory(address: string): Promise<{
   feesUsd: number | null;
   feesUnits: number | null;
   creatorUsd: number | null;
+  /** A buyback's entire output: what it destroyed. Zero-safe, null when the coin has no price. */
+  burnedUsd: number | null;
+  burnedUnits: number | null;
   rounds: number;
   payments: number;
   events: IndexEvent[];
@@ -527,7 +572,9 @@ export async function readIndexHistory(address: string): Promise<{
   const a = activity.get(address.toLowerCase());
   if (!a) return null;
 
-  const tokens = [index.quote.toLowerCase(), ...[...a.distributed.keys()]];
+  // The coin belongs in here too: a buyback denominates everything it does in it.
+  const tokens = [index.quote.toLowerCase(), index.coin.toLowerCase(), ...[...a.distributed.keys()]]
+    .filter((t) => /^0x[a-f0-9]{40}$/.test(t) && BigInt(t) !== 0n);
   const tickers = tokens.map((t) => stockByAddress(t)?.ticker).filter(Boolean) as string[];
   const [decimals, board] = await Promise.all([
     readDecimals(tokens),
@@ -563,6 +610,8 @@ export async function readIndexHistory(address: string): Promise<{
     feesUsd: a.feesRaw === 0n ? 0 : value(index.quote, a.feesRaw),
     feesUnits: units(index.quote, a.feesRaw),
     creatorUsd: a.creatorRaw === 0n ? 0 : value(index.quote, a.creatorRaw),
+    burnedUsd: a.burnedRaw === 0n ? 0 : value(index.coin, a.burnedRaw),
+    burnedUnits: a.burnedRaw === 0n ? 0 : units(index.coin, a.burnedRaw),
     rounds: a.rounds,
     payments: a.payments,
     events: a.events,

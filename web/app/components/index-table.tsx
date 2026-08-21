@@ -3,7 +3,7 @@ import Link from "next/link";
 import type { B20Asset } from "../../lib/b20";
 import type { IndexRow } from "../../lib/indices";
 import { MODE } from "../../lib/indices";
-import { usdCompact } from "../../lib/format";
+import { compactNumber, usdCompact } from "../../lib/format";
 import { StockLogo } from "./stock-logo";
 
 /**
@@ -29,7 +29,7 @@ export function IndexTable({
       <div className="idx-row idx-row-head" role="row">
         <span role="columnheader">Coin</span>
         <span role="columnheader">Holds</span>
-        <span role="columnheader">Paid to holders</span>
+        <span role="columnheader">Paid out / burned</span>
         <span role="columnheader">Fees in</span>
         <span role="columnheader">Rounds</span>
         <span aria-hidden="true" />
@@ -67,14 +67,25 @@ export function IndexTable({
               )}
             </span>
 
-            <span className="idx-num" data-label="Paid to holders" role="cell">
-              <b>{row.paidUsd === null ? "—" : row.paidUsd === 0 ? "—" : usdCompact(row.paidUsd)}</b>
-              {row.paidUnits.length > 0 && (
-                <small>
-                  {row.paidUnits
-                    .map((p) => `${p.units < 1 ? p.units.toFixed(4) : p.units.toFixed(2)} ${p.symbol}`)
-                    .join(" · ")}
-                </small>
+            {/* A buyback pays nobody — everything it does ends at the burn. Reporting it under
+                "paid to holders" would show a dash forever on an index that is working. */}
+            <span className="idx-num" data-label={burns ? "Burned" : "Paid to holders"} role="cell">
+              {burns ? (
+                <>
+                  <b>{row.burnedUsd ? usdCompact(row.burnedUsd) : "—"}</b>
+                  {row.burnedUnits ? <small>{compactNumber(row.burnedUnits)} {row.coinSymbol ?? "coins"} burned</small> : null}
+                </>
+              ) : (
+                <>
+                  <b>{row.paidUsd ? usdCompact(row.paidUsd) : "—"}</b>
+                  {row.paidUnits.length > 0 && (
+                    <small>
+                      {row.paidUnits
+                        .map((p) => `${p.units < 1 ? p.units.toFixed(4) : p.units.toFixed(2)} ${p.symbol}`)
+                        .join(" · ")}
+                    </small>
+                  )}
+                </>
               )}
             </span>
 
