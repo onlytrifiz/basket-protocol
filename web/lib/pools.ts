@@ -9,9 +9,12 @@
  * THE EQUITY MUST BE THE PAIR'S BASE TOKEN. Where it sits on the quote side, `priceUsd` describes
  * the *other* asset — a memecoin/NVDAc pool would otherwise report a memecoin's price as NVIDIA's.
  */
+import { cached } from "./cache";
 
 const DEX_API = "https://api.dexscreener.com/token-pairs/v1/base";
 const MAX_ADDRS = 20;
+/** How long a pair list may be reused, including after the upstream starts refusing. */
+const PAIRS_TTL_MS = 60_000;
 
 /**
  * A pool must clear this before it is allowed to quote the headline price.
@@ -91,17 +94,37 @@ function toPool(pair: DexPair, minLiq: number): Pool {
   };
 }
 
-export async function poolsFor(address: string, minLiq: number, full: boolean): Promise<TokenPools> {
-  let pairs: DexPair[] = [];
+/**
+ * The raw pair list for a token, kept across a refusal — and an EMPTY answer counts as one.
+ *
+ * DexScreener returns `[]` with a 200 for tokens it describes perfectly a minute later. Measured on
+ * AAPLc, which holds a $662k Aerodrome pool: thirty pairs on one call, zero on the next, from the
+ * same URL. Shaped straight through, that empty answer reached the page as a confident "no market",
+ * and the row for a real, deep, live market printed three dashes — the exact failure `lib/rpc`
+ * refuses by name, that a read we could not make must never render as a value we read as zero.
+ *
+ * So an empty list is a failure whenever a non-empty one has been seen, and `cached` serves the
+ * last good one. A token that has genuinely never had a pool still falls through to an empty
+ * result, which is what the dashes are actually for. Pools do not vanish; upstreams blink.
+ */
+async function pairsFor(address: string): Promise<DexPair[]> {
   try {
-    const response = await fetch(`${DEX_API}/${address}`, { next: { revalidate: 60 } });
-    if (response.ok) {
+    return await cached(`pools:pairs:${address}`, PAIRS_TTL_MS, async () => {
+      const response = await fetch(`${DEX_API}/${address}`, { next: { revalidate: 60 } });
+      if (!response.ok) throw new Error(`dexscreener ${response.status}`);
       const payload = await response.json() as unknown;
-      if (Array.isArray(payload)) pairs = payload as DexPair[];
-    }
+      if (!Array.isArray(payload)) throw new Error("dexscreener: not a list");
+      if (payload.length === 0) throw new Error("dexscreener: empty");
+      return payload as DexPair[];
+    });
   } catch {
-    // An unreachable price API degrades to "no market" cells, never to a broken page.
+    // Never seen a pair for this token in this process. That is an answer, and it is a dash.
+    return [];
   }
+}
+
+export async function poolsFor(address: string, minLiq: number, full: boolean): Promise<TokenPools> {
+  const pairs = await pairsFor(address);
 
   const own = pairs.filter((p) => p.baseToken?.address?.toLowerCase() === address);
   const pools = own.map((p) => toPool(p, minLiq)).sort((a, b) => b.liquidityUsd - a.liquidityUsd);
