@@ -38,37 +38,31 @@ const isAddress = (value?: string) => /^0x[a-fA-F0-9]{40}$/.test(value ?? "");
 const contractRows = [
   {
     name: "StockifyToken",
-    file: "src/StockifyToken.sol",
     description: "Fixed-supply STFY ERC-20. Maintains the enumerable holder registry the vault reads; it does not ask an indexer or explorer for recipients.",
     facts: ["1,000,000,000 STFY fixed supply", "10,000–100,000 STFY eligibility range", "O(1) holder removal with swap-and-pop"],
   },
   {
     name: "StockifyFeeHook",
-    file: "src/StockifyFeeHook.sol",
     description: "The Uniswap v4 hook on the ETH/STFY pool. It takes 300 bps in native ETH and settles it directly to the vault.",
     facts: ["300 bps hook fee", "ETH must be currency0", "CREATE2 address mined for v4 flags"],
   },
   {
     name: "DividendVault",
-    file: "src/DividendVault.sol",
     description: "Holds hook ETH and acquired B20 balances, tracks protocol revenue, snapshots eligible holders and pushes dividends in batches.",
     facts: ["1 hour minimum between cycle starts", "90% stock budget / 10% protocol revenue", "Owner-curated venue allowlist", "No native-ETH emergency withdrawal"],
   },
   {
     name: "StockifyRouter",
-    file: "src/StockifyRouter.sol",
     description: "Stateless buy/sell router for the ETH/STFY pool, because aggregators will not route a pool whose hook is not on their allowlist. It holds no funds and has no owner.",
     facts: ["buy(minOut) payable · sell(amountIn, minOut)", "Refunds input the pool would not take", "Approvals are made to this contract, not a proxy"],
   },
   {
     name: "IndexFactory / IndexTreasury",
-    file: "src/indices/",
     description: "A separate product: one EIP-1167 treasury per launch that points its creator fees here. See the Indices section below — its roles are not the vault's.",
     facts: ["CREATE2 address known before deployment", "Composition immutable after creation", "Clones are never upgraded"],
   },
   {
     name: "Keepers",
-    file: "keeper/ · keeper-indices/",
     description: "Two off-chain executors, one per product. Both discover routes and submit transactions; neither supplies a recipient list.",
     facts: ["Base chain ID 8453", "250 default snapshot batch", "25 default payout batch"],
   },
@@ -182,10 +176,10 @@ export default function DocsPage() {
               <div className="docs-section-label"><span>02</span><p>Contract reference</p></div>
               <div className="docs-section-body">
                 <h2>The implementation surfaces.</h2>
-                <p>These are the modules that define the protocol. Deployed addresses are in the last section.</p>
+                <p>These are the components that define the protocol. Deployed addresses are in the last section.</p>
                 <div className="docs-contracts">
                   {contractRows.map((contract) => <article key={contract.name}>
-                    <div className="docs-contract-head"><h3>{contract.name}</h3><code>{contract.file}</code></div>
+                    <div className="docs-contract-head"><h3>{contract.name}</h3></div>
                     <p>{contract.description}</p>
                     <ul>{contract.facts.map((fact) => <li key={fact}>{fact}</li>)}</ul>
                   </article>)}
