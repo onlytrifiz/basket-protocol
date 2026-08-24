@@ -122,7 +122,18 @@ export async function batchCall(calls: RpcCall[]): Promise<CallResult[]> {
   return out;
 }
 
-export type Log = { address: string; topics: string[]; data: string; blockNumber: number; timestamp: number; transactionHash: string };
+/**
+ * `logIndex` is the position within the BLOCK, which is what makes (txHash, logIndex) a unique key.
+ * A stored scan needs one: a transaction can emit the same event twice — a round paying two basket
+ * entries emits two `Distributed` logs — and deduping on the tuple's contents would silently drop
+ * the second.
+ */
+export type Log = { address: string; topics: string[]; data: string; blockNumber: number; logIndex: number; timestamp: number; transactionHash: string };
+
+/** Hex or decimal, and absent on a node that omits it. Never throws on a blank. */
+const toNumber = (value: unknown) => {
+  try { return Number(BigInt(String(value ?? "0") || "0")); } catch { return 0; }
+};
 
 /**
  * Logs from Etherscan's V2 API, when a key is configured.
@@ -194,9 +205,10 @@ async function explorerLogs(
           address: String(entry.address ?? ""),
           topics: Array.isArray(entry.topics) ? entry.topics as string[] : [],
           data: String(entry.data ?? "0x"),
-          blockNumber: Number(BigInt(String(entry.blockNumber ?? "0x0"))),
+          blockNumber: toNumber(entry.blockNumber),
+          logIndex: toNumber(entry.logIndex),
           // Etherscan spells it `timeStamp`, and always sends it — so dating a row costs nothing.
-          timestamp: Number(BigInt(String(entry.timeStamp ?? "0x0"))),
+          timestamp: toNumber(entry.timeStamp),
           transactionHash: String(entry.transactionHash ?? ""),
         });
       }
@@ -279,11 +291,12 @@ export async function getLogs(
             address: String(entry.address ?? ""),
             topics: Array.isArray(entry.topics) ? entry.topics as string[] : [],
             data: String(entry.data ?? "0x"),
-            blockNumber: Number(BigInt(String(entry.blockNumber ?? "0x0"))),
+            blockNumber: toNumber(entry.blockNumber),
+            logIndex: toNumber(entry.logIndex),
             // op-geth serves `blockTimestamp` on every log, so dating a row costs no extra call.
             // Defaulted rather than required: it is an extension, and a node that omits it should
             // cost a date, not the row.
-            timestamp: Number(BigInt(String(entry.blockTimestamp ?? "0x0"))),
+            timestamp: toNumber(entry.blockTimestamp),
             transactionHash: String(entry.transactionHash ?? ""),
           });
         }

@@ -3,7 +3,8 @@ import { readDecimals } from "./decimals";
 import { marketBoard } from "./market";
 import { ethUsd, poolsFor } from "./pools";
 import { stockByAddress } from "./stocks";
-import { batchCall, blockNumber, getLogs, pad, toBigInt, type RpcCall } from "./rpc";
+import { batchCall, pad, toBigInt, type RpcCall } from "./rpc";
+import { readActivityLogs } from "./indexActivityLog";
 
 /**
  * Indices — what a launch's creator fees are turned into.
@@ -295,9 +296,10 @@ export async function readIndexDetail(address: string): Promise<IndexDetail | nu
    treasury, because paying to keep a growing tally on-chain to serve a web page would be the wrong
    trade. The events are the record, so this reads them.
 
-   ONE SCAN FOR EVERY TREASURY AT ONCE. `eth_getLogs` accepts an array of addresses, so the request
-   count follows the block range and not the number of indexes — a hundred of them cost exactly what
-   one does. Cached, because a settled round cannot change.
+   EVERY BLOCK IS WALKED ONCE, EVER. A settled round cannot change, so re-deriving it on each cold
+   cache was work with no possible new answer — and the range it covered grew by ~43,000 blocks a
+   day, forever. `lib/indexActivityLog` owns the cursor; this module owns the decoder, and reads
+   through it. One `eth_getLogs` for every treasury at once, over minutes of blocks.
    ══════════════════════════════════════════════════════════════════════════════════════════════ */
 
 const TOPIC = {
@@ -310,9 +312,6 @@ const TOPIC = {
   /** Swapped(address indexed sellToken, uint256 spent, address indexed buyToken, uint256 bought) */
   swapped: "0xdb587d878116df0bdd4fe154699aa2c5f439da001cc811dfd05d9f589fc5a8ee",
 } as const;
-
-/** The block the factory was created in — nothing it minted can predate it. */
-const FACTORY_BLOCK = Math.max(0, Number(process.env.INDEX_FACTORY_DEPLOY_BLOCK) || 50_225_995);
 
 const dataWord = (data: string, i: number) => {
   const w = (data.replace(/^0x/, "").match(/.{64}/g) ?? [])[i];
@@ -377,10 +376,14 @@ async function loadActivity(): Promise<Map<string, IndexActivity> | null> {
   const all = await readIndices();
   if (all.length === 0) return new Map();
 
-  const tip = await blockNumber();
-  if (tip === null) return null;
-
-  const logs = await getLogs(all.map((i) => i.address), [], FACTORY_BLOCK, tip);
+  /**
+   * Read through the stored log rather than re-derived from the chain.
+   *
+   * Every block range is walked exactly once, ever — see `lib/indexActivityLog`. This used to be a
+   * full `FACTORY_BLOCK`-to-head scan on every cold cache, which cost 1.9s when the explorer
+   * answered and 27.7s when it did not, and grew by ~43,000 blocks a day either way.
+   */
+  const logs = await readActivityLogs(all.map((i) => i.address), Object.values(TOPIC));
   if (logs === null) return null;
 
   const out = new Map<string, IndexActivity>();
