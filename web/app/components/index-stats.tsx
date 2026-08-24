@@ -13,8 +13,13 @@ export function IndexStats({ totals }: { totals: IndexTotals }) {
     <section className="stats-band" aria-label="Every index">
       <div className="stats-inner">
         <div>
-          <span>Paid to holders</span>
-          <strong>{totals.paidUsd === null || totals.paidUsd === 0 ? "—" : usdCompact(totals.paidUsd)}</strong>
+          {/* Both mechanisms are named, because the figure covers both: an index either pushes
+              equity to holders or destroys the coin, and a tile headed with only the first would
+              quietly count the second under a word that does not describe it. */}
+          <span>Paid to holders / Bought back</span>
+          <strong>
+            {totals.returnedUsd === null || totals.returnedUsd === 0 ? "—" : usdCompact(totals.returnedUsd)}
+          </strong>
           <small>across every index</small>
         </div>
         <div>

@@ -53,7 +53,7 @@ const cadence = (seconds: number) => {
   return `${Math.round(seconds / 60)}m`;
 };
 
-/** The overview leads with the three biggest payers; the rest live on their own page. */
+/** The overview leads with the three that have given back the most; the rest live on their own page. */
 const FEATURED = 3;
 
 export default async function IndicesPage() {
@@ -100,11 +100,12 @@ export default async function IndicesPage() {
                 ? "Nothing has pointed its fees here yet."
                 : totals.count <= FEATURED
                   ? `${totals.count} ${totals.count === 1 ? "index" : "indices"} running.`
-                  : `The ${FEATURED} biggest payers.`}
+                  : `The ${FEATURED} that have given back the most.`}
             </h2>
             <p>
-              What each one holds, what it has handed to holders, and how often it has done it.
-              Ordered by what has actually reached people. Made here, or inside a launch on{" "}
+              What each one holds, what it has given back, and how often it has done it. Ordered by
+              that — equity pushed to holders, or coins bought back and destroyed, whichever the
+              index was built to do. Made here, or inside a launch on{" "}
               <a href={LAUNCHPAD.url} rel="noreferrer" target="_blank">{LAUNCHPAD.name} ↗</a>; an index
               does not care which launchpad its coin came from.
             </p>

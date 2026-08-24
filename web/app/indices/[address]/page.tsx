@@ -9,6 +9,7 @@ import {
   readIndexDetail,
   readIndexHistory,
   readPlatformFeeBps,
+  returnedUsd,
   splitOf,
 } from "../../../lib/indices";
 import { shares as fmtShares, since, usd, usdCompact } from "../../../lib/format";
@@ -159,9 +160,17 @@ export default async function IndexPage({
             <div>
               <span>{burns ? "Burned" : "Paid to holders"}</span>
               <strong>
-                {burns
-                  ? history?.burnedUsd ? usdCompact(history.burnedUsd) : "—"
-                  : history?.paidUsd ? usdCompact(history.paidUsd) : "—"}
+                {(() => {
+                  // The list's own definition, fed from this page's figures, so the headline here
+                  // and the row over on /indices can never print two different numbers.
+                  const returned = returnedUsd({
+                    mode: index.mode,
+                    paidUsd: history?.paidUsd ?? null,
+                    burnedUsd: history?.burnedUsd ?? null,
+                    spentUsd: history?.spentUsd ?? null,
+                  });
+                  return returned ? usdCompact(returned) : "—";
+                })()}
               </strong>
               <small>
                 {burns

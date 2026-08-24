@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import type { B20Asset } from "../../lib/b20";
 import type { IndexRow } from "../../lib/indices";
-import { MODE } from "../../lib/indices";
+import { MODE, returnedUsd } from "../../lib/indices";
 import { compactNumber, usdCompact } from "../../lib/format";
 import { StockLogo } from "./stock-logo";
 
@@ -11,8 +11,9 @@ import { StockLogo } from "./stock-logo";
  *
  * Shared so the three on the overview and the full set on their own page cannot drift into two
  * different ideas of what a row says. Ordering is decided upstream, in `readIndexRows` — biggest
- * payer first, because a list of indices sorted by what has actually reached holders argues for the
- * mechanism better than any description of it.
+ * first by `returnedUsd`, because a list of indices sorted by what each has actually given back
+ * argues for the mechanism better than any description of it. This column prints that same figure,
+ * so the order and the number a reader compares it against can never disagree.
  */
 
 const shorten = (address: string) => `${address.slice(0, 6)}…${address.slice(-4)}`;
@@ -72,7 +73,7 @@ export function IndexTable({
             <span className="idx-num" data-label={burns ? "Burned" : "Paid to holders"} role="cell">
               {burns ? (
                 <>
-                  <b>{row.burnedUsd ? usdCompact(row.burnedUsd) : "—"}</b>
+                  <b>{returnedUsd(row) ? usdCompact(returnedUsd(row) as number) : "—"}</b>
                   {row.burnedUnits ? <small>{compactNumber(row.burnedUnits)} {row.coinSymbol ?? "coins"} burned</small> : null}
                 </>
               ) : (

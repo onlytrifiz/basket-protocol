@@ -54,8 +54,8 @@ export default async function AllIndicesPage() {
             </h1>
             <p>
               Each one turns its launch&apos;s creator fees into tokenized equity and pushes it out, or
-              buys the coin back and destroys it. Biggest payer first. Open one to see what it holds
-              and when it next pays.
+              buys the coin back and destroys it. Biggest first, by what each has actually given
+              back. Open one to see what it holds and when it next pays.
             </p>
             {/* A page called "Every index" has to stop calling itself that the moment it is not.
                 Nothing is unreachable — an index off this list still has its own page — but the set
