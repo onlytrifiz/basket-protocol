@@ -12,6 +12,18 @@
 import { cached } from "./cache";
 
 const DEX_API = "https://api.dexscreener.com/token-pairs/v1/base";
+/**
+ * The other free endpoint, and the reason it is worth a second request.
+ *
+ * `token-pairs/v1` truncates at thirty pairs, and it counts pools where the token is the QUOTE.
+ * AAPLc is quoted by dozens of memecoins, so only five of its thirty come back with AAPLc as the
+ * base — and the day a few more launch against it, its own $652k Aerodrome pool is crowded out of
+ * its own listing and the headline price silently becomes whatever survives. This endpoint answers
+ * with the DEEPEST pair a token is the base of, one row, which is exactly the pool that must never
+ * be the one that falls off. Union of the two: this one guarantees the price, the other keeps the
+ * venue breakdown the detail page is built on.
+ */
+const DEX_TOKENS_API = "https://api.dexscreener.com/tokens/v1/base";
 const MAX_ADDRS = 20;
 /** How long a pair list may be reused, including after the upstream starts refusing. */
 const PAIRS_TTL_MS = 60_000;
@@ -110,15 +122,33 @@ function toPool(pair: DexPair, minLiq: number): Pool {
 async function pairsFor(address: string): Promise<DexPair[]> {
   try {
     return await cached(`pools:pairs:${address}`, PAIRS_TTL_MS, async () => {
-      const response = await fetch(`${DEX_API}/${address}`, { next: { revalidate: 60 } });
-      if (!response.ok) throw new Error(`dexscreener ${response.status}`);
-      const payload = await response.json() as unknown;
-      if (!Array.isArray(payload)) throw new Error("dexscreener: not a list");
-      if (payload.length === 0) throw new Error("dexscreener: empty");
-      return payload as DexPair[];
+      const [deepest, listed] = await Promise.all([
+        fetchPairs(`${DEX_TOKENS_API}/${address}`),
+        fetchPairs(`${DEX_API}/${address}`),
+      ]);
+      // Either source alone is an answer; only both failing is a failure worth keeping the old
+      // list for. Deduped on the pair address, because the deepest pool is in both when both land.
+      const merged = new Map<string, DexPair>();
+      for (const p of [...deepest, ...listed]) {
+        if (p?.pairAddress) merged.set(p.pairAddress.toLowerCase(), p);
+      }
+      if (merged.size === 0) throw new Error("dexscreener: nothing");
+      return [...merged.values()];
     });
   } catch {
     // Never seen a pair for this token in this process. That is an answer, and it is a dash.
+    return [];
+  }
+}
+
+/** One upstream, returning an empty list rather than throwing — the caller decides what empty means. */
+async function fetchPairs(url: string): Promise<DexPair[]> {
+  try {
+    const response = await fetch(url, { next: { revalidate: 60 } });
+    if (!response.ok) return [];
+    const payload = await response.json() as unknown;
+    return Array.isArray(payload) ? payload as DexPair[] : [];
+  } catch {
     return [];
   }
 }
