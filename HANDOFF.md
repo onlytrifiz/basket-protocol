@@ -167,15 +167,7 @@ This is not loss-of-funds — the fee reaches the vault either way — but it me
 
 The script now accepts a dedicated `KEEPER`, sets it before transferring ownership, and refuses a deployer-owned or deployer-keyed deployment unless `ALLOW_HOT_KEY_OWNER=1` is passed explicitly.
 
-### 7. The live owner is an externally-owned account — high
-
-Both `DividendVault` and `IndexFactory` are owned by the same EOA. Every document in this repository was written assuming a multisig, and the deploy script requires one by default, so the live deployment used the explicit override.
-
-That key can rotate the keeper, replace the index, curate venues, change the eligibility threshold and set reward exclusions, and can `emergencyWithdrawERC20` all ERC-20 custody — including stock already bought for holders — to itself. On the factory side it can also set the platform fee and recipient and repoint launchpads.
-
-**Fix:** move both to a multisig via `transferOwnership`. This is the highest-value single operational change available.
-
-### 8. One key may be both keeper and index administrator — verify
+### 7. One key may be both keeper and index administrator — verify
 
 `keeper-indices` assumes the vault keeper runs on the same account. If that is still true, one key is simultaneously the vault’s execution role and the index treasuries’ **administrative** role (exclusions, dust floor, pause, rescue, ownership).
 

@@ -301,7 +301,7 @@ export default function DocsPage() {
                 <h2>Explicit permissions, not implied automation.</h2>
                 <p>This section is about the STFY vault. The index treasuries assign these roles differently — see above.</p>
                 <div className="docs-role-grid">
-                  <article><span>Owner</span><h3>Configuration and emergency custody</h3><p>Can change policy, curate swap venues and use the ERC-20 emergency path. A material trust role: the deployment script requires a contract owner unless explicitly overridden, and the live owner is a single externally-owned account today.</p></article>
+                  <article><span>Owner</span><h3>Configuration and emergency custody</h3><p>Can change policy, curate swap venues and use the ERC-20 emergency path. This is a material trust role and should be held by a multisig.</p></article>
                   <article><span>Keeper</span><h3>Routes, buys and batches</h3><p>Can buy stocks and advance snapshots and payouts, but cannot change thresholds, index weights, venues, recipients or ownership.</p></article>
                   <article><span>Platform recipient</span><h3>Claims only accrued revenue</h3><p>Can claim <code>platformClaimable</code>. The owner can rotate this recipient; it has no direct access to the stock budget.</p></article>
                   <article><span>Anyone</span><h3>Retries an unpaid dividend</h3><p>Can call <code>flushUnpaidDividend</code>, but tokens can only be sent to the recorded rightful holder.</p></article>
