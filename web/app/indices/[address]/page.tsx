@@ -179,7 +179,6 @@ export default async function IndexPage({
                     mode: index.mode,
                     paidUsd: history?.paidUsd ?? null,
                     burnedUsd: history?.burnedUsd ?? null,
-                    spentUsd: history?.spentUsd ?? null,
                   });
                   return returned ? usdCompact(returned) : "—";
                 })()}

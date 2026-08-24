@@ -354,15 +354,6 @@ export type IndexActivity = {
   distributed: Map<string, bigint>;
   /** Raw units of the coin destroyed. A buyback's whole output, and the only thing it produces. */
   burnedRaw: bigint;
-  /**
-   * Raw QUOTE units put through a buy, ever — what the treasury paid, not what it received.
-   *
-   * Kept because it is the one measure of a buyback's output that does not depend on the coin's own
-   * price. `burnedRaw` is denominated in a launch coin, which is priced off a single small pool and
-   * answers `null` as often as not; the quote is ether or an equity, which this module always
-   * prices. See `returnedUsd`.
-   */
-  spentRaw: bigint;
   /** Rounds that actually paid, and the wallet payments inside them. */
   rounds: number;
   payments: number;
@@ -375,7 +366,6 @@ const emptyActivity = (): IndexActivity => ({
   creatorRaw: 0n,
   distributed: new Map(),
   burnedRaw: 0n,
-  spentRaw: 0n,
   rounds: 0,
   payments: 0,
   events: [],
@@ -438,7 +428,6 @@ async function loadActivity(): Promise<Map<string, IndexActivity> | null> {
       });
     } else if (topic === TOPIC.swapped) {
       // topics: [sig, sellToken, buyToken] · data: [spent, bought]
-      entry.spentRaw += dataWord(log.data, 0);
       entry.events.push({
         kind: "bought", treasury: key, blockNumber: log.blockNumber, logIndex: log.logIndex, timestamp: log.timestamp,
         txHash: log.transactionHash, amountRaw: dataWord(log.data, 1).toString(),
@@ -481,8 +470,6 @@ export type IndexRow = Index & {
   /** For a buyback, what has been destroyed — the figure that stands where a payout would. */
   burnedUsd: number | null;
   burnedUnits: number | null;
-  /** Dollars put through a buy, priced in the QUOTE. The floor under `burnedUsd`; see `returnedUsd`. */
-  spentUsd: number | null;
   rounds: number;
   payments: number;
   /** True when the history could not be read; the row shows dashes rather than zeros. */
@@ -515,16 +502,51 @@ export type IndexTotals = {
  * answer for a LAUNCH COIN, and a buyback's entire output is denominated in one — so without the
  * fallback a buyback index reports what it burned as nothing at all.
  */
+/**
+ * How long a price may be reused, including after the upstream stops answering.
+ *
+ * Reference data on a minute scale. Showing a figure from two minutes ago costs a reader nothing;
+ * showing a different figure every time they reload costs them the ability to trust any of them.
+ */
+const PRICE_TTL_MS = 120_000;
+
+/**
+ * A price, where a price that could NOT BE READ is a failure rather than an answer of "none".
+ *
+ * `cached` already serves the last good value when its loader throws — the behaviour a flaky
+ * upstream needs. But `poolsFor` and `ethUsd` both swallow their own errors and return null, so a
+ * refused DexScreener call arrived here indistinguishable from "this token genuinely has no
+ * market", and was then cached as if it were one for the whole TTL.
+ *
+ * That is what made a buyback's headline swing. It is denominated in the launch coin, so a single
+ * missed call took the figure from twelve thousand dollars to nothing at all. Throwing here is what
+ * lets the cache hold the line.
+ */
+async function lastGoodPrice(key: string, load: () => Promise<number | null>): Promise<number | null> {
+  try {
+    return await cached(key, PRICE_TTL_MS, async () => {
+      const price = await load();
+      if (price === null || !Number.isFinite(price) || price <= 0) throw new Error("unpriced");
+      return price;
+    });
+  } catch {
+    // Never had a price at all, in this process. That IS an answer, and it is a dash.
+    return null;
+  }
+}
+
 async function priceOf(token: string, quotes: Record<string, { price: number }>): Promise<number | null> {
-  if (token === ZERO_ADDRESS) return ethUsd();
+  if (token === ZERO_ADDRESS) return lastGoodPrice("indices:price:eth", ethUsd);
   const known = stockByAddress(token);
+  // The equities come from the market board, which does its own caching and its own staleness.
   const price = known?.ticker ? quotes[known.ticker]?.price : undefined;
   if (typeof price === "number" && Number.isFinite(price)) return price;
 
   // No minimum: a coin minutes old trades in one small pool, and that pool is its price.
-  const pools = await poolsFor(token.toLowerCase(), 0, false);
-  const fromPool = pools.best?.priceUsd;
-  return typeof fromPool === "number" && Number.isFinite(fromPool) && fromPool > 0 ? fromPool : null;
+  return lastGoodPrice(
+    `indices:price:${token}`,
+    async () => (await poolsFor(token.toLowerCase(), 0, false)).best?.priceUsd ?? null,
+  );
 }
 
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
@@ -541,21 +563,20 @@ export const MODE_BUYBACK = 1;
  * better — it prints the burn where a payout would go — but the ORDER did not, so the list
  * contradicted the rows it was made of.
  *
- * The fallback to `spentUsd` is what makes this usable rather than merely correct. `burnedUsd`
- * values the burn at the coin's own price, and a launch coin is priced off one small pool that
- * answers `null` more often than not — measured on the live set, every buyback came back unpriced
- * on one read and priced on the next, so ordering on it alone is a list that reshuffles itself.
- * What the treasury PAID is denominated in the quote, which is ether or an equity and always
- * prices. It undercounts, because it misses the coin-side fee leg that `harvest` burns without
- * buying, so it is a floor and never a replacement.
+ * BOTH SIDES ARE VALUED THE SAME WAY: units × the price now. That is how `paidUsd` is built, and a
+ * burn measured any other way would rank the two modes on different questions.
  *
- * Null still means null: an index whose output cannot be priced at all is not a confident zero.
+ * There is deliberately NO second measure standing in when the coin cannot be priced. An earlier
+ * version fell back to what the treasury had PAID for the coins, which sounds like a floor and is
+ * really a different quantity — on the live set the two were 6.4x apart, because the coin had risen
+ * since the buys — so the headline swapped between them whenever one upstream call was refused, and
+ * said nothing about it. Keeping the price readable is `lastGoodPrice`'s job; null here means the
+ * coin has never priced at all, and a dash is the honest answer to that.
  */
 export function returnedUsd(
-  row: Pick<IndexRow, "mode" | "paidUsd" | "burnedUsd" | "spentUsd">,
+  row: Pick<IndexRow, "mode" | "paidUsd" | "burnedUsd">,
 ): number | null {
-  if (row.mode !== MODE_BUYBACK) return row.paidUsd;
-  return row.burnedUsd ?? row.spentUsd;
+  return row.mode === MODE_BUYBACK ? row.burnedUsd : row.paidUsd;
 }
 
 /**
@@ -612,7 +633,7 @@ async function loadRows(): Promise<{ rows: IndexRow[]; totals: IndexTotals }> {
     if (!a) {
       return {
         ...index, paidUsd: null, paidUnits: [], feesUsd: null,
-        burnedUsd: null, burnedUnits: null, spentUsd: null, rounds: 0, payments: 0, unread: true,
+        burnedUsd: null, burnedUnits: null, rounds: 0, payments: 0, unread: true,
       };
     }
 
@@ -648,7 +669,6 @@ async function loadRows(): Promise<{ rows: IndexRow[]; totals: IndexTotals }> {
       burnedUsd: burnedUnits === null || coinPrice === null || coinPrice === undefined
         ? null
         : burnedUnits * coinPrice,
-      spentUsd: a.spentRaw === 0n ? 0 : usd(index.quote, a.spentRaw),
       rounds: a.rounds,
       payments: a.payments,
       unread: false,
@@ -719,8 +739,6 @@ export async function readIndexHistory(address: string): Promise<{
   /** A buyback's entire output: what it destroyed. Zero-safe, null when the coin has no price. */
   burnedUsd: number | null;
   burnedUnits: number | null;
-  /** Dollars put through a buy, priced in the quote — the same floor the list uses. See `returnedUsd`. */
-  spentUsd: number | null;
   rounds: number;
   payments: number;
   events: IndexEvent[];
@@ -787,7 +805,6 @@ export async function readIndexHistory(address: string): Promise<{
     creatorUsd: a.creatorRaw === 0n ? 0 : value(index.quote, a.creatorRaw),
     burnedUsd: a.burnedRaw === 0n ? 0 : value(index.coin, a.burnedRaw),
     burnedUnits: a.burnedRaw === 0n ? 0 : units(index.coin, a.burnedRaw),
-    spentUsd: a.spentRaw === 0n ? 0 : value(index.quote, a.spentRaw),
     rounds: a.rounds,
     payments: a.payments,
     events: a.events,
