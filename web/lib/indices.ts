@@ -324,6 +324,15 @@ export type IndexEvent = {
   kind: "fees" | "bought" | "paid" | "burn";
   treasury: string;
   blockNumber: number;
+  /**
+   * Position within the block, kept so the feed can order events INSIDE one.
+   *
+   * A harvest emits `Harvested` and the coin-leg `Burned` from the same transaction, and a sort on
+   * the block alone left them in ascending log order under a feed that reads newest-first — so one
+   * cycle's two halves printed back to front. Only visible once the feed draws a sequence, which is
+   * exactly why it is worth carrying.
+   */
+  logIndex: number;
   timestamp: number;
   txHash: string;
   /** Raw units — of the quote for `fees`, of the paid token for `paid`, of the coin for `burn`. */
@@ -412,7 +421,7 @@ async function loadActivity(): Promise<Map<string, IndexActivity> | null> {
       // A harvest that brought nothing in is the ordinary empty poll, not an event worth a row.
       if (amount > 0n) {
         entry.events.push({
-          kind: "fees", treasury: key, blockNumber: log.blockNumber, timestamp: log.timestamp,
+          kind: "fees", treasury: key, blockNumber: log.blockNumber, logIndex: log.logIndex, timestamp: log.timestamp,
           txHash: log.transactionHash, amountRaw: amount.toString(),
         });
       }
@@ -424,21 +433,21 @@ async function loadActivity(): Promise<Map<string, IndexActivity> | null> {
       entry.rounds += 1;
       entry.payments += holders;
       entry.events.push({
-        kind: "paid", treasury: key, blockNumber: log.blockNumber, timestamp: log.timestamp,
+        kind: "paid", treasury: key, blockNumber: log.blockNumber, logIndex: log.logIndex, timestamp: log.timestamp,
         txHash: log.transactionHash, amountRaw: amount.toString(), token, holders,
       });
     } else if (topic === TOPIC.swapped) {
       // topics: [sig, sellToken, buyToken] · data: [spent, bought]
       entry.spentRaw += dataWord(log.data, 0);
       entry.events.push({
-        kind: "bought", treasury: key, blockNumber: log.blockNumber, timestamp: log.timestamp,
+        kind: "bought", treasury: key, blockNumber: log.blockNumber, logIndex: log.logIndex, timestamp: log.timestamp,
         txHash: log.transactionHash, amountRaw: dataWord(log.data, 1).toString(),
         token: `0x${(log.topics[2] ?? "").slice(-40)}`, spentRaw: dataWord(log.data, 0).toString(),
       });
     } else if (topic === TOPIC.burned) {
       entry.burnedRaw += dataWord(log.data, 0);
       entry.events.push({
-        kind: "burn", treasury: key, blockNumber: log.blockNumber, timestamp: log.timestamp,
+        kind: "burn", treasury: key, blockNumber: log.blockNumber, logIndex: log.logIndex, timestamp: log.timestamp,
         txHash: log.transactionHash, amountRaw: dataWord(log.data, 0).toString(),
         // `Burned(address indexed coin, uint256 amount)` — the token is in the topic, and without
         // it the feed has nothing to scale the amount by and renders an em dash.
@@ -447,7 +456,10 @@ async function loadActivity(): Promise<Map<string, IndexActivity> | null> {
     }
   }
 
-  for (const entry of out.values()) entry.events.sort((a, b) => b.blockNumber - a.blockNumber);
+  // Newest first, and newest WITHIN a block first too — see `logIndex`.
+  for (const entry of out.values()) {
+    entry.events.sort((a, b) => b.blockNumber - a.blockNumber || b.logIndex - a.logIndex);
+  }
   return out;
 }
 

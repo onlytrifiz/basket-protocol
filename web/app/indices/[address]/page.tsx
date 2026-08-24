@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Fragment } from "react";
 import Link from "next/link";
 
 import { readAssets } from "../../../lib/b20";
@@ -53,6 +54,17 @@ const cadence = (seconds: number) => {
 };
 
 const amount = (n: number) => (n === 0 ? "0" : n < 1 ? n.toFixed(4) : n.toFixed(2));
+
+/**
+ * The UTC day an event landed on, for the dividers in the feed.
+ *
+ * UTC rather than the reader's zone because every other timestamp on this page is UTC, and a feed
+ * whose dividers disagree with its rows about which day it is would be worse than no dividers.
+ */
+const dayOf = (seconds: number) =>
+  new Date(seconds * 1000).toLocaleDateString("en-GB", {
+    day: "2-digit", month: "short", year: "numeric", timeZone: "UTC",
+  });
 const shorten = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 
 export default async function IndexPage({
@@ -289,8 +301,10 @@ export default async function IndexPage({
               <h2>{events.length} {events.length === 1 ? "entry" : "entries"}.</h2>
             </div>
 
-            <div className="idx-feed">
-              {visible.map((event) => {
+            {/* An ordered list, not a stack of links: the order IS the record, and a screen
+                reader that cannot tell one entry from the next loses the only structure here. */}
+            <ol className="idx-feed">
+              {visible.map((event, i) => {
                 const asset = event.token ? byAddress.get(event.token.toLowerCase()) : undefined;
                 /**
                  * The scale of whatever this row moved, and it is three different tokens.
@@ -309,56 +323,78 @@ export default async function IndexPage({
                       : null;
                 const spent = event.spentRaw ? toUnits(event.spentRaw, quoteDecimals) : null;
                 const value = toUnits(event.amountRaw, scale);
+                const symbol = event.kind === "fees"
+                  ? quoteLabel
+                  : isCoin
+                    ? index.coinSymbol ?? ""
+                    : asset?.symbol ?? "";
+                const label = event.kind === "fees"
+                  ? "Fees in"
+                  : event.kind === "bought"
+                    ? "Bought"
+                    : event.kind === "burn"
+                      ? "Burned"
+                      : "Paid out";
+                const day = dayOf(event.timestamp);
+                const opensDay = i === 0 || dayOf(visible[i - 1].timestamp) !== day;
+
                 return (
-                  <a
-                    className={`idx-feed-row${event.kind === "paid" ? " is-paid" : ""}`}
-                    href={`https://basescan.org/tx/${event.txHash}`}
-                    key={`${event.txHash}-${event.kind}-${event.blockNumber}`}
-                    rel="noreferrer"
-                    target="_blank"
-                  >
-                    <span className="idx-kind">
-                      {event.kind === "fees"
-                        ? "Fees in"
-                        : event.kind === "bought"
-                          ? "Bought"
-                          : event.kind === "burn"
-                            ? "Burned"
-                            : "Paid out"}
-                    </span>
-                    <span className="idx-feed-what">
-                      <b>
-                        {value === null ? "—" : amount(value)}{" "}
-                        {event.kind === "fees"
-                          ? quoteLabel
-                          : isCoin
-                            ? index.coinSymbol ?? ""
-                            : asset?.symbol ?? ""}
-                      </b>
-                      {event.holders !== undefined && (
-                        <small>to {event.holders.toLocaleString("en-US")} holder{event.holders === 1 ? "" : "s"}</small>
-                      )}
-                      {/* What the buy cost, so the feed reads as one motion: fee in, equity out. */}
-                      {spent !== null && <small>for {amount(spent)} {quoteLabel}</small>}
-                    </span>
-                    <span className="idx-feed-when">{since(event.timestamp)}</span>
-                  </a>
+                  <Fragment key={`${event.txHash}-${event.kind}-${event.logIndex}`}>
+                    {/* Only where the day actually turns. A divider on every row would be a
+                        decoration; here it is the one thing "12m ago" cannot tell you. */}
+                    {opensDay && (
+                      <li aria-hidden="true" className="idx-feed-day"><span>{day}</span></li>
+                    )}
+                    <li className={`idx-feed-item is-${event.kind}`}>
+                      <a
+                        className="idx-feed-row"
+                        href={`https://basescan.org/tx/${event.txHash}`}
+                        rel="noreferrer"
+                        target="_blank"
+                      >
+                        {/* The node carries the one thing four identical grey rows could not say:
+                            which way value moved. Filled where it settled — in, or out for good —
+                            and hollow for a buy, which is the only state where value is inside the
+                            treasury and has not left yet. */}
+                        <span aria-hidden="true" className="idx-feed-node" />
+                        <span className="idx-kind">{label}</span>
+                        <span className="idx-feed-what">
+                          <b className="idx-feed-amount">{value === null ? "—" : amount(value)}</b>
+                          {symbol && <span className="idx-feed-sym">{symbol}</span>}
+                          {event.holders !== undefined && (
+                            <small>to {event.holders.toLocaleString("en-US")} holder{event.holders === 1 ? "" : "s"}</small>
+                          )}
+                          {/* What the buy cost, so the feed reads as one motion: fee in, equity out. */}
+                          {spent !== null && <small>for {amount(spent)} {quoteLabel}</small>}
+                        </span>
+                        <span className="idx-feed-when">{since(event.timestamp)}</span>
+                      </a>
+                    </li>
+                  </Fragment>
                 );
               })}
-            </div>
+            </ol>
 
             {pageCount > 1 && (
-              <nav aria-label="Activity pages" className="ledger-pager">
+              <nav aria-label="Activity pages" className="idx-pager">
                 {page > 1 ? (
-                  <Link href={`/indices/${index.address}?page=${page - 1}`} rel="prev">← Newer</Link>
+                  <Link className="idx-pager-step" href={`/indices/${index.address}?page=${page - 1}`} rel="prev">
+                    ← Newer
+                  </Link>
                 ) : (
-                  <span aria-hidden="true">← Newer</span>
+                  /* The end of the record is shown, not hidden: a missing control reads as a bug,
+                     a spent one reads as the edge of what there is. */
+                  <span aria-disabled="true" className="idx-pager-step is-spent">← Newer</span>
                 )}
-                <b>Page {page} of {pageCount}</b>
+                <span className="idx-pager-count">
+                  Page <b>{page}</b> of <b>{pageCount}</b>
+                </span>
                 {page < pageCount ? (
-                  <Link href={`/indices/${index.address}?page=${page + 1}`} rel="next">Older →</Link>
+                  <Link className="idx-pager-step" href={`/indices/${index.address}?page=${page + 1}`} rel="next">
+                    Older →
+                  </Link>
                 ) : (
-                  <span aria-hidden="true">Older →</span>
+                  <span aria-disabled="true" className="idx-pager-step is-spent">Older →</span>
                 )}
               </nav>
             )}
