@@ -1,68 +1,67 @@
 # Stockify — engineering handoff
 
-**Repository:** `onlytrifiz/stockify-protocol`  
-**Branch:** `main`  
-**Latest commit at handoff:** `e4328f1 Refine public protocol documentation`  
-**Status:** pre-launch; do **not** deploy the current contracts as the final mainnet protocol.
+**Status:** deployed and live on Base mainnet. Unaudited.
 
-Stockify is a Base protocol for routing an ETH/STFY Uniswap v4 hook fee into purchases of Base B20 tokenized stocks, then pushing those stock balances pro rata to eligible STFY holders.
+Stockify is a Base protocol that routes an ETH/STFY Uniswap v4 hook fee into purchases of Base B20 tokenized stocks, then pushes those stock balances pro rata to eligible STFY holders. The same repository contains **Indices**, a second product that does the equivalent for another launch’s creator fees.
+
+This document is for whoever operates or extends the system. It describes what is deployed, not what was planned.
 
 ---
 
 ## What is implemented
 
-| Module | Source | Current behavior |
+| Module | Source | Current behaviour |
 | --- | --- | --- |
 | STFY token | `src/StockifyToken.sol` | Fixed supply of `1,000,000,000 STFY`; on-chain eligible-holder registry. |
-| Fee hook | `src/StockifyFeeHook.sol` | Collects `300 bps` native ETH in the intended ETH/STFY v4 pool and forwards it to the vault. |
-| Dividend vault | `src/DividendVault.sol` | Accounts for hook ETH, buys B20 assets, snapshots holders and sends batched push payouts. |
-| Keeper | `keeper/src/keeper.ts` | Gets routes off-chain and executes vault buys / snapshots / payouts. It does not provide the holder list. |
-| Deploy script | `script/Deploy.s.sol` | Deploys token, vault and CREATE2-mined hook on Base. It deliberately does not initialize a pool or add liquidity. |
-| Web app | `web/` | Next.js public site with market, distributions, protocol and public documentation pages. |
+| Fee hook | `src/StockifyFeeHook.sol` | Collects `300 bps` native ETH on any v4 pool naming it with ETH as `currency0`, and forwards it to the vault. |
+| Dividend vault | `src/DividendVault.sol` | Accounts for hook ETH, buys B20 assets through an owner-curated venue allowlist, snapshots holders and sends batched push payouts. |
+| Pool router | `src/StockifyRouter.sol` | Stateless buy/sell for the ETH/STFY pool. No owner, holds no funds, refunds input the pool would not absorb. |
+| Vault guardian | `src/VaultGuardian.sol` | Optional owner wrapper refusing `abortCycle()` on a partially paid cycle. **Not installed.** |
+| Indices | `src/indices/` | `IndexFactory` mints one `IndexTreasury` clone per launch. Separate roles — see below. |
+| Vault keeper | `keeper/` | Gets routes off-chain and executes vault buys / snapshots / payouts. It does not provide the holder list. |
+| Indices keeper | `keeper-indices/` | Runs harvest / swap / distribute (or burn) for every treasury the factory has minted. |
+| Deploy script | `script/Deploy.s.sol` | Deploys token, vault and CREATE2-mined hook. It deliberately does not initialize a pool. |
+| Web app | `web/` | Next.js public site: market, distributions, indices, protocol and public documentation pages. |
 
-The public documentation is at `/docs`; it describes protocol behavior only. Frontend service configuration is deliberately not shown there.
+Public documentation is at `/docs`. It reads deployed addresses from the same configuration the application is built against, so the two cannot disagree.
 
 ---
 
-## Intended economics
+## Economics
 
 | Item | Rate | Destination |
 | --- | ---: | --- |
-| v4 LP fee | 1.00% | Liquidity providers; pool configuration, separate from Stockify hook. |
-| Stockify hook fee | 3.00% | Native ETH sent to `DividendVault`. |
+| v4 LP fee | 1.00% | Liquidity providers; pool configuration, separate from the hook. |
+| Stockify hook fee | 3.00% | Native ETH to `DividendVault`. |
 | Stock purchase budget | 2.70% of volume | 90% of the hook-fee allocation. |
-| Protocol revenue | 0.30% of volume | 10% of the hook-fee allocation, recorded as `platformClaimable`. |
+| Protocol revenue | 0.30% of volume | 10% of the allocation, recorded as `platformClaimable`. |
 
-The vault uses the active index weights to divide the stock-purchase budget. The owner can replace the active buy index only outside a pending snapshot or active distribution cycle. Assets that were ever admitted remain in the distribution set so balances already acquired are not automatically stranded after an index change.
+Protocol revenue accrues on ETH **actually spent** on stock (`totalSpent / 9`), not on ETH merely made available. A `buyStocks` call whose routes fill nothing accrues nothing.
+
+The vault uses the active index weights to divide the purchase budget. The owner can replace the active index only outside a pending snapshot or active cycle. Assets that were ever admitted remain in the distribution set, so balances already acquired are not stranded by a rotation.
 
 ---
 
 ## Token and payout model
 
 - Supply: `1,000,000,000 STFY`.
-- Initial dividend eligibility threshold: `100,000 STFY`.
-- Owner-configurable threshold range: `10,000–100,000 STFY`.
-- `StockifyToken` keeps its own enumerable holder registry using `holderCount()` and `holderAt(i)`.
+- Initial dividend eligibility threshold: `100,000 STFY`; owner-configurable within `10,000–100,000`.
+- `StockifyToken` keeps its own enumerable holder registry via `holderCount()` / `holderAt(i)`.
 - Payouts are **push**, not Merkle claims.
-- The holder payout formula is:
-
-```text
-stock pot × min(snapshot balance, live balance) ÷ eligibleSupply
-```
-
-- The live-balance clamp means a holder who sells after capture receives no more than their remaining balance weight.
-- A B20 transfer that fails receiver-policy checks is recorded as `unpaidDividend`; anyone may retry the exact entitlement via `flushUnpaidDividend(holder, stock)`.
+- Formula: `stock pot × min(snapshot balance, live balance) ÷ eligibleSupply`.
+- The live-balance clamp means a holder who sells after capture receives no more than their remaining weight.
+- A B20 transfer that fails a receiver-policy check is recorded as `unpaidDividend`; anyone may retry the exact entitlement via `flushUnpaidDividend(holder, stock)`.
 
 ### Distribution state flow
 
 ```text
 hook ETH in DividendVault
         │
-        ├── keeper: buyStocks(...)
-        │       ├── 10% → platformClaimable
-        │       └── 90% → active B20 index
+        ├── keeper: buyStocks(targets, routeCalldatas, amountInOffsets, minOuts)
+        │       ├── 10% of what is spent → platformClaimable
+        │       └── 90% → active B20 index, one leg per entry
         │
-        ├── keeper: snapshotHolders(count) [optional pages]
+        ├── keeper: snapshotHolders(count) [pages]
         ├── keeper: startCycle()
         └── keeper: distributeBatch(count) [pages]
 ```
@@ -71,15 +70,45 @@ hook ETH in DividendVault
 
 ---
 
-## Initial B20 universe
+## How a purchase reaches a venue
 
-The deploy script contains thirteen Base B20 assets:
+The vault stores **no router address**. This changed from the original design and is the single most important correction to any older notes: there is no pinned Universal Router.
 
-`NVDAc`, `AAPLc`, `GOOGLc`, `METAc`, `AMZNc`, `COINc`, `CRCLc`, `INTCc`, `MSFTc`, `MSTRc`, `SNDKc`, `SPCXc`, `TSLAc`.
+- The owner curates an allowlist with `setSwapTarget(target, allowed)`.
+- The keeper names one allowlisted venue per leg, plus the byte offset of the input-amount word inside that venue’s own calldata.
+- The vault sizes the input itself, overwrites that word with the real spend, approves exactly that amount, calls the venue, and revokes the approval in the same transaction.
+- The result is judged purely by balance deltas: `received ≥ minOut`, and `spent` is measured, never asserted.
 
-Initial weights are effectively equal: the first twelve assets are `769 bps`; `TSLAc` receives the `772 bps` remainder, for a total of `10,000 bps`. Addresses and the exact initialization are in `script/Deploy.s.sol`.
+A listed venue can therefore make a leg fail; it cannot take custody of more than that leg’s input. **The owner’s allowlist, not the keeper, is the real bound on execution quality** — `minOut` is a keeper-chosen number.
 
-The B20 assets are validated via ERC-20 reads rather than normal EVM bytecode checks because B20 assets are Base Rust precompiles. B20 sender/receiver transfer policies must be validated before a live launch.
+---
+
+## The B20 index
+
+The active index is read from the chain — `stocksLength()` and `stockAt(i)`. `script/Deploy.s.sol` seeds thirteen assets at effectively equal weight (twelve at `769 bps`, `TSLAc` at `772 bps`), but the deployed vault has been reconfigured since and the deploy list is not the live one. Never read the index from a document.
+
+B20 assets are validated via ERC-20 reads rather than bytecode checks, because they are Base Rust precompiles: `eth_getCode` returns a single `0xef` byte for a token and nothing for the factory. Note that `IndexTreasury.initialize` does gate basket entries on `code.length != 0`, which passes only because of that one-byte stub — an undocumented dependency worth remembering if B20 representation ever changes.
+
+---
+
+## Indices — a different trust model
+
+Do not carry the vault’s role assignment over. On an `IndexTreasury`:
+
+| | DividendVault | IndexTreasury |
+| --- | --- | --- |
+| Configuration, pause, rescue | Owner | **Keeper** |
+| Exclusions, dust floor | Owner | **Keeper** |
+| Buys and payouts | Keeper | Keeper |
+| Creator / coin owner | — | **No powers at all** |
+
+`owner` on a treasury is a label recording who it was created for. It gates nothing. That is deliberate: `coin` is what the payout denominator is read over, so an owner able to configure the treasury could shape or freeze its holders’ payouts.
+
+What the keeper cannot do is take custody: it may only buy basket names (or, in buyback mode, the coin), only sell the quote asset, never sell equity back, and never set payout weights — those are read from coin balances over a strictly ascending list, so no address can appear twice in a round.
+
+**Binding is self-verifying but the promise has two tiers.** A launchpad pays whoever a coin’s creator *split* names, falling back to the creator *role* only when no split is set. An ordinary launch produces the first, which the launching wallet can point back at itself at any time. `bindIsPermanent` snapshots which applied at bind; `feeRecipientNow()` re-derives it live.
+
+Clones are never upgraded. `setImplementation()` affects future clones only, so a treasury keeps the logic it was created with forever.
 
 ---
 
@@ -89,110 +118,114 @@ The B20 assets are validated via ERC-20 reads rather than normal EVM bytecode ch
 | --- | --- |
 | Chain ID | `8453` |
 | Uniswap v4 PoolManager | `0x498581fF718922c3f8e6A244956aF099B2652b2b` |
-| Uniswap Universal Router | `0x6fF5693b99212Da76ad316178A184AB56D299b43` |
+| Swap venues | Owner allowlist on the deployed vault and factory. No pinned router. |
 | Pool initialization | Intentionally not in the deploy script. |
 
-The current script requires `PRIVATE_KEY`; it optionally accepts `PROTOCOL_OWNER`, `PLATFORM_RECIPIENT`, `POOL_MANAGER`, `UNIVERSAL_ROUTER` and `MAX_GROSS_SPEND_PER_CYCLE`.
+`script/Deploy.s.sol` requires `PRIVATE_KEY`; it optionally accepts `PROTOCOL_OWNER`, `KEEPER`, `PLATFORM_RECIPIENT`, `POOL_MANAGER` and `MAX_GROSS_SPEND_PER_CYCLE`. It refuses to run unless `PROTOCOL_OWNER` is a contract and `KEEPER` differs from the deployer, unless `ALLOW_HOT_KEY_OWNER=1` is set.
 
-**Do not use an EOA as the final `PROTOCOL_OWNER`.** Use a multisig. Never commit, paste into this repository or add private keys/API secrets to a handoff document.
+Never commit or paste private keys or API secrets into this repository or into a handoff document.
 
 ---
 
-## Mainnet blockers — must fix before final deployment
+## Open constraints
 
-### 1. Raw Universal Router calldata is a custody risk — critical
+Numbered as in earlier revisions of this document so older notes still resolve. Items 1 and 6 are resolved; the rest stand.
 
-`DividendVault.buyStocks()` forwards keeper-controlled raw calldata to the Universal Router. The router address is immutable, but that does not constrain the router commands or recipient contained in calldata. A compromised keeper can potentially use router commands to move vault ETH away while satisfying a keeper-selected minimal output.
+### 1. Raw router calldata — RESOLVED, with a residual
 
-**Required fix:** replace raw router forwarding with a restricted adapter or strict calldata decoding / allowlist. Enforce route targets, `recipient == vault`, ETH input amount, expected B20 output, deadline and permitted commands. The keeper should supply typed trade parameters, not arbitrary router bytes.
+The original design forwarded keeper calldata to an immutable Universal Router, which constrained neither the router commands nor the recipient. That is gone: purchases now go through an owner-curated venue allowlist, the vault writes the spend into the calldata itself, approves exactly one leg’s input and revokes it in the same call, and judges the outcome by measured balance deltas.
+
+**Residual:** `minOut` is still keeper-supplied, so a compromised keeper can accept a poor fill at a listed venue. Bounding that is the allowlist’s job. Treat venue listing as a security decision, not a convenience one.
 
 ### 2. Spend cap is per call, not per cycle — high
 
 `maxGrossSpendPerCycle` is applied in each call to `buyStocks()`. A keeper can call it repeatedly, so it is not a calendar-hour or distribution-cycle limit.
 
-**Required fix:** track a spend epoch / rolling window on-chain and enforce the cumulative cap, or make buying callable only once for each distribution epoch.
+**Fix:** track a spend epoch or rolling window on-chain and enforce the cumulative cap, or make buying callable once per distribution epoch.
 
 ### 3. Partial-cycle abort changes payout economics — high
 
-`abortCycle()` can clear state after one or more `distributeBatch()` calls. Recipients already paid are not recorded as completed for the next cycle; remaining stock balances can enter a later cycle and be shared again.
+`abortCycle()` can clear state after one or more `distributeBatch()` calls. Recipients already paid are not recorded as completed, so remaining stock can enter a later cycle and be shared again — a silent transfer from the unpaid to the paid.
 
-**Required fix:** allow abort only when `cursor == 0`, or persist the remaining liabilities so abort cannot redivide assets already allocated in a partially executed cycle.
+`src/VaultGuardian.sol` exists to refuse exactly that call and is **deliberately not installed**; `isInstalled()` currently returns false. Note that installing it makes the guardian the vault’s `owner()`, so `emergencyWithdrawERC20` would deliver to the guardian and leave via `sweepERC20` — one extra hop, not a lost capability.
+
+**Fix:** install the guardian, or allow abort only when `cursor == 0`, or persist remaining liabilities.
 
 ### 4. Paginated snapshot is not atomic — high fairness risk
 
-`snapshotHolders(count)` reads the token’s mutable swap-and-pop holder registry across multiple transactions. Transfers during capture can change indices. The vault deduplicates seen addresses and uses a live-balance clamp, but this is not an atomic snapshot.
+`snapshotHolders(count)` reads the token’s mutable swap-and-pop registry across several transactions. Transfers during capture change indices. The vault deduplicates seen addresses and applies the live-balance clamp, but this is not an atomic snapshot.
 
-**Required fix:** for early launch, use a single-transaction snapshot only while the holder count is safely bounded. Before scaling, choose and implement a robust checkpoint/snapshot design; do not rely on the current paginated process as an atomic entitlement snapshot.
+**Fix:** while the holder count is safely bounded, prefer a single-transaction snapshot. Before scaling, implement a real checkpoint design.
 
-### 5. Hook scope is not pinned to the intended STFY pool — hardening required
+### 5. Hook scope is not pinned to the intended STFY pool — permanent
 
-`StockifyFeeHook` currently checks only that `currency0` is native ETH. It does not enforce `currency1 == STFY`, pool fee or tick spacing.
+`StockifyFeeHook` checks only that `currency0` is native ETH. It does not enforce `currency1 == STFY`, the pool fee or the tick spacing, so any v4 pool naming this hook forwards 3% of its ETH volume to the vault.
 
-**Required fix:** make the intended STFY token and pool configuration immutable constructor values, then reject all other `PoolKey`s.
+This is not loss-of-funds — the fee reaches the vault either way — but it means the hook cannot be presented as scoped to one market. **The hook is deployed and immutable, so this cannot be narrowed.** A future generation would need a new hook, a new CREATE2 mine and a new pool.
 
-### 6. Production role assignment needs deployment-script support
+### 6. Deployment role assignment — RESOLVED
 
-The script initially enables the broadcaster as keeper and only afterward transfers ownership. It does not accept a dedicated `KEEPER` address.
+The script now accepts a dedicated `KEEPER`, sets it before transferring ownership, and refuses a deployer-owned or deployer-keyed deployment unless `ALLOW_HOT_KEY_OWNER=1` is passed explicitly.
 
-**Required fix:** add an explicit `KEEPER` constructor/deployment environment value, set it before ownership transfer, and avoid leaving the deployer hot key active. Final owner and platform recipient should be deliberate multisig addresses.
+### 7. The live owner is an externally-owned account — high
 
----
+Both `DividendVault` and `IndexFactory` are owned by the same EOA. Every document in this repository was written assuming a multisig, and the deploy script requires one by default, so the live deployment used the explicit override.
 
-## Operational constraints that are not loss-of-funds bugs
+That key can rotate the keeper, replace the index, curate venues, change the eligibility threshold and set reward exclusions, and can `emergencyWithdrawERC20` all ERC-20 custody — including stock already bought for holders — to itself. On the factory side it can also set the platform fee and recipient and repoint launchpads.
 
-- The keeper supplied in this repository skips a full purchase if any active B20 asset has no complete route. Hook ETH remains in the vault for a later attempt; it is not converted or distributed as another asset.
-- There are no public STFY pool parameters, liquidity or price in the deployment script. A separate, deliberate transaction must initialize and seed the pool.
-- The owner has no direct withdrawal path for non-fee ETH. The owner **does** have `emergencyWithdrawERC20`, which can retrieve all ERC-20 custody including B20 dividend assets. This is an explicit governance trust assumption.
-- The owner controls the eligibility threshold and `rewardsExcluded`; a threshold change is reflected for an account when it next transfers or its exclusion is changed.
+**Fix:** move both to a multisig via `transferOwnership`. This is the highest-value single operational change available.
 
----
+### 8. One key may be both keeper and index administrator — verify
 
-## Suggested safe release sequence
+`keeper-indices` assumes the vault keeper runs on the same account. If that is still true, one key is simultaneously the vault’s execution role and the index treasuries’ **administrative** role (exclusions, dust floor, pause, rescue, ownership).
 
-1. Implement the six blocker fixes above and add focused regression tests for each one.
-2. Run an independent Solidity security audit and remediate its findings.
-3. Deploy and exercise the full system on a Base test environment or controlled fork:
-   - hook fee on both trade directions;
-   - B20 purchase adapter restrictions;
-   - failed B20 receiver-policy payout;
-   - holder snapshot under transfers;
-   - partial payout recovery;
-   - owner / keeper rotation.
-4. Select final multisig owner, platform recipient and dedicated keeper addresses.
-5. Deploy token, vault and hook together; verify source and publish addresses.
-6. Configure the intended STFY pool, initial price and LP position in a separate transaction.
-7. Validate every active B20 route and receiver policy with production-sized quotes before enabling the keeper.
-8. Start with a conservative, **on-chain cumulative** spend cap and monitoring/alerting for keeper buys and payout failures.
-9. Publish contract addresses, operator policy and the first completed distribution transaction on the website.
+**Fix:** confirm the current assignment on-chain and separate the two if they are shared.
 
 ---
 
-## Verification performed at handoff
+## Operational constraints that are not bugs
+
+- Both keepers skip work rather than guess. The vault keeper skips a full purchase if any active B20 asset has no complete route, or if any entry’s decimals cannot be read; hook ETH stays in the vault for a later attempt.
+- The owner has no direct withdrawal path for non-fee ETH. It **does** have `emergencyWithdrawERC20`.
+- A threshold change is reflected for an account when it next transfers or its exclusion is changed.
+- Index rounds and buys are gated on dollar value, so a quiet treasury will correctly appear to do nothing for long stretches.
+
+---
+
+## Verification
 
 ```text
-forge test
-15 passed, 0 failed
+forge test --no-match-path 'test/*fork*'
+139 passed, 0 failed
 
-cd web && npm run build
-passed; /docs prerenders successfully
+web:  npx tsc --noEmit && npx next build     passes, 28 routes
+      npx tsx scripts/check-index-calldata.ts  passes
+keeper, keeper-indices:  npx tsc --noEmit    passes
 ```
 
-Passing tests are not a replacement for the blocker fixes or an independent audit.
+`test/BuyImpact.t.sol` is a fork test and additionally requires `BASE_RPC`; without it the suite reports one failure in `setUp`.
+
+Passing tests are not a replacement for the open constraints above or an independent audit.
 
 ---
 
 ## Relevant files
 
 ```text
-src/StockifyToken.sol             Token and holder registry
-src/StockifyFeeHook.sol           Uniswap v4 hook
-src/DividendVault.sol           Fee custody, B20 acquisition and payout state machine
-script/Deploy.s.sol             Base deployment script
-test/StockifyToken.t.sol          Token tests
-test/DividendVault.t.sol        Vault tests
-keeper/src/keeper.ts            Off-chain execution loop
-keeper/src/uniswap.ts           Quote / route construction
-web/app/docs/page.tsx           Public protocol docs
-web/app/protocol/page.tsx       Public protocol summary
-README.md                       Developer and repository overview
+src/StockifyToken.sol            Token and holder registry
+src/StockifyFeeHook.sol          Uniswap v4 hook
+src/DividendVault.sol            Fee custody, B20 acquisition and payout state machine
+src/StockifyRouter.sol           Public buy/sell router for the ETH/STFY pool
+src/VaultGuardian.sol            Optional abort rail (not installed)
+src/indices/IndexFactory.sol     Mints one treasury per launch; venue/keeper/fee config
+src/indices/IndexTreasury.sol    Harvest, swap, distribute or buyback-and-burn
+script/Deploy.s.sol              Base deployment script
+test/                            Contract tests, including gas benchmarks
+keeper/src/keeper.ts             Vault execution loop
+keeper/src/route.ts              Self-built Slipstream route
+keeper/src/velora.ts             Aggregator route construction
+keeper-indices/src/keeper.ts     Indices execution loop
+web/lib/                         Chain readers: rpc, vault, indices, ledger, decimals
+web/app/docs/page.tsx            Public protocol docs
+README.md                        Repository overview
 ```
