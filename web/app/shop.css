@@ -459,7 +459,11 @@
 .sh-pick-btn.empty .sym { color: var(--muted); font-weight: 600; }
 .sh-pick-btn.empty { border-style: dashed; }
 .sh-pick-btn .sym { font-size: 0.95rem; font-weight: 700; display: block; line-height: 1.2; }
-.sh-pick-btn .sym.tick { font-family: var(--font-mono); letter-spacing: -0.01em; }
+/* Mono on the trigger too, so the row that produced it is recognisable in what
+   replaced it — and every row is a ticker now, so this is no longer a variant. */
+.sh-pick-btn .sym { font-family: var(--font-mono); letter-spacing: -0.01em; }
+/* Except the prompt, which is a sentence rather than a ticker. */
+.sh-pick-btn.empty .sym { font-family: inherit; letter-spacing: normal; }
 .sh-pick-btn .nm { font-size: 0.76rem; color: var(--muted); display: block; }
 .sh-pick-btn .chev { margin-left: auto; color: var(--muted); transition: transform .15s; flex: none; }
 .sh-pick-btn .chev.up { transform: rotate(180deg); }
@@ -477,18 +481,27 @@
 .sh-pick-grp .lab span:first-child { font-family: var(--font-mono); font-size: 0.62rem; font-weight: 700;
   letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
 .sh-pick-grp .lab .rule { flex: 1; height: 1px; background: var(--line); }
-.sh-pick-grp ul { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; grid-template-columns: 1fr 1fr; }
-.sh-pick-grp.equity ul { grid-template-columns: repeat(4, 1fr); }
+/* One treatment for every group. The tokens used to be a two-column list of
+   left-aligned rows while the equities were a four-column grid of centred
+   tickers, on the theory that shares and tokens are different kinds of thing.
+   On screen it read as two half-finished pickers stacked on top of each other —
+   and on this rail they are the same thing: something you hand over to pay. */
+.sh-pick-grp ul { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; grid-template-columns: repeat(4, 1fr); }
 .sh-pick-grp button {
-  display: flex; align-items: center; gap: 8px; width: 100%; font: inherit; text-align: left; cursor: pointer;
-  background: none; border: 1px solid transparent; border-radius: 11px; padding: 7px 8px; color: var(--ink);
+  display: flex; flex-direction: column; align-items: center; gap: 4px; width: 100%; font: inherit;
+  text-align: center; cursor: pointer;
+  background: none; border: 1px solid transparent; border-radius: 11px; padding: 9px 4px; color: var(--ink);
 }
 .sh-pick-grp button:hover { background: var(--cream); }
 .sh-pick-grp button.on { border-color: var(--lime-deep); background: rgba(0, 82, 255, .14); }
-.sh-pick-grp.equity button { flex-direction: column; gap: 4px; padding: 9px 4px; text-align: center; }
-.sh-pick-grp .s { font-size: 0.78rem; font-weight: 600; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sh-pick-grp.equity .s { font-family: var(--font-mono); font-size: 0.72rem; font-weight: 700; }
-.sh-pick-grp .p { font-family: var(--font-mono); font-size: 0.66rem; color: var(--muted); display: block; }
+/* Both halves are read as tickers now, so both are set in mono. */
+.sh-pick-grp .s { font-family: var(--font-mono); font-size: 0.72rem; font-weight: 700; display: block;
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Truncates for the same reason `.s` does: this line carries a balance when a
+   wallet is connected and a NAME when one is not, and "The Stonks Exchange" is
+   four times the width of the column it has to fit in. */
+.sh-pick-grp .p { font-family: var(--font-mono); font-size: 0.66rem; color: var(--muted); display: block;
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .sh-send { background: var(--cream); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-top: 16px; }
 .sh-send .k { font-size: 0.7rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
@@ -589,7 +602,7 @@
   .sh-hero-side .grid { grid-template-columns: 1fr 1fr; }
   .sh-panel { padding: 18px; }
   .sh-feat, .sh-checklist { grid-template-columns: 1fr; }
-  .sh-pick-grp.equity ul { grid-template-columns: repeat(3, 1fr); }
+  .sh-pick-grp ul { grid-template-columns: repeat(3, 1fr); }
   .sh-admin-stats { grid-template-columns: 1fr 1fr; }
   /* Three columns on a phone give the third label two lines and its value two
      more. It is the most interesting of the three, so it takes the full width

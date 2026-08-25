@@ -11,11 +11,12 @@ import { StockifyMark } from "../site-chrome";
  * scrolling menu — seven logos are read at a glance where seven lines of text
  * are not.
  *
- * The groups are typeset differently on purpose. Stocks are stocks: they have
- * tickers, and a ticker belongs in mono next to a balance. Everything else
- * leads with its mark. Flattening both into one uniform grid would lose the one
- * genuinely surprising thing on this screen — that the Apple stock a dividend
- * paid out buys an Apple gift card.
+ * Both groups are typeset the same way: a grid of marks with the symbol set as
+ * a ticker underneath. They were split for a while — shares as centred tickers,
+ * tokens as a two-column list of rows — on the theory that the two are
+ * different kinds of thing. They are, but not on this screen: here each one is
+ * only something you hand over to pay, and the split read as two half-finished
+ * pickers stacked on each other.
  *
  * What is shown beside each entry is the wallet's own BALANCE, not a price. A
  * price is a fact about the market; on this screen the only question is which
@@ -106,12 +107,6 @@ export function TokenPicker({
   // No `?? all[0]` fallback: showing the first entry when none is chosen is
   // exactly how a buyer ends up paying in something they never picked.
   const selected = value ? all.find((t) => t.address.toLowerCase() === value.toLowerCase()) : undefined;
-  // A ticker stays in mono on the trigger too, so the row that produced it is
-  // recognisable in what replaced it.
-  const selectedIsEquity = groups.some(
-    (g) => g.kind === "equity" && g.tokens.some((t) => t.address === selected?.address),
-  );
-
   // Escape closes, and so does a click that lands anywhere else. Both are
   // reflexes; a popover that only closes by re-clicking its trigger feels stuck.
   useEffect(() => {
@@ -148,7 +143,7 @@ export function TokenPicker({
           <>
             <PayMark token={selected} size={28} />
             <span style={{ minWidth: 0, flex: 1 }}>
-              <span className={`sym${selectedIsEquity ? " tick" : ""}`}>{selected.symbol}</span>
+              <span className="sym">{selected.symbol}</span>
               <span className="nm">{selected.name}</span>
             </span>
           </>
@@ -200,7 +195,7 @@ export function TokenPicker({
                         aria-pressed={on}
                         title={t.name}
                       >
-                        <PayMark token={t} size={group.kind === "equity" ? 26 : 22} />
+                        <PayMark token={t} size={26} />
                         <span style={{ minWidth: 0, flex: 1 }}>
                           <span className="s">{t.symbol}</span>
                           {/* The balance where a price would be. Before a wallet
