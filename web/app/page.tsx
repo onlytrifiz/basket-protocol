@@ -48,6 +48,12 @@ const products = [
     line: "Get info about any B20 stock",
     copy: "Supply, markets and how far each one trades from the share it represents.",
   },
+  {
+    name: "Shop",
+    href: "/shop",
+    line: "Spend the stock you were paid in",
+    copy: "Gift cards, eSIM data and mobile top-ups across 2,000+ brands, in one transaction on Base.",
+  },
 ] as const;
 
 const mechanics = [
@@ -128,19 +134,19 @@ export default async function Home() {
             B20 stock is — the section above is the premise and this is the consequence. */}
         <section className="section wrap" id="products">
           <div className="section-head">
-            <p className="eyebrow">THREE WAYS IN</p>
+            <p className="eyebrow">FOUR WAYS IN</p>
             <h2>The hub for B20 stocks on Base.</h2>
             <p>
-              One protocol that pays them out, one that turns any launch&apos;s fees into them, and one
-              place to look them up.
+              One protocol that pays them out, one that turns any launch&apos;s fees into them, one
+              place to look them up — and one place to spend them.
             </p>
           </div>
           <div className="product-grid">
             {products.map((product) => (
               <Link className="product-card" href={product.href} key={product.name}>
-                {/* The NAME leads. It was the small label above the description, which made three
-                    cards read as three sentences that happened to be filed under something — and
-                    the thing a visitor has to leave with is what the three things are called. */}
+                {/* The NAME leads. It was the small label above the description, which made the
+                    cards read as sentences that happened to be filed under something — and the
+                    thing a visitor has to leave with is what these things are called. */}
                 <strong className="product-name">{product.name}</strong>
                 <span className="product-line">{product.line}</span>
                 <p>{product.copy}</p>
