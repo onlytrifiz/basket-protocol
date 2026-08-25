@@ -98,7 +98,11 @@
   --r-lg: 18px;
   --r-xl: 26px;
   --r-pill: 999px;
-  --maxw: 1120px;
+  /* The site's one content width. Everything is measured off it — the nav pill,
+     `.wrap`, the hero grid, the footer — so widening the header means widening
+     this, and the header stays flush with the sections below it by construction
+     rather than by coincidence. */
+  --maxw: 1200px;
   --nav-h: 62px;
 
   --mono-stack: var(--font-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -1292,6 +1296,25 @@ code, kbd, samp, pre {
   padding: 54px 24px;
 }
 .footer-inner p { color: var(--ink-3); font-size: .78rem; line-height: 1.58; margin: 16px 0 0; max-width: 270px; }
+/* Reference links, in the brand column. Kept as pills rather than as another
+   list so the footer's two columns stay legibly different things: this one is
+   who we are and where to read about it, the other is where to go. */
+.footer-icons { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 20px; }
+.footer-icons a {
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  color: var(--ink-2);
+  display: inline-flex;
+  font-size: .78rem;
+  font-weight: 500;
+  gap: 7px;
+  padding: 7px 14px 7px 11px;
+  transition: background .16s var(--ease), border-color .16s var(--ease), color .16s var(--ease);
+}
+.footer-icons a:hover { background: var(--surface-2); border-color: var(--line-2); color: var(--ink); }
+.footer-icons svg { height: 15px; width: 15px; }
+
 .footer-links { display: flex; flex-direction: column; gap: 10px; text-align: right; }
 .footer-links span { color: var(--ink-3); font-size: .62rem; letter-spacing: .13em; margin-bottom: 3px; text-transform: uppercase; }
 .footer-links a { font-size: .81rem; font-weight: 500; }

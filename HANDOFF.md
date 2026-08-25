@@ -22,8 +22,13 @@ This document is for whoever operates or extends the system. It describes what i
 | Indices keeper | `keeper-indices/` | Runs harvest / swap / distribute (or burn) for every treasury the factory has minted. |
 | Deploy script | `script/Deploy.s.sol` | Deploys token, vault and CREATE2-mined hook. It deliberately does not initialize a pool. |
 | Web app | `web/` | Next.js public site: market, distributions, indices, protocol and public documentation pages. |
+| Shop | `web/app/shop/` | Storefront for gift cards, eSIM and top-ups, fulfilled by CryptoRefills and paid for in distributed stock. No contract; see below. |
 
 Public documentation is at `/docs`. It reads deployed addresses from the same configuration the application is built against, so the two cannot disagree.
+
+### The shop, in one paragraph
+
+`/shop` sells gift cards, eSIM data and mobile top-ups against the tokenized stock the vault distributes. CryptoRefills fulfils and is the system of record; what this repository owns is the payment. Because CryptoRefills settles in USDC on Base — the chain this protocol already runs on — an order is paid by a single **exact-output** Velora swap that delivers the exact figure to the order's own deposit address, with no bridge and no custody. `STFY` is the one exception: it is sold through `StockifyRouter` into ETH first, so the sale pays the 3% hook fee like any other and the ETH then pays the order, which is two signatures. `app/api/shop/pay/route.ts` is where the allowlist, the pinned destination and the receiver check live; read that file before changing anything about how money moves. Ordering refuses with a 503 when `CRYPTOREFILLS_PARTNER_ID` is unset, because the supplier does not enforce the header and an unattributed sale earns nothing with nothing in the logs to show for it.
 
 ---
 

@@ -1,0 +1,598 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   Shop — the storefront.
+
+   Ported from a sibling shop and re-pointed at this site's tokens rather than
+   restyled by hand: the bridge below is the whole of the palette change, so the
+   layout that was already tested stays byte-for-byte what it was.
+
+   Two rules from `globals.css` are carried over deliberately.
+
+   LIME IS RESERVED. It may only appear where value reaches a holder — a
+   dividend amount, a settled distribution, the lit ring segment. A shop is
+   where value LEAVES, so nothing in this file is lime and every accent maps to
+   Base blue, including the pay button.
+
+   BRAND ARTWORK IS NOT OURS TO RECOLOUR. Gift-card logos ship with their own
+   backdrops and keep them — a Steam card repainted to match this palette is a
+   Steam card nobody recognises. They are framed instead, in our frames.
+
+   Loaded from app/shop/layout.tsx, so none of it reaches the protocol pages.
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.wrap,
+.sh-page,
+.sh-cats,
+.sh-hero {
+  /* ── the bridge ──────────────────────────────────────────────────────────
+     Left as the names the ported rules already use, defined in this site's
+     tokens. Scoped to the shop's own roots rather than declared on `:root`, so
+     nothing outside this section can pick them up — `--lime` in particular is a
+     real token elsewhere on this site, and it means something there that it must
+     not mean here. `.wrap` is safe to hang this on: it exists only in this file
+     and is used only by shop markup. */
+  --cream: var(--paper);
+  --card: var(--surface);
+  --sand: var(--surface-sunken);
+  --muted: var(--ink-3);
+  --forest: var(--navy);
+  /* Both accents are blue. See the note above about lime. */
+  --lime: var(--chip);
+  --lime-deep: var(--link);
+  --font-display: var(--font-ui);
+}
+
+/* ── scaffolding ──────────────────────────────────────────────────────────
+   The few generic classes the ported markup expects that this site's globals do
+   not carry. `.wrap`, `.section`, `.steps-grid` and `.step-card` are NOT among
+   them and must never be redefined here: globals owns all four, and a copy of
+   `.wrap` at a different max-width is exactly how this shop ended up 40px wider
+   per side than the header above it. Check globals before adding anything. */
+
+.lead { color: var(--ink-2); font-size: 1.02rem; line-height: 1.55; }
+.muted { color: var(--ink-3); }
+.mono { font-family: var(--font-mono); }
+.row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.err { color: #b23b3b; }
+
+/* Buttons are `globals.css`'s `.button` / `.button-ink` / `.button-ghost`. This
+   file used to carry copies of them under `.btn`, which looked identical and
+   was one edit away from not being — the ported markup was rewritten to ask for
+   the real ones instead. Only the disabled state is added, because the shop
+   spends most of its time waiting for a price. */
+.button:disabled { cursor: default; opacity: .55; transform: none; }
+
+/* ── page scaffolding ────────────────────────────────────────── */
+.sh-page { padding-top: 6px; padding-bottom: 60px; }
+.sh-crumbs { font-size: 0.82rem; color: var(--muted); display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sh-crumbs a:hover { color: var(--ink); }
+.sh-crumbs .sep { color: var(--line); }
+.sh-crumbs .now { color: var(--ink); }
+
+.sh-h1 { font-size: clamp(1.9rem, 4vw, 2.8rem); line-height: 1.03; margin: 12px 0 0; }
+.sh-h2 { font-size: clamp(1.4rem, 2.6vw, 1.9rem); }
+.sh-sub { color: var(--muted); font-size: 0.96rem; line-height: 1.55; margin: 10px 0 0; }
+
+/* ── shop bar: search, sections, country ─────────────────────── */
+/* A second row under the site nav rather than more items inside it. The nav
+   answers "which product am I in"; this answers "where in the shop", and the
+   country control belongs here because it changes what is on sale, not where
+   you are. */
+.sh-bar { display: flex; align-items: center; gap: 14px; padding: 4px 0 18px; }
+.sh-search { position: relative; flex: 1; min-width: 0; max-width: 460px; }
+.sh-search svg { position: absolute; left: 15px; top: 50%; transform: translateY(-50%); color: var(--muted); pointer-events: none; }
+.sh-search input {
+  width: 100%; font: inherit; font-size: 0.92rem; color: var(--ink);
+  background: var(--card); border: 1px solid var(--line); border-radius: 999px;
+  padding: 11px 16px 11px 42px; outline: none; transition: border-color .12s, box-shadow .12s;
+}
+.sh-search input:focus { border-color: var(--lime-deep); box-shadow: 0 0 0 3px rgba(0, 82, 255, .16); }
+.sh-search input::placeholder { color: var(--muted); }
+
+/* type-ahead */
+.sh-hits {
+  position: absolute; z-index: 60; top: calc(100% + 8px); left: 0; width: 100%;
+  background: var(--card); border: 1px solid var(--line); border-radius: 16px;
+  box-shadow: 0 18px 44px rgba(13, 29, 59, .12); padding: 6px; list-style: none; margin: 0;
+  max-height: 380px; overflow-y: auto;
+}
+.sh-hit { display: flex; align-items: center; gap: 11px; padding: 8px 10px; border-radius: 11px; color: inherit; }
+.sh-hit:hover, .sh-hit.on { background: var(--cream); }
+.sh-hit .art { flex: none; width: 46px; height: 30px; border-radius: 7px; border: 1px solid var(--line); display: grid; place-items: center; grid-template-rows: minmax(0, 1fr); grid-template-columns: minmax(0, 1fr); overflow: hidden; padding: 3px; }
+.sh-hit .art img { width: 100%; height: 100%; object-fit: contain; }
+.sh-hit .nm { font-size: 0.88rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sh-hit .rg { font-family: var(--font-mono); font-size: 0.72rem; color: var(--muted); }
+
+.sh-bar-links { display: flex; align-items: center; gap: 14px; margin-left: auto; }
+.sh-bar-links a { font-size: 0.9rem; color: var(--muted); font-weight: 500; }
+.sh-bar-links a:hover { color: var(--ink); }
+.sh-bar-links a.on { color: var(--ink); }
+
+/* country picker */
+.sh-country { position: relative; flex: none; }
+.sh-country-btn {
+  display: inline-flex; align-items: center; gap: 8px; font: inherit; font-size: 0.88rem; font-weight: 600;
+  background: var(--sand); border: 1px solid var(--line); border-radius: 999px; padding: 8px 12px; cursor: pointer;
+  color: var(--ink); max-width: 200px;
+}
+.sh-country-btn:hover { border-color: var(--lime-deep); }
+.sh-country-btn:disabled { opacity: 0.6; cursor: default; }
+.sh-country-btn .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sh-country-btn .cd { display: none; font-family: var(--font-mono); }
+.sh-country-btn .chev { transition: transform .12s; }
+.sh-country-btn .chev.up { transform: rotate(180deg); }
+.sh-country-pop {
+  position: absolute; z-index: 60; top: calc(100% + 8px); right: 0; width: 280px;
+  background: var(--card); border: 1px solid var(--line); border-radius: 16px; overflow: hidden;
+  box-shadow: 0 18px 44px rgba(13, 29, 59, .14);
+}
+.sh-country-pop .filter { padding: 8px; border-bottom: 1px solid var(--line); }
+.sh-country-pop .filter input {
+  width: 100%; font: inherit; font-size: 0.88rem; background: var(--cream); border: 1px solid var(--line);
+  border-radius: 10px; padding: 9px 11px; outline: none; color: var(--ink);
+}
+.sh-country-pop .filter input:focus { border-color: var(--lime-deep); }
+.sh-country-list { list-style: none; margin: 0; padding: 6px; max-height: 300px; overflow-y: auto; }
+.sh-country-list button {
+  display: flex; align-items: center; gap: 10px; width: 100%; font: inherit; font-size: 0.88rem; text-align: left;
+  background: none; border: none; border-radius: 10px; padding: 8px 10px; cursor: pointer; color: var(--ink);
+}
+.sh-country-list button:hover, .sh-country-list button.on { background: var(--cream); }
+.sh-country-list button.picked { font-weight: 700; }
+.sh-country-list .code { margin-left: auto; font-family: var(--font-mono); font-size: 0.72rem; color: var(--muted); }
+.sh-empty { padding: 22px; text-align: center; color: var(--muted); font-size: 0.88rem; }
+
+/* ── storefront hero ─────────────────────────────────────────── */
+/* The hero is `globals.css`'s `.hero-card` band and `.hero-inner` grid — the
+   same one the home page opens with — so almost nothing is needed here. What
+   was here instead was a rounded card on a lime-turned-blue gradient, with a
+   fan of tilted brand cards and a row of stat tiles inside it. That is a
+   different site's hero wearing this site's colours, and it read as one.
+
+   Only the padding differs: the home page opens on nothing, this one opens
+   under the shop bar, and 86px below it left a hole. */
+/* Depth, in this site's own vocabulary rather than a borrowed card.
+   `.hero-card` ships one bloom — chip-blue, from above the fold, centred — and
+   on the home page that is enough because a dark swap panel carries the weight
+   on the right. Here the right column is white brand artwork on a pale ground,
+   so the band needs to carry itself: a second bloom in `--sky` rises from
+   behind the headline, and the whole thing settles into the page colour at the
+   bottom so the closing hairline dissolves instead of ruling a box.
+
+   Every stop is a token or a mix of one. Nothing here is a new colour. */
+.sh-hero-band {
+  background:
+    radial-gradient(74% 108% at 6% 96%, color-mix(in srgb, var(--sky) 58%, transparent) 0%, transparent 58%),
+    radial-gradient(58% 84% at 84% 4%, color-mix(in srgb, var(--chip) 84%, transparent) 0%, transparent 60%),
+    radial-gradient(120% 78% at 50% -18%, color-mix(in srgb, var(--chip) 62%, transparent) 0%, transparent 62%),
+    linear-gradient(178deg, var(--surface-2) 0%, var(--surface-2) 38%, var(--paper) 100%);
+}
+
+.sh-hero { padding-top: 34px; padding-bottom: 52px; align-items: start; }
+/* `.hero-inner` centres its two columns, which is right on the home page where
+   the swap panel is about as tall as the copy. Here the right column is a
+   six-tile shelf and the copy floated in the middle of it, starting a third of
+   the way down the page. Both columns start at the top instead. */
+.sh-hero .hero-copy h1 {
+  /* The breaks are chosen here with `<br>`, so the 11ch clamp that shapes the
+     home page's headline can only get in the way. */
+  max-width: none;
+}
+
+/* what you pay with */
+.sh-paywith { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 20px 0 0; }
+.sh-paywith .k { font-size: 0.68rem; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); }
+.sh-paywith .marks { display: flex; align-items: center; gap: 6px; }
+/* Framed by what they are, not by their tag: the equities are images, the cash
+   legs are inline SVG and STFY is the site's own render, and a rule written for
+   `img` left three of the six unframed. */
+.sh-paywith .marks > * { display: inline-flex; width: 25px; height: 25px; border-radius: 50%; background: var(--card); border: 1px solid var(--line); overflow: hidden; }
+.sh-paywith .marks img, .sh-paywith .marks svg { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+.sh-paywith .more { font-size: 0.76rem; color: var(--muted); }
+
+
+/* The shelf, as a panel.
+   The home page balances its hero with a dark swap card on the right; this one
+   had white brand artwork floating on a pale wash, which left the whole side of
+   the band with nothing holding it. A surface card is the same move in the same
+   place — and it frames the artwork, which is the one thing on this page that
+   is not ours to restyle. */
+.sh-hero-side {
+  min-width: 0; background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--r-xl); box-shadow: var(--shadow-2); padding: 22px;
+}
+.sh-hero-side h2 { font-size: 1.05rem; display: flex; align-items: center; gap: 8px; }
+.sh-hero-side .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 16px; }
+
+/* ── brand tiles ─────────────────────────────────────────────── */
+/* min-width:0 is what lets the label below actually truncate: a grid item
+   defaults to min-content, so one unbreakable range label — "Libon $5 – Libon
+   $10 + $1 Bonus" — widens its whole column and pushes the row off the page. */
+.sh-tile { display: block; color: inherit; min-width: 0; }
+.sh-tile .art {
+  position: relative; aspect-ratio: 8 / 5; display: grid; place-items: center; padding: 14px; overflow: hidden;
+  /* THE `minmax(0, …)` IS THE WHOLE FIX. An auto grid row takes min-content as
+     its floor, so this row grew to the image's natural height (125px) inside a
+     frame with 114px of room — and `place-items: center` then centred the image
+     in the ROW, not in the frame, which is why every card sat low and clipped
+     at the bottom. Zeroing the floor lets the row be the frame. */
+  grid-template-rows: minmax(0, 1fr); grid-template-columns: minmax(0, 1fr);
+  background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+  transition: border-color .15s, transform .12s, box-shadow .15s;
+}
+.sh-tile:hover .art { border-color: var(--lime-deep); transform: translateY(-2px); box-shadow: 0 14px 30px rgba(13, 29, 59, .08); }
+/* `width/height: 100%` with `object-fit: contain`, never `max-width/max-height`.
+   The max- pair reads as the safer spelling and is not: these boxes take their
+   height from `aspect-ratio`, so the percentage in `max-height` resolves
+   against an indefinite height and is dropped. Only the width constraint then
+   applies, and a 700x444 card image comes out 11px taller than the space it has
+   — overflowing the bottom padding and sitting visibly low in its frame.
+   `object-fit: contain` letterboxes inside the box it is given and centres what
+   is left, which is what these frames were always meant to do. */
+.sh-tile .art img { width: 100%; height: 100%; object-fit: contain; }
+.sh-tile .art .fallback { font-family: var(--font-display); font-weight: 600; font-size: 0.95rem; text-align: center; color: var(--ink); }
+.sh-tile .sold {
+  position: absolute; top: 8px; right: 8px; background: rgba(13, 29, 59, .86); color: var(--cream);
+  font-size: 0.58rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; border-radius: 999px; padding: 3px 8px;
+}
+.sh-tile .nm { margin-top: 9px; font-size: 0.88rem; font-weight: 600; line-height: 1.25; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* One line, like the name above it. Top-up operators ship range labels as long
+   as "PIN USA 19.99 USD – PIN USA 79.99 USD", which wrapped to three lines and
+   left the grid rows ragged. */
+.sh-tile .rg { font-family: var(--font-mono); font-size: 0.76rem; color: var(--muted); margin-top: 1px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.sh-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 16px; }
+
+/* a rail scrolls sideways rather than reflowing: a row of cards reads as a
+   shelf, and a wrapped grid of six categories does not */
+.sh-rail { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(168px, 1fr); gap: 14px;
+  overflow-x: auto; padding-bottom: 6px; scroll-snap-type: x proximity;
+  scrollbar-width: thin; scrollbar-color: var(--line) transparent; }
+.sh-rail > * { scroll-snap-align: start; }
+.sh-rail::-webkit-scrollbar { height: 7px; }
+.sh-rail::-webkit-scrollbar-thumb { background: var(--line); border-radius: 999px; }
+.sh-rail::-webkit-scrollbar-track { background: transparent; }
+
+.sh-rail-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 14px; }
+.sh-rail-head h2 { font-size: 1.35rem; }
+.sh-rail-head .all { font-size: 0.86rem; font-weight: 600; color: var(--lime-deep); flex: none; }
+.sh-rail-head .all:hover { color: var(--forest); }
+.sh-section { padding: 26px 0; }
+
+/* ── category strip ──────────────────────────────────────────── */
+.sh-cats { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background: var(--card); margin-top: 30px; }
+.sh-cats ul { list-style: none; margin: 0; padding: 14px 0; display: grid; grid-auto-flow: column; grid-auto-columns: max-content;
+  gap: 4px; overflow-x: auto; scrollbar-width: none; }
+.sh-cats ul::-webkit-scrollbar { display: none; }
+.sh-cats a { display: flex; flex-direction: column; align-items: center; gap: 7px; width: 104px; padding: 10px 6px;
+  border-radius: 12px; color: var(--ink); text-align: center; }
+.sh-cats a:hover { background: var(--cream); }
+.sh-cats a:hover .m { border-color: var(--lime-deep); background: var(--lime); color: var(--forest); }
+.sh-cats .m { display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px;
+  background: var(--sand); border: 1px solid var(--line); color: var(--forest); transition: background .15s, border-color .15s; }
+.sh-cats .t { font-size: 0.72rem; font-weight: 500; line-height: 1.25; }
+
+/* filter pills */
+.sh-pills { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 6px; scrollbar-width: none; }
+.sh-pills::-webkit-scrollbar { display: none; }
+.sh-pill { flex: none; font-size: 0.85rem; font-weight: 600; border-radius: 999px; padding: 8px 14px;
+  background: var(--card); border: 1px solid var(--line); color: var(--ink); white-space: nowrap; }
+.sh-pill:hover { border-color: var(--lime-deep); }
+.sh-pill.on { background: var(--ink); border-color: var(--ink); color: var(--cream); }
+.sh-pill .n { font-family: var(--font-mono); font-size: 0.72rem; opacity: 0.6; margin-left: 5px; }
+
+/* ── product page ────────────────────────────────────────────── */
+.sh-product { display: grid; grid-template-columns: 1fr 396px; gap: 40px; align-items: start; margin-top: 20px; }
+.sh-art {
+  aspect-ratio: 16 / 9; max-width: 560px; display: grid; place-items: center; padding: 34px; overflow: hidden;
+  grid-template-rows: minmax(0, 1fr); grid-template-columns: minmax(0, 1fr);
+  background: var(--card); border: 1px solid var(--line); border-radius: 22px;
+}
+.sh-art img { width: 100%; height: 100%; object-fit: contain; }
+.sh-meta { font-size: 0.9rem; color: var(--muted); margin: 10px 0 0; }
+.sh-chips { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 14px; list-style: none; padding: 0; }
+.sh-chips li { font-size: 0.74rem; font-weight: 600; color: var(--muted); background: var(--sand);
+  border: 1px solid var(--line); border-radius: 999px; padding: 4px 11px; }
+
+/* supplier prose, folded away */
+.sh-prose { max-width: 640px; margin-top: 34px; }
+.sh-fold { border-bottom: 1px solid var(--line); padding: 14px 0; }
+.sh-fold summary { display: flex; align-items: center; justify-content: space-between; gap: 14px; cursor: pointer;
+  list-style: none; font-family: var(--font-display); font-weight: 600; font-size: 1.08rem; }
+.sh-fold summary::-webkit-details-marker { display: none; }
+.sh-fold summary .chev { flex: none; color: var(--muted); transition: transform .15s; }
+.sh-fold[open] summary .chev { transform: rotate(180deg); }
+.sh-fold .body, .sh-note { color: var(--ink-2); font-size: 0.96rem; line-height: 1.65; }
+.sh-fold .body { margin-top: 12px; }
+.sh-fold .body p, .sh-note p { margin: 0 0 10px; }
+.sh-fold .body p:last-child, .sh-note p:last-child { margin-bottom: 0; }
+.sh-fold .body ul, .sh-fold .body ol { padding-left: 20px; margin: 8px 0 10px; }
+.sh-fold .body li { margin: 5px 0; }
+.sh-fold .body a, .sh-note a { color: var(--lime-deep); text-decoration: underline; }
+.sh-fold .body h3, .sh-fold .body h4 { font-family: var(--font-ui); font-size: 1rem; font-weight: 600; margin: 16px 0 6px; color: var(--ink); }
+.sh-note { background: var(--card); border: 1px solid var(--line); border-left: 3px solid var(--lime-deep);
+  border-radius: 12px; padding: 16px 18px; margin-bottom: 24px; }
+.sh-note .k { display: block; font-size: 0.66rem; font-weight: 700; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--lime-deep); margin-bottom: 8px; }
+
+/* ── panels: buy, pay, checkout ──────────────────────────────── */
+.sh-panel { background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 22px; }
+.sh-panel + .sh-panel { margin-top: 16px; }
+.sh-panel h2 { font-size: 1.25rem; }
+.sh-panel h3 { font-family: var(--font-ui); font-size: 0.82rem; font-weight: 700; letter-spacing: 0.02em; }
+.sh-sticky { position: sticky; top: 96px; }
+
+.sh-legend { font-family: var(--font-ui); font-size: 0.86rem; font-weight: 700; display: block; }
+.sh-fieldset { border: none; padding: 0; margin: 0; }
+
+/* denomination buttons */
+.sh-opts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.sh-opt {
+  font: inherit; font-family: var(--font-mono); font-size: 0.88rem; font-weight: 600; cursor: pointer;
+  background: var(--cream); border: 1px solid var(--line); border-radius: 11px; padding: 9px 13px; color: var(--ink);
+  transition: border-color .12s, background .12s, color .12s;
+}
+.sh-opt:hover { border-color: var(--lime-deep); }
+.sh-opt.on { background: var(--lime); border-color: var(--lime-deep); color: var(--ink); }
+.sh-optgroup + .sh-optgroup { margin-top: 14px; }
+.sh-optgroup .t { font-size: 0.68rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+
+/* plan rows — the allowance is the headline, the price is secondary */
+.sh-plans { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.sh-plan {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px; width: 100%; text-align: left;
+  font: inherit; cursor: pointer; color: var(--ink);
+  background: var(--cream); border: 1px solid var(--line); border-radius: 14px; padding: 13px 15px;
+  transition: border-color .12s, background .12s;
+}
+.sh-plan:hover { border-color: var(--lime-deep); }
+.sh-plan.on { border-color: var(--lime-deep); background: rgba(0, 82, 255, .12); box-shadow: inset 0 0 0 1px var(--lime-deep); }
+.sh-plan .big { font-size: 1.02rem; font-weight: 700; display: block; }
+.sh-plan .small { font-size: 0.76rem; color: var(--muted); display: block; margin-top: 2px; }
+.sh-plan .price { font-family: var(--font-mono); font-size: 0.88rem; font-weight: 600; text-align: right; flex: none; }
+.sh-plan .price .muted { display: block; font-size: 0.72rem; }
+.sh-skel { height: 66px; border-radius: 14px; background: var(--sand); animation: sh-pulse 1.4s ease-in-out infinite; }
+@keyframes sh-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+
+/* fields */
+.sh-field { display: block; margin-top: 20px; }
+.sh-field > .lab { font-family: var(--font-ui); font-size: 0.86rem; font-weight: 700; display: block; }
+.sh-input, .sh-select {
+  width: 100%; font: inherit; font-size: 0.95rem; color: var(--ink); margin-top: 10px;
+  background: var(--cream); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; outline: none;
+  transition: border-color .12s, background .12s;
+}
+.sh-input:focus, .sh-select:focus { border-color: var(--lime-deep); background: #fff; }
+.sh-input.mono { font-family: var(--font-mono); }
+.sh-select { cursor: pointer; appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8' fill='none' stroke='%236c6f59' stroke-width='1.6' stroke-linecap='round'%3E%3Cpath d='M1 1l5 5 5-5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 14px center; padding-right: 36px; }
+.sh-hint { font-size: 0.76rem; color: var(--muted); margin: 6px 0 0; line-height: 1.45; }
+/* Present for a screen reader, absent for everyone else — used where the
+   visible label is the placeholder or the control next to it. */
+.sh-sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden;
+  clip-path: inset(50%); white-space: nowrap; border: 0; }
+.sh-bad { font-size: 0.76rem; color: #b23b3b; margin: 6px 0 0; }
+.sh-amount-wrap { position: relative; }
+.sh-amount-wrap .cur { position: absolute; left: 14px; top: calc(50% + 5px); transform: translateY(-50%);
+  font-size: 0.72rem; font-weight: 700; color: var(--muted); font-family: var(--font-mono); }
+.sh-amount-wrap .sh-input { padding-left: 50px; }
+
+/* the price line */
+.sh-total { display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  background: var(--cream); border: 1px solid var(--line); border-radius: 14px; padding: 15px 16px; margin-top: 20px; }
+.sh-total .k { font-size: 0.72rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+.sh-total .v { font-family: var(--font-mono); font-size: 1.5rem; font-weight: 600; letter-spacing: -0.02em; }
+.sh-total .v.dim { color: var(--muted); }
+.sh-total .v.bad { font-family: var(--font-ui); font-size: 0.86rem; font-weight: 600; color: #b23b3b; text-align: right; }
+.sh-cta { width: 100%; justify-content: center; margin-top: 14px; }
+.sh-cta:disabled { opacity: 0.45; cursor: default; transform: none; }
+.sh-foot-note { font-size: 0.76rem; color: var(--muted); text-align: center; margin: 12px 0 0; line-height: 1.5; }
+.sh-warn { font-size: 0.8rem; color: #b23b3b; background: rgba(178,59,59,0.08); border-radius: 10px; padding: 9px 12px; margin: 12px 0 0; }
+.sh-tell { font-size: 0.8rem; color: var(--muted); background: var(--cream); border: 1px solid var(--line);
+  border-radius: 11px; padding: 10px 12px; margin: 12px 0 0; line-height: 1.5; }
+.sh-tell b { color: var(--ink); }
+
+/* ── order tracker ───────────────────────────────────────────── */
+.sh-status { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.sh-state { display: inline-flex; align-items: center; gap: 8px; border-radius: 999px; padding: 7px 14px;
+  font-size: 0.85rem; font-weight: 600; background: rgba(0, 82, 255, .18); color: var(--link); border: 1px solid var(--lime-deep); }
+.sh-state.done { background: rgba(0, 82, 255, .12); border-color: var(--blue); color: var(--blue-hover); }
+.sh-state.dead { background: rgba(178,59,59,0.1); border-color: #b23b3b; color: #b23b3b; }
+.sh-ref { font-family: var(--font-mono); font-size: 0.74rem; color: var(--muted); word-break: break-all; }
+.sh-spin { animation: sh-turn 900ms linear infinite; }
+@keyframes sh-turn { to { transform: rotate(360deg); } }
+
+.sh-steps { list-style: none; margin: 20px 0 0; padding: 0; display: flex; flex-direction: column; gap: 11px; }
+.sh-steps li { display: flex; align-items: center; gap: 11px; font-size: 0.94rem; color: var(--muted); }
+.sh-steps li.active { color: var(--ink); font-weight: 600; }
+.sh-steps li.todo { color: var(--ink-3); }
+.sh-steps .mk { flex: none; display: grid; place-items: center; width: 18px; height: 18px; }
+.sh-steps .mk.ok { color: var(--blue); }
+.sh-steps .mk.active { color: var(--lime-deep); }
+.sh-steps .mk.todo { color: var(--line); }
+
+/* A payment the supplier is holding: not success, not failure, and the only
+   state on this page that a person has to resolve. Amber rather than red —
+   nothing is lost, it is stuck. */
+.sh-held { background: rgba(201,138,58,0.08); border: 1px solid rgba(201,138,58,0.35);
+  border-radius: 14px; padding: 18px; margin-top: 20px; }
+.sh-held .t { font-size: 0.98rem; font-weight: 700; margin: 0; }
+.sh-held .d { font-size: 0.9rem; line-height: 1.55; color: var(--muted); margin: 8px 0 0; }
+.sh-held .button { margin-top: 14px; }
+
+.sh-item-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+.sh-item-id { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.sh-item-logo { flex: none; width: 50px; height: 50px; display: grid; place-items: center; padding: 6px; overflow: hidden;
+  grid-template-rows: minmax(0, 1fr); grid-template-columns: minmax(0, 1fr);
+  background: var(--card); border: 1px solid var(--line); border-radius: 13px; }
+.sh-item-logo img { width: 100%; height: 100%; object-fit: contain; }
+.sh-item-id h2 { font-size: 1.05rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sh-item-id .den { font-family: var(--font-mono); font-size: 0.82rem; color: var(--muted); margin-top: 2px; }
+
+.sh-deliver { background: rgba(0, 82, 255, .09); border: 1px solid rgba(0, 82, 255, .25); border-radius: 14px; padding: 16px; margin-top: 16px; }
+.sh-deliver .k { font-size: 0.68rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--blue-hover); font-weight: 700; }
+.sh-deliver .code { display: block; font-family: var(--font-mono); font-size: 1.05rem; font-weight: 700; margin-top: 7px; word-break: break-all; }
+.sh-deliver .sub { font-size: 0.8rem; color: var(--muted); margin: 6px 0 0; }
+.sh-scan { border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-top: 16px; text-align: center; }
+.sh-scan h3 { font-family: var(--font-display); font-size: 1.05rem; font-weight: 600; text-align: left; }
+.sh-scan p { font-size: 0.86rem; color: var(--muted); margin: 6px 0 0; text-align: left; line-height: 1.5; }
+.sh-scan img { margin: 14px auto 0; background: #fff; border-radius: 10px; padding: 8px; display: block; }
+.sh-help { display: flex; align-items: center; gap: 13px; padding: 18px; color: inherit; }
+.sh-help:hover { border-color: var(--lime-deep); }
+.sh-help .tg { color: #229ED9; flex: none; }
+.sh-help .t { font-size: 0.9rem; font-weight: 700; display: block; }
+.sh-help .d { font-size: 0.86rem; color: var(--muted); display: block; margin-top: 2px; line-height: 1.45; }
+.sh-help .arrow { margin-left: auto; color: var(--muted); flex: none; }
+
+/* ── paying: token picker ────────────────────────────────────── */
+.sh-pick { position: relative; margin-top: 10px; }
+.sh-pick-btn {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left; font: inherit; cursor: pointer;
+  background: var(--cream); border: 1px solid var(--line); border-radius: 14px; padding: 11px 14px; color: var(--ink);
+}
+.sh-pick-btn:hover { border-color: var(--lime-deep); }
+.sh-pick-btn:disabled { opacity: 0.55; cursor: default; }
+/* Nothing chosen yet. Reads as a prompt rather than as a selected asset — a
+   greyed name in the same slot a ticker occupies is how someone comes to think
+   they have already picked something. */
+.sh-pick-btn.empty .sym { color: var(--muted); font-weight: 600; }
+.sh-pick-btn.empty { border-style: dashed; }
+.sh-pick-btn .sym { font-size: 0.95rem; font-weight: 700; display: block; line-height: 1.2; }
+.sh-pick-btn .sym.tick { font-family: var(--font-mono); letter-spacing: -0.01em; }
+.sh-pick-btn .nm { font-size: 0.76rem; color: var(--muted); display: block; }
+.sh-pick-btn .chev { margin-left: auto; color: var(--muted); transition: transform .15s; flex: none; }
+.sh-pick-btn .chev.up { transform: rotate(180deg); }
+.sh-mark { flex: none; border-radius: 50%; object-fit: cover; background: var(--card); border: 1px solid var(--line); }
+.sh-mark-txt { flex: none; display: grid; place-items: center; border-radius: 50%; background: var(--sand);
+  border: 1px solid var(--line); font-family: var(--font-mono); font-weight: 700; color: var(--muted); }
+
+.sh-pick-pop {
+  position: absolute; z-index: 40; top: calc(100% + 8px); left: 0; width: 100%;
+  background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 14px;
+  box-shadow: 0 18px 44px rgba(13, 29, 59, .14);
+}
+.sh-pick-grp + .sh-pick-grp { margin-top: 16px; }
+.sh-pick-grp .lab { display: flex; align-items: center; gap: 10px; }
+.sh-pick-grp .lab span:first-child { font-family: var(--font-mono); font-size: 0.62rem; font-weight: 700;
+  letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+.sh-pick-grp .lab .rule { flex: 1; height: 1px; background: var(--line); }
+.sh-pick-grp ul { list-style: none; margin: 10px 0 0; padding: 0; display: grid; gap: 6px; grid-template-columns: 1fr 1fr; }
+.sh-pick-grp.equity ul { grid-template-columns: repeat(4, 1fr); }
+.sh-pick-grp button {
+  display: flex; align-items: center; gap: 8px; width: 100%; font: inherit; text-align: left; cursor: pointer;
+  background: none; border: 1px solid transparent; border-radius: 11px; padding: 7px 8px; color: var(--ink);
+}
+.sh-pick-grp button:hover { background: var(--cream); }
+.sh-pick-grp button.on { border-color: var(--lime-deep); background: rgba(0, 82, 255, .14); }
+.sh-pick-grp.equity button { flex-direction: column; gap: 4px; padding: 9px 4px; text-align: center; }
+.sh-pick-grp .s { font-size: 0.78rem; font-weight: 600; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sh-pick-grp.equity .s { font-family: var(--font-mono); font-size: 0.72rem; font-weight: 700; }
+.sh-pick-grp .p { font-family: var(--font-mono); font-size: 0.66rem; color: var(--muted); display: block; }
+
+.sh-send { background: var(--cream); border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin-top: 16px; }
+.sh-send .k { font-size: 0.7rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+.sh-send .v { font-family: var(--font-mono); font-size: 1.55rem; font-weight: 600; letter-spacing: -0.02em;
+  margin-top: 6px; line-height: 1.15; word-break: break-word; }
+.sh-send .from { font-size: 0.78rem; color: var(--muted); margin-top: 4px; }
+.sh-send .cost { font-size: 0.78rem; color: var(--muted); line-height: 1.5; margin: 14px 0 0; padding-top: 12px; border-top: 1px solid var(--line); }
+.sh-send .cost b { color: var(--ink); }
+
+.sh-acct { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 16px; font-size: 0.78rem; }
+.sh-acct .who { font-family: var(--font-mono); color: var(--muted); overflow: hidden; text-overflow: ellipsis; }
+.sh-acct button { font: inherit; font-weight: 600; background: none; border: none; padding: 0; cursor: pointer;
+  color: var(--muted); text-decoration: underline; text-underline-offset: 2px; }
+.sh-acct button:hover:not(:disabled) { color: var(--ink); }
+.sh-acct button:disabled { opacity: 0.4; cursor: default; }
+.sh-custom { margin-top: 10px; }
+.sh-custom summary { font-size: 0.78rem; color: var(--muted); cursor: pointer; }
+.sh-custom summary:hover { color: var(--ink); }
+.sh-custom .row { display: flex; gap: 8px; margin-top: 9px; }
+.sh-custom .sh-input { margin-top: 0; font-family: var(--font-mono); font-size: 0.8rem; }
+.sh-custom .button { flex: none; padding: 10px 16px; font-size: 0.85rem; }
+.sh-loading { height: 200px; border-radius: 16px; background: var(--sand); animation: sh-pulse 1.4s ease-in-out infinite; }
+
+/* ── eSIM ────────────────────────────────────────────────────── */
+.sh-esim-intro { display: grid; grid-template-columns: 1fr 1fr; gap: 34px; align-items: center; margin-top: 18px; }
+.sh-feat { list-style: none; margin: 24px 0 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 16px 24px; }
+.sh-feat .t { font-size: 0.9rem; font-weight: 700; }
+.sh-feat .d { font-size: 0.78rem; color: var(--muted); margin-top: 2px; }
+.sh-howto { list-style: none; margin: 16px 0 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
+.sh-howto li { display: flex; gap: 12px; }
+.sh-howto .n { flex: none; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%;
+  background: var(--lime); border: 1px solid var(--lime-deep); color: var(--forest); font-family: var(--font-mono);
+  font-size: 0.72rem; font-weight: 700; }
+.sh-howto .t { font-size: 0.9rem; font-weight: 600; display: block; }
+.sh-howto .d { font-size: 0.88rem; color: var(--muted); display: block; margin-top: 2px; line-height: 1.45; }
+.sh-esim-shop { display: grid; grid-template-columns: 1fr 372px; gap: 40px; align-items: start; }
+.sh-checklist { list-style: none; margin: 12px 0 0; padding: 0; display: grid; grid-template-columns: 1fr 1fr; gap: 10px 24px;
+  font-size: 0.9rem; color: var(--muted); }
+.sh-checklist li { display: flex; gap: 9px; line-height: 1.45; }
+.sh-checklist li::before { content: "—"; color: var(--lime-deep); flex: none; }
+
+/* ── who actually delivers this ──────────────────────────────── */
+/* Shop pages only, and above the site footer rather than in it: the vault and
+   the markets owe CryptoRefills nothing, and a site-wide credit would say they
+   did. Quiet by design — it is an attribution, not an endorsement banner. */
+/* 4px of air below this used to be enough, in a layout where it was the last
+   thing on the page. Here the site footer starts immediately after it, so the
+   attribution sat on the footer's top rule.
+   28px, not more: the footer already opens with 54px of its own padding, so
+   what is set here is the gap to the RULE, not to the footer's content — and
+   anything generous enough to look right against the content leaves a hole
+   against the line. */
+.sh-powered { display: flex; align-items: center; gap: 22px; flex-wrap: wrap;
+  border-top: 1px solid var(--line); margin-top: 40px; padding: 26px 0 28px; }
+.sh-powered .who { display: flex; align-items: center; gap: 12px; flex: none; }
+.sh-powered .k { font-size: 0.68rem; letter-spacing: 0.16em; text-transform: uppercase; color: var(--muted); }
+.sh-powered img { display: block; width: 132px; height: auto; opacity: 0.9; transition: opacity .12s; }
+.sh-powered a:hover img { opacity: 1; }
+.sh-powered p { flex: 1; min-width: 260px; margin: 0; font-size: 0.8rem; line-height: 1.55; color: var(--muted); }
+.sh-powered p a { color: var(--lime-deep); font-weight: 600; }
+
+/* ── admin ledger ────────────────────────────────────────────── */
+.sh-admin-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin: 18px 0; }
+
+/* ── responsive ──────────────────────────────────────────────── */
+@media (max-width: 1000px) {
+  .sh-grid { grid-template-columns: repeat(4, 1fr); }
+  .sh-product { grid-template-columns: 1fr; gap: 28px; }
+  .sh-sticky { position: static; }
+  .sh-esim-shop { grid-template-columns: 1fr; gap: 28px; }
+}
+
+@media (max-width: 900px) {
+  .sh-hero { grid-template-columns: 1fr; }
+  .sh-esim-intro { grid-template-columns: 1fr; gap: 24px; }
+  .sh-bar { flex-wrap: wrap; }
+  .sh-search { order: 3; flex: 1 0 100%; max-width: none; }
+  .sh-bar-links { margin-left: 0; }
+  .sh-country { margin-left: auto; }
+}
+
+@media (max-width: 640px) {
+  .sh-page { padding-bottom: 40px; }
+  /* Section links and the country control share one row; the country gives up
+     its name to make that fit, rather than taking a whole line for itself. */
+  .sh-country-btn .nm { display: none; }
+  .sh-country-btn .cd { display: inline; }
+  /* Tight enough that four section links and the country control still share
+     one row: the alternative is a row of its own for a single pill. */
+  .sh-bar { gap: 8px; padding-bottom: 14px; }
+  .sh-bar-links { gap: 11px; }
+  .sh-bar-links a { font-size: 0.8rem; }
+  .sh-country-btn { padding: 7px 10px; font-size: 0.8rem; gap: 6px; }
+  .sh-grid { grid-template-columns: repeat(2, 1fr); gap: 12px; }
+  /* Four cards split a 340px screen into thumbnails no logo survives; three
+     leave each a third wider, which is the difference between recognising a
+     brand and squinting at it. */
+  .sh-hero-side .grid { grid-template-columns: 1fr 1fr; }
+  .sh-panel { padding: 18px; }
+  .sh-feat, .sh-checklist { grid-template-columns: 1fr; }
+  .sh-pick-grp.equity ul { grid-template-columns: repeat(3, 1fr); }
+  .sh-admin-stats { grid-template-columns: 1fr 1fr; }
+  /* Three columns on a phone give the third label two lines and its value two
+     more. It is the most interesting of the three, so it takes the full width
+     underneath instead of being the one that breaks. */
+  .sh-art { padding: 22px; border-radius: 18px; }
+}

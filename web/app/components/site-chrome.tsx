@@ -3,7 +3,7 @@ import Link from "next/link";
 import { ConnectWalletButton } from "./wallet";
 
 
-type ActivePage = "home" | "stocks" | "dividends" | "indices" | "docs";
+type ActivePage = "home" | "stocks" | "dividends" | "indices" | "shop" | "docs";
 
 /**
  * The account the site links to, and why it is not written here.
@@ -18,6 +18,20 @@ type ActivePage = "home" | "stocks" | "dividends" | "indices" | "docs";
  * `NEXT_PUBLIC_X_URL` still overrides, and setting it empty removes the icon.
  */
 const X_URL = process.env.NEXT_PUBLIC_X_URL ?? "https://x.com/Stockify_fi";
+
+/**
+ * The handle, read off the URL rather than written twice.
+ *
+ * In the footer the mark alone is not enough — an unlabelled glyph in a list of
+ * labelled ones reads as a missing word — and labelling it "X" next to the X
+ * mark says the same letter twice. The handle is the thing worth printing, and
+ * deriving it means an overridden `NEXT_PUBLIC_X_URL` cannot end up pointing at
+ * one account while the label names another.
+ */
+const X_HANDLE = (() => {
+  const slug = X_URL.split("?")[0].replace(/\/+$/, "").split("/").pop();
+  return slug && slug !== "x.com" ? `@${slug}` : "X";
+})();
 
 function XIcon() {
   return (
@@ -64,9 +78,13 @@ export function SiteHeader({ active }: { active: ActivePage }) {
           <Link className={active === "stocks" ? "active" : ""} href="/stocks">Stocks</Link>
           <Link className={active === "dividends" ? "active" : ""} href="/dividends">Dividends</Link>
           <Link className={active === "indices" ? "active" : ""} href="/indices">Indices</Link>
+          {/* Last, because it is the end of the line rather than another way in:
+              the three before it are how value is produced, and this is what it
+              is finally spent on. */}
+          <Link className={active === "shop" ? "active" : ""} href="/shop">Shop</Link>
         </div>
         {/* Icons rather than words: these two are destinations people already know the shape of,
-            and spending a nav slot on the word "Docs" crowds the four that name what this site does. */}
+            and spending a nav slot on the word "Docs" crowds the ones that name what this site does. */}
         <div className="site-icons">
           {X_URL && (
             <a aria-label="Stockify on X" href={X_URL} rel="noreferrer" target="_blank"><XIcon /></a>
@@ -85,8 +103,27 @@ export function SiteFooter() {
   return (
     <footer className="site-footer">
       <div className="footer-inner">
-        <div><Link className="brandmark" href="/"><StockifyMark /><span>Stockify</span></Link><p>Stock dividend protocol for Coinbase L2&apos;s tokenized stocks.</p></div>
-        <div className="footer-links"><span>Explore</span><Link href="/stocks">Tokenized stocks</Link><Link href="/dividends">Dividends</Link><Link href="/docs">Documentation</Link><a href="https://base.org" target="_blank" rel="noreferrer">Built on Base ↗</a></div>
+        <div>
+          <Link className="brandmark" href="/"><StockifyMark /><span>Stockify</span></Link>
+          <p>Stock dividend protocol for Coinbase L2&apos;s tokenized stocks.</p>
+          {/* The same two the header carries as icons — and the reason they are
+              repeated here rather than merely mirrored: `.site-icons` is
+              display:none below 720px, so on a phone the header's X and docs
+              links do not exist at all. This is where they do.
+
+              Labelled rather than icon-only. In a header an unlabelled glyph is
+              read from its position; in a footer it is just a small shape. */}
+          <div className="footer-icons">
+            {X_URL && (
+              <a href={X_URL} rel="noreferrer" target="_blank"><XIcon /><span>{X_HANDLE}</span></a>
+            )}
+            <Link href="/docs"><DocsIcon /><span>Docs</span></Link>
+          </div>
+        </div>
+        {/* Documentation is deliberately absent from this list: it is one line
+            away, in the row above, and naming the same destination twice in a
+            footer this small reads as an oversight rather than as emphasis. */}
+        <div className="footer-links"><span>Explore</span><Link href="/stocks">Tokenized stocks</Link><Link href="/dividends">Dividends</Link><Link href="/shop">Shop</Link><a href="https://base.org" target="_blank" rel="noreferrer">Built on Base ↗</a></div>
       </div>
       <div className="footer-meta"><span>© 2026 Stockify</span><span>Pre-launch. No STFY market is live.</span></div>
     </footer>

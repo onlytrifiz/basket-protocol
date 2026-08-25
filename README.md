@@ -115,6 +115,31 @@ Two tiers of promise, and the default is the weaker one. A launchpad pays whoeve
 
 Clones are never upgraded. `setImplementation()` affects future clones only.
 
+## Shop
+
+A third product, and the only one with no contract of its own: a storefront at **`/shop`** for gift cards, eSIM data and mobile top-ups across 2,000+ brands, paid for with the tokenized stock this protocol distributes. Fulfilment is [CryptoRefills](https://www.cryptorefills.com); the payment is ours.
+
+It exists because a dividend arrives as a fraction of a share of Apple, and a fraction of a share of Apple is not something anybody can spend. This is where it becomes an Apple gift card.
+
+```text
+web/lib/shop/          supplier client, pricing rules, settlement, order ledger
+web/app/api/shop/      quote, order, order/[id], search, esim, pay
+web/app/shop/         storefront, catalogue, product page, eSIM, top-ups, order tracker, admin ledger
+web/app/components/shop/
+```
+
+**There is no bridge, and that is the whole design.** CryptoRefills settles in a fixed list of coins and networks, and USDC on Base is one of them — the chain this protocol already runs on. So an order is paid by one ordinary Base transaction: an **exact-output** swap through Velora that sells the buyer's stock and delivers the precise figure the order needs straight to the order's own deposit address. The site never takes custody, and there is no floor to check afterwards, because an exact-output trade delivers the amount or reverts.
+
+`/api/shop/pay` is where that is enforced. The source must be on the pay-with allowlist and its decimals come from there rather than from the request — the equities are 8-decimal tokens, and a client-supplied 18 would quote a payment a hundred million times too large. The destination is pinned to the settlement asset. The receiver must be given and is checked again against the calldata that comes back: a quote built without one pays the sender, the transaction succeeds, the buyer is told it worked, and the order is never paid.
+
+**What can be paid with is deliberately short**: the four B20 equities the vault actually distributes, `STFY`, and the two cash legs. The other nine listed equities report `totalSupply() == 0` on Base — no supply, no pool, no route — so offering them would be offering a payment that cannot be made.
+
+**`STFY` is two transactions, on purpose.** An aggregator will quote it against USDC and route through a pool holding a few hundred dollars, next to the STFY/ETH pool holding tens of thousands. That pool also cannot carry the hook, which only fires when `currency0` is native ETH — so selling there would pay the vault nothing. Instead `StockifyRouter` sells STFY into ETH at the real pool, paying the same 3% hook fee as any other sale, and the ETH pays the order. The sale's `minOut` is set to what the second step spends, so if the first transaction succeeds the second is provably payable; whatever ETH is left over stays in the buyer's wallet.
+
+**Two upstream quirks cost the buyer money if handled naively**, and both are enforced in one place, `lib/shop/cryptorefills.ts`: range-priced products must be ordered as `denomination: "range"` plus `product_value` (sending the literal `"100 USD"` resolves to a different, dearer product), and everything else must quote the supplier's own denomination string verbatim. `selectPurchase()` snaps a request onto something actually on sale and reports whether it had to move; `POST /api/shop/order` refuses with a 409 rather than charging for something the buyer did not pick.
+
+`CRYPTOREFILLS_PARTNER_ID` carries the commission and the supplier does not enforce it, which makes a missing one silent and expensive — so ordering refuses with a 503 rather than selling unattributed. `DATABASE_URL` is an optional ledger that stores no redeem codes, since those are bearer instruments. `ADMIN_TOKEN` guards `/shop/admin/orders`; unset, that page 404s rather than defaulting open. Every variable is documented in [`web/.env.example`](web/.env.example).
+
 ## Base dependencies
 
 - Base mainnet: chain ID `8453`
@@ -139,8 +164,8 @@ cd keeper && npm install && cp .env.example .env && npm run once
 # keeper (indices)
 cd keeper-indices && npm install && cp .env.example .env && npm run once
 
-# web
-cd web && npm install && npm run dev
+# web (protocol pages, and the shop at /shop)
+cd web && npm install && cp .env.example .env.local && npm run dev
 ```
 
 `forge test` runs 139 tests. `test/BuyImpact.t.sol` is a fork test and additionally requires `BASE_RPC`.
