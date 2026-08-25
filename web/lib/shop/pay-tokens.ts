@@ -123,6 +123,42 @@ export const PAY_GROUPS: PayGroup[] = [
             },
           ]
         : []),
+      {
+        /**
+         * One transaction, unlike STFY, and the pools are why.
+         *
+         * STONKEX carries the same shape of hazard — a STONKEX/WETH v3 pool
+         * holding ~$63k next to four STONKEX/USDC v4 pools holding $512, $28,
+         * $20 and $2 — but the aggregator picks the deep one, and Velora's two
+         * valuations of the trade agree with each other, where STFY's disagreed
+         * by 6x. That agreement is what makes this rail safe: whatever the
+         * route costs, it is being reported rather than hidden.
+         *
+         * WHAT IT COSTS MOVES, AND MOVES A LOT. Measured twice within an hour
+         * on the same $25 order: 90,140 STONKEX at 0.1% over spot, then 94,941
+         * at 5%. Neither is wrong — the pool turns over ten times its own depth
+         * in a day. So the checkout says so: anything at or above 3% prints the
+         * line about a thin pool, and this token will trip it often.
+         *
+         * Re-measure before quoting either figure. If a dust pool ever deepens
+         * enough to win the route, the symptom is a quote asking for far more
+         * STONKEX than the price implies, and the fix is this token moving to
+         * the `router` rail the way STFY did.
+         */
+        symbol: "STONKEX",
+        name: "The Stonks Exchange",
+        /** Lowercase, like every equity in `lib/stocks.ts`. Not a style choice:
+         *  the aggregator validates EIP-55, so a checksum typed by hand is
+         *  rejected outright — "srcToken does not match any of the allowed
+         *  types" — while an all-lowercase address is always accepted. */
+        address: "0x5ab000ff9b9ffe0349ce5ffa5fd86f217c3680f5",
+        decimals: 18,
+        rail: "swap",
+        // No `contractURI()` to read — it is not a B20 — so the mark comes from
+        // the site's favicon, checked to answer with a real PNG rather than a
+        // redirect to nothing.
+        domain: "thestonks.exchange",
+      },
       { symbol: "USDC", name: "USD Coin", address: USDC, decimals: 6, rail: "direct" },
     ],
   },
