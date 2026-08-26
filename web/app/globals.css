@@ -2089,20 +2089,43 @@ a.hub-row:hover .hub-go { color: var(--link); opacity: 1; transform: translateX(
   padding: 11px 15px;
 }
 
-.hub-notes {
-  display: grid;
-  gap: 26px;
-  grid-template-columns: repeat(3, 1fr);
-  padding-top: 0;
+/* The table's three explanations, as closed FAQ rows. They were a three-column card grid; folded
+   they stop competing with the table above and the market band below, and the platform's own
+   <details> carries the toggle. */
+.hub-faq { padding-top: 0; }
+.hub-faq details { border-bottom: 1px solid var(--line); }
+.hub-faq details:first-of-type { border-top: 1px solid var(--line); }
+.hub-faq summary {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  list-style: none;
+  padding: 17px 2px;
 }
-.hub-notes h2 { font-size: 1.12rem; margin: 0 0 10px; }
-.hub-notes p { color: var(--ink-2); font-size: .87rem; line-height: 1.62; margin: 0; }
-.hub-notes code {
-  background: var(--surface-sunken);
-  border-radius: 4px;
+.hub-faq summary::-webkit-details-marker { display: none; }
+.hub-faq summary:focus-visible { border-radius: 6px; outline: 2px solid var(--blue); outline-offset: 2px; }
+.hub-faq h2 { font-size: 1.02rem; letter-spacing: -.025em; margin: 0; transition: color .16s var(--ease); }
+.hub-faq summary:hover h2 { color: var(--link); }
+/* One glyph, rotated to ×, so open and closed cannot drift apart visually. */
+.hub-faq summary i {
+  color: var(--link);
+  flex: none;
   font-family: var(--mono-stack);
-  font-size: .82em;
-  padding: 1px 5px;
+  font-size: 1.05rem;
+  font-style: normal;
+  line-height: 1;
+  transition: transform .18s var(--ease);
+}
+.hub-faq details[open] summary i { transform: rotate(45deg); }
+.hub-faq p {
+  color: var(--ink-2);
+  font-size: .9rem;
+  line-height: 1.62;
+  margin: 0;
+  max-width: 68ch;
+  padding: 0 2px 20px;
 }
 
 .stock-logo i {
@@ -2546,7 +2569,6 @@ a.pool-row:hover { background: var(--surface-2); }
     text-transform: uppercase;
   }
   .hub-premium { grid-column: 1 / -1; }
-  .hub-notes { grid-template-columns: 1fr; gap: 22px; }
   /* Stacked, not dropped. Hiding the render on a phone removed the one thing on the page that says
      at a glance what a "tokenized stock" is; below the copy it costs a scroll and keeps saying it.
      Centred and capped so it never becomes a full-width banner on a wide phone. */
@@ -3298,3 +3320,295 @@ a.idx-row:hover { background: var(--surface-2); }
 .site-icons a.active { color: var(--ink); }
 .site-icons svg { height: 17px; width: 17px; }
 @media (max-width: 720px) { .site-icons { display: none; } }
+
+/* ---------- 26. Market pulse ---------------------------------------------- */
+
+/* The whole-market band on /stocks — every Base equity issuer, drawn from Blockworks' pipeline.
+   It sits on the desk: the hub above is our universe on the light surface, this is the market
+   around it, and the desk is the register this site already uses for "the market at work".
+
+   The chart hues are constants like --sky (the desk stays navy in both themes). The set was
+   STEPPED AND ORDERED for color-blind separation against this navy — worst adjacent pair ΔE 17.6
+   under CVD simulation, all six ≥3:1 on the desk — so a reorder or a "nicer" hue quietly spends
+   that guarantee. They live in lib/blockworks.ts (VIZ_COLORS) so server chips and client charts
+   cannot drift apart; lime stays reserved for payouts even here. */
+
+.mkt-band { margin-top: 30px; }
+.mkt-band .desk-head { flex-wrap: wrap; }
+/* `.desk-head p` styles the dividends desk's own sky eyebrow, and at (0,1,1) it beats any single
+   class on these two paragraphs — so both overrides carry the band's class to outrank it. */
+.mkt-band .desk-head .eyebrow {
+  color: var(--desk-fg-3);
+  font-size: .68rem;
+  letter-spacing: .15em;
+  margin-bottom: 14px;
+}
+.mkt-band .mkt-lede {
+  color: var(--desk-fg-2);
+  font-family: var(--ui-stack);
+  font-size: .95rem;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.62;
+  margin: 16px 0 0;
+  max-width: 56ch;
+}
+
+.mkt-grid { display: grid; gap: 12px; grid-template-columns: repeat(2, 1fr); margin-top: 22px; }
+
+.mkt-card {
+  backdrop-filter: blur(10px);
+  background: var(--desk-glass);
+  border: 1px solid var(--desk-line);
+  border-radius: var(--r-md);
+  min-width: 0;
+  padding: 16px 18px 14px;
+}
+.mkt-card-head { align-items: flex-start; display: flex; gap: 14px; justify-content: space-between; }
+.mkt-card-head h3 { font-size: .95rem; letter-spacing: -.02em; margin: 0; }
+.mkt-card-head p { color: var(--desk-fg-3); font-size: .72rem; margin: 4px 0 0; }
+
+/* The chart's one readout, PriceChart-style: hover retargets it, rest shows the newest point. */
+.mkt-readout { flex: none; text-align: right; }
+.mkt-readout b {
+  display: block;
+  font-family: var(--mono-stack);
+  font-size: 1.05rem;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.02em;
+}
+.mkt-readout span {
+  color: var(--desk-fg-3);
+  display: block;
+  font-family: var(--mono-stack);
+  font-size: .62rem;
+  margin-top: 3px;
+  white-space: nowrap;
+}
+
+.mkt-svg { display: block; height: 190px; margin-top: 12px; touch-action: pan-y; width: 100%; }
+.mkt-area { opacity: .16; }
+.mkt-cursor line { stroke: var(--desk-fg-3); stroke-dasharray: 3 3; }
+.mkt-cursor circle { stroke: var(--desk); stroke-width: 2; }
+
+/* Legend chips double as the value readout per series, so no tooltip ever covers a line. */
+.mkt-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 12px; }
+.mkt-chip {
+  align-items: center;
+  color: var(--desk-fg-2);
+  display: inline-flex;
+  font-family: var(--mono-stack);
+  font-size: .66rem;
+  gap: 6px;
+}
+.mkt-chip i { border-radius: 3px; display: block; flex: none; height: 9px; width: 9px; }
+.mkt-chip b { color: var(--desk-fg); font-variant-numeric: tabular-nums; font-weight: 500; }
+
+/* Every issuer's largest tokens — the distribution table's register, different columns. */
+.mkt-table { border: 1px solid var(--desk-line); border-radius: var(--r-md); margin-top: 22px; overflow: hidden; }
+.mkt-row { align-items: center; display: grid; grid-template-columns: 1.05fr 1.5fr 1.1fr 1fr 1fr .85fr; }
+.mkt-row > span { overflow: hidden; padding: 11px 15px; text-overflow: ellipsis; white-space: nowrap; }
+.mkt-row + .mkt-row { border-top: 1px solid var(--desk-line); }
+.mkt-row:not(.mkt-row-head) {
+  color: var(--desk-fg);
+  font-family: var(--mono-stack);
+  font-size: .78rem;
+  font-variant-numeric: tabular-nums;
+}
+.mkt-row-head {
+  background: rgba(255, 255, 255, .04);
+  color: var(--desk-fg-3);
+  font-family: var(--mono-stack);
+  font-size: .61rem;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+.mkt-row-head > span:nth-child(n+4), .mkt-cell-num { text-align: right; }
+.mkt-sym { color: var(--sky); font-weight: 600; }
+/* The swatch ties a row to its issuer's line in every chart above it. */
+.mkt-issuer { align-items: center; display: flex; font-family: var(--ui-stack); gap: 8px; min-width: 0; }
+.mkt-issuer i { border-radius: 3px; flex: none; height: 9px; width: 9px; }
+
+.mkt-band .desk-note a { color: var(--desk-fg-2); text-decoration: underline; text-underline-offset: 2px; }
+.mkt-band .desk-note a:hover { color: var(--desk-fg); }
+
+@media (max-width: 980px) {
+  .mkt-grid { grid-template-columns: 1fr; }
+  .mkt-metrics { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 720px) {
+  /* Underlying and holders go first: symbol, issuer, price and size are the row's argument. */
+  .mkt-row { grid-template-columns: 1fr 1.3fr 1fr 1fr; }
+  .mkt-row > span:nth-child(3), .mkt-row > span:nth-child(6) { display: none; }
+}
+
+/* The band's advance notice, fused to the stats band's underside. Same navy as the section it
+   anchors to, so the strip previews the destination as material rather than as a promise — and a
+   reader who came for the table scrolls past 48px, not eight charts. */
+.mkt-teaser {
+  background-color: var(--desk);
+  background-image: radial-gradient(90% 170% at 50% -50%, var(--desk-sheen) 0%, transparent 62%);
+  border-bottom: 1px solid var(--desk-line);
+  color: var(--desk-fg);
+  display: block;
+  transition: background-color .16s var(--ease);
+}
+.mkt-teaser:hover { background-color: var(--desk-2); }
+.mkt-teaser:focus-visible { border-radius: 0; outline-offset: -2px; }
+.mkt-teaser-inner {
+  align-items: center;
+  display: flex;
+  gap: 20px;
+  margin: 0 auto;
+  max-width: var(--maxw);
+  min-height: 48px;
+  padding: 10px 24px;
+}
+.mkt-teaser-label {
+  color: var(--sky);
+  flex: none;
+  font-family: var(--mono-stack);
+  font-size: .62rem;
+  font-weight: 600;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+}
+.mkt-teaser-copy {
+  color: var(--desk-fg-2);
+  flex: 1;
+  font-size: .82rem;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mkt-teaser-copy b {
+  color: var(--desk-fg);
+  font-family: var(--mono-stack);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.mkt-teaser-go {
+  align-items: center;
+  color: var(--sky);
+  display: inline-flex;
+  flex: none;
+  font-family: var(--mono-stack);
+  font-size: .68rem;
+  font-weight: 600;
+  gap: 6px;
+  letter-spacing: .04em;
+}
+.mkt-teaser-go i { font-style: normal; transition: transform .16s var(--ease); }
+.mkt-teaser:hover .mkt-teaser-go i { transform: translateY(2px); }
+
+/* The anchor target clears the sticky nav pill, so a jump never lands the headline under it. */
+.mkt-band { scroll-margin-top: 88px; }
+
+@media (max-width: 860px) {
+  .mkt-teaser-copy { display: none; }
+  .mkt-teaser-inner { justify-content: space-between; }
+}
+
+/* The hub table's fold control — a full-width bar in the table's own footer position. */
+.hub-more {
+  align-items: center;
+  background: var(--surface-sunken);
+  border: 0;
+  border-top: 1px solid var(--line);
+  color: var(--link);
+  cursor: pointer;
+  display: flex;
+  font-family: var(--mono-stack);
+  font-size: .66rem;
+  font-weight: 600;
+  gap: 8px;
+  justify-content: center;
+  letter-spacing: .09em;
+  padding: 12px 20px;
+  text-transform: uppercase;
+  transition: background .16s var(--ease);
+  width: 100%;
+}
+.hub-more:hover { background: var(--surface-2); }
+.hub-more i { font-style: normal; transition: transform .16s var(--ease); }
+.hub-more:hover i { transform: translateY(1px); }
+@media (max-width: 860px) {
+  /* Below the card breakpoint the table has no chrome to sit in, so the bar becomes its own. */
+  .hub-more { border: 1px solid var(--line); border-radius: var(--r-md); margin-top: 10px; }
+}
+
+/* Readout above, timeframe below — the card head's right column. */
+.mkt-head-side { align-items: flex-end; display: flex; flex: none; flex-direction: column; gap: 7px; }
+.mkt-ranges { display: flex; gap: 3px; }
+.mkt-ranges button {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  color: var(--desk-fg-3);
+  cursor: pointer;
+  font-family: var(--mono-stack);
+  font-size: .6rem;
+  font-weight: 600;
+  letter-spacing: .05em;
+  padding: 3px 7px;
+  transition: background .16s var(--ease), border-color .16s var(--ease), color .16s var(--ease);
+}
+.mkt-ranges button:hover { background: var(--desk-glass); color: var(--desk-fg); }
+.mkt-ranges button.is-active { background: var(--desk-glass-2); border-color: var(--desk-line-2); color: var(--sky); }
+.mkt-ranges button:focus-visible { outline: 2px solid var(--sky); outline-offset: 1px; }
+
+/* The hero's "B20 table" jump needs the same sticky-nav clearance the market anchor has. */
+.hub-section { scroll-margin-top: 88px; }
+
+/* The token table's pager — view state over rows already in the page, so buttons, not links. */
+.mkt-pager {
+  align-items: center;
+  border-top: 1px solid var(--desk-line);
+  display: flex;
+  gap: 14px;
+  justify-content: space-between;
+  padding: 9px 15px;
+}
+.mkt-pager button {
+  background: transparent;
+  border: 1px solid var(--desk-line);
+  border-radius: var(--r-sm);
+  color: var(--desk-fg);
+  cursor: pointer;
+  font-family: var(--mono-stack);
+  font-size: .68rem;
+  padding: 6px 12px;
+  transition: background .16s var(--ease), border-color .16s var(--ease), color .16s var(--ease);
+}
+.mkt-pager button:hover:not(:disabled) { background: var(--desk-glass); border-color: var(--sky); color: var(--sky); }
+/* Spent, not hidden: a missing button reads as a bug, a disabled one as the edge of the list. */
+.mkt-pager button:disabled { color: var(--desk-fg-3); cursor: default; opacity: .45; }
+.mkt-pager b {
+  color: var(--desk-fg-2);
+  font-family: var(--mono-stack);
+  font-size: .68rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+
+/* Header cells are the sort controls — same type as the labels they replace, plus a direction
+   glyph reserved a slot so toggling never shifts the column. */
+.mkt-row-head button {
+  align-items: center;
+  background: none;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  gap: 4px;
+  letter-spacing: inherit;
+  padding: 0;
+  text-transform: inherit;
+  transition: color .16s var(--ease);
+}
+.mkt-row-head button:hover { color: var(--desk-fg); }
+.mkt-row-head button:focus-visible { outline: 2px solid var(--sky); outline-offset: 2px; }
+.mkt-row-head button i { color: var(--sky); font-style: normal; min-width: 8px; }
+.mkt-row-head [aria-sort] button { color: var(--desk-fg-2); }
