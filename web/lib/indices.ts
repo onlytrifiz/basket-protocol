@@ -52,6 +52,17 @@ export type Index = {
   address: string;
   coin: string;
   coinSymbol: string | null;
+  /**
+   * `symbol()` for each basket entry, in basket order. Null where the token would not say.
+   *
+   * A basket is NOT a list of tokenized equities. `IndexTreasury.initialize` takes any ERC-20 that
+   * holds code, and the launchpads have started pairing against things that are not stocks — so the
+   * seed list in `lib/stocks` answers for the names this repo ships and nothing else. Without this,
+   * every other holding rendered as its own address under a column headed "Stock".
+   */
+  basketSymbols: (string | null)[];
+  /** `symbol()` for the asset the fees arrive in. Null for native, and where the token would not say. */
+  quoteSymbol: string | null;
   quote: string;
   /** 0 = buy the basket and pay it to holders. 1 = buy the coin back and burn it. */
   mode: number;
@@ -143,6 +154,8 @@ async function loadIndexRows(addresses: string[]): Promise<Index[]> {
       address,
       coin: addrOf(at("coin").data) ?? "",
       coinSymbol: null,
+      basketSymbols: [],
+      quoteSymbol: null,
       quote: addrOf(at("quote").data) ?? "",
       mode: numOf(at("mode").data),
       interval: numOf(at("interval").data),
@@ -153,11 +166,35 @@ async function loadIndexRows(addresses: string[]): Promise<Index[]> {
     };
   });
 
-  // A symbol is decoration: an unbound coin has none to read, so a miss falls back to the address
-  // rather than taking the row down with it.
-  const symbols = await batchCall(rows.map((r) => ({ to: r.coin, data: SEL.symbol })));
-  rows.forEach((r, i) => {
-    r.coinSymbol = stringOf(symbols[i]?.data);
+  /**
+   * Symbols, for the coin AND for every basket entry the seed list cannot name.
+   *
+   * Asked in one batch, deduped, and only for what is not already known: the ordinary page of
+   * thirteen shipped equities still costs nothing extra, and a basket holding something else costs
+   * one call instead of rendering an address at the reader.
+   *
+   * A symbol is decoration: an unbound coin has none to read and a token need not implement
+   * `symbol()` at all, so a miss falls back to the address rather than taking the row down with it.
+   */
+  const wanted: string[] = [];
+  for (const r of rows) {
+    if (r.coin) wanted.push(r.coin.toLowerCase());
+    // The quote too: it is the asset every fee figure on the page is denominated in, and a launch
+    // paired against something the seed list has never heard of labelled them all "the quote".
+    if (r.quote && !stockByAddress(r.quote)) wanted.push(r.quote.toLowerCase());
+    for (const t of r.basket) if (!stockByAddress(t)) wanted.push(t.toLowerCase());
+  }
+  const unique = [...new Set(wanted)].filter((a) => /^0x[a-f0-9]{40}$/.test(a) && BigInt(a) !== 0n);
+  const answers = await batchCall(unique.map((to) => ({ to, data: SEL.symbol })));
+  const symbolOf = new Map<string, string | null>();
+  unique.forEach((a, i) => symbolOf.set(a, stringOf(answers[i]?.data)));
+
+  rows.forEach((r) => {
+    r.coinSymbol = symbolOf.get(r.coin.toLowerCase()) ?? null;
+    r.basketSymbols = r.basket.map(
+      (t) => stockByAddress(t)?.symbol ?? symbolOf.get(t.toLowerCase()) ?? null,
+    );
+    r.quoteSymbol = stockByAddress(r.quote)?.symbol ?? symbolOf.get(r.quote.toLowerCase()) ?? null;
   });
 
   return rows;
@@ -549,6 +586,12 @@ async function priceOf(token: string, quotes: Record<string, { price: number }>)
   );
 }
 
+/** The symbol an index already read for one of its own holdings, if that is one of them. */
+function symbolIn(index: Index, token: string): string | null {
+  const i = index.basket.findIndex((t) => t.toLowerCase() === token.toLowerCase());
+  return i === -1 ? null : index.basketSymbols[i] ?? null;
+}
+
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
 /** `mode` on a treasury: buy the coin back and destroy it, rather than pay a basket out. */
@@ -644,7 +687,7 @@ async function loadRows(): Promise<{ rows: IndexRow[]; totals: IndexTotals }> {
       if (d !== null && d !== undefined) {
         paidUnits.push({
           token,
-          symbol: stockByAddress(token)?.symbol ?? `${token.slice(0, 6)}…`,
+          symbol: stockByAddress(token)?.symbol ?? symbolIn(index, token) ?? `${token.slice(0, 6)}…`,
           units: Number(raw) / 10 ** d,
         });
       }
@@ -792,7 +835,7 @@ export async function readIndexHistory(address: string): Promise<{
   let paidUsd: number | null = null;
   for (const [token, raw] of a.distributed) {
     const u = units(token, raw);
-    if (u !== null) paidUnits.push({ token, symbol: stockByAddress(token)?.symbol ?? `${token.slice(0, 6)}…`, units: u });
+    if (u !== null) paidUnits.push({ token, symbol: stockByAddress(token)?.symbol ?? symbolIn(index, token) ?? `${token.slice(0, 6)}…`, units: u });
     const v = value(token, raw);
     if (v !== null) paidUsd = (paidUsd ?? 0) + v;
   }

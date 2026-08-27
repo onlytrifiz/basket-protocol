@@ -53,14 +53,13 @@ export function IndexTable({
                 <em>buys itself back</em>
               ) : (
                 <>
-                  {holds.slice(0, 6).map((token) => {
+                  {holds.slice(0, 6).map((token, i) => {
                     const asset = assets.get(token.toLowerCase());
+                    // The seed list names the equities; the chain named everything else when the
+                    // row was read. An address is the mark of last resort, not the first one.
+                    const symbol = asset?.symbol ?? row.basketSymbols[i] ?? token.slice(0, 6);
                     return (
-                      <StockLogo
-                        key={token}
-                        logo={asset?.logo}
-                        stock={{ symbol: asset?.symbol ?? token.slice(0, 6), domain: asset?.domain }}
-                      />
+                      <StockLogo key={token} logo={asset?.logo} stock={{ symbol, domain: asset?.domain }} />
                     );
                   })}
                   {holds.length > 6 && <span className="idx-more">+{holds.length - 6}</span>}

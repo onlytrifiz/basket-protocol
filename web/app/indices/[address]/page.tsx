@@ -3,7 +3,7 @@ import { Fragment } from "react";
 import Link from "next/link";
 
 import { readAssets } from "../../../lib/b20";
-import { readDecimalsOf, toUnits } from "../../../lib/decimals";
+import { readDecimals, readDecimalsOf, toUnits } from "../../../lib/decimals";
 import {
   MIN_HOLDER_COINS,
   MODE,
@@ -108,10 +108,18 @@ export default async function IndexPage({
   const quoteDecimals = await readDecimalsOf(index.quote);
   // The coin has its own scale, and the feed moves it on every burn and every buyback purchase.
   const coinDecimals = bound ? await readDecimalsOf(index.coin) : null;
+  /**
+   * And every holding has its own too — ASKED, not assumed to be eight.
+   *
+   * Eight is a fact about the equities this repo ships, not about a basket: `initialize` takes any
+   * ERC-20 that holds code. A payout of anything else was scaled against a seed-list hit that did
+   * not exist and rendered an em dash, on a row where real money had moved.
+   */
+  const basketDecimals = await readDecimals(index.basket);
   const quoteLabel =
     index.quote === "0x0000000000000000000000000000000000000000"
       ? "ETH"
-      : byAddress.get(index.quote.toLowerCase())?.symbol ?? "the quote";
+      : byAddress.get(index.quote.toLowerCase())?.symbol ?? index.quoteSymbol ?? "the quote";
 
   const requested = Number((await searchParams).page);
   const events = history?.events ?? [];
@@ -119,6 +127,13 @@ export default async function IndexPage({
   const page = Number.isSafeInteger(requested) && requested >= 1 ? Math.min(requested, pageCount) : 1;
   const visible = events.slice((page - 1) * PER_PAGE, page * PER_PAGE);
   const burnCount = events.filter((e) => e.kind === "burn").length;
+
+  /** What a holding calls itself: the seed list, then what the chain said, then nothing. */
+  const symbolOfHolding = (token?: string) => {
+    if (!token) return null;
+    const i = index.basket.findIndex((t) => t.toLowerCase() === token.toLowerCase());
+    return i === -1 ? null : index.basketSymbols[i] ?? null;
+  };
 
   const waiting = toUnits(index.spendable.toString(), quoteDecimals);
   const creatorWaiting = toUnits(index.creatorClaimable.toString(), quoteDecimals);
@@ -263,19 +278,24 @@ export default async function IndexPage({
           {!burns && index.basket.length > 0 && (
             <div className="idx-table" role="table" aria-label="Composition">
               <div className="idx-row idx-row-head idx-row-holds" role="row">
-                <span role="columnheader">Stock</span>
+                <span role="columnheader">Holding</span>
                 <span role="columnheader">Weight</span>
                 <span role="columnheader">Paid out so far</span>
               </div>
               {index.basket.map((token, i) => {
                 const asset = byAddress.get(token.toLowerCase());
+                const symbolFor = (idx: number, t: string) =>
+                  asset?.symbol ?? index.basketSymbols[idx] ?? shorten(t);
                 const paid = history?.paidUnits.find((p) => p.token.toLowerCase() === token.toLowerCase());
                 return (
                   <div className="idx-row idx-row-holds" key={token} role="row">
                     <span className="idx-coin idx-coin-logo" role="cell">
-                      <StockLogo logo={asset?.logo} stock={{ symbol: asset?.symbol ?? shorten(token), domain: asset?.domain }} />
+                      {/* A basket entry is any ERC-20 the treasury was created with, so the seed
+                          list answers for the equities and the chain answers for everything else.
+                          Only a token that will not say either falls back to its address. */}
+                      <StockLogo logo={asset?.logo} stock={{ symbol: symbolFor(i, token), domain: asset?.domain }} />
                       <span>
-                        <b>{asset?.symbol ?? shorten(token)}</b>
+                        <b>{symbolFor(i, token)}</b>
                         <small>{asset?.name ?? token}</small>
                       </span>
                     </span>
@@ -284,7 +304,7 @@ export default async function IndexPage({
                     </span>
                     <span className="idx-num" data-label="Paid out so far" role="cell">
                       <b>{paid ? `${amount(paid.units)}` : "—"}</b>
-                      {paid && <small>{asset?.symbol ?? ""}</small>}
+                      {paid && <small>{symbolFor(i, token)}</small>}
                     </span>
                   </div>
                 );
@@ -317,8 +337,8 @@ export default async function IndexPage({
                   ? quoteDecimals
                   : isCoin
                     ? coinDecimals
-                    : asset
-                      ? 8
+                    : event.token
+                      ? basketDecimals.get(event.token.toLowerCase()) ?? null
                       : null;
                 const spent = event.spentRaw ? toUnits(event.spentRaw, quoteDecimals) : null;
                 const value = toUnits(event.amountRaw, scale);
@@ -326,7 +346,7 @@ export default async function IndexPage({
                   ? quoteLabel
                   : isCoin
                     ? index.coinSymbol ?? ""
-                    : asset?.symbol ?? "";
+                    : asset?.symbol ?? symbolOfHolding(event.token) ?? "";
                 const label = event.kind === "fees"
                   ? "Fees in"
                   : event.kind === "bought"
