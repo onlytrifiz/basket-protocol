@@ -26,6 +26,15 @@ import { CoinMark } from "./coin-mark";
 import { StockLogo } from "./stock-logo";
 
 const ZERO = "0x0000000000000000000000000000000000000000";
+/**
+ * Base WETH, refused as a basket name on a natively-quoted treasury.
+ *
+ * `IndexTreasury.initialize` reverts on it (`quote_ == address(0) && t == weth`): with a native
+ * quote the working asset is ether and wrapped at once, so a WETH entry would be the same balance
+ * counted two ways. Named here so the wizard refuses it with the reason rather than letting the
+ * creation transaction revert with `BadConfig`.
+ */
+const WETH = "0x4200000000000000000000000000000000000006";
 // From `cast sig`, not from memory — hand-written ones were wrong here before.
 const PREDICT_SELECTOR = "0xcb193942"; // predictAddress(address,bytes32)
 const INDEX_COUNT_OF = "0x1c72cafc"; // indexCountOf(address)
@@ -38,15 +47,15 @@ type Shape = "single" | "basket" | "buyback";
 const SHAPES: Record<Shape, { mode: 0 | 1; title: string; blurb: string; detail: string }> = {
   single: {
     mode: 0,
-    title: "One stock",
-    blurb: "Every fee buys one equity and pays it to your holders.",
+    title: "One stock or token",
+    blurb: "Every fee buys one asset and pays it to your holders.",
     detail:
-      "The version that pays most often: one position means the whole fee goes into one purchase, so it clears the per-name floor sooner than a split would.",
+      "The version that pays most often: one position means the whole fee goes into one purchase, so it clears the per-name floor sooner than a split would. Pick a listed equity, or paste any token's contract.",
   },
   basket: {
     mode: 0,
     title: "A basket",
-    blurb: "Fees buy several equities by weight and pay them all out.",
+    blurb: "Fees buy several assets by weight and pay them all out.",
     detail:
       "Each name accrues on its own and is bought only when its slice is worth the gas, so more names means rarer payouts — the figure below moves as you add them.",
   },
@@ -85,6 +94,19 @@ export function IndexBuilder({ stocks, platformBps }: { stocks: IndexStock[]; pl
   const [creatorShareBps, setCreatorShareBps] = useState(0);
   const [interval, setInterval] = useState(3_600);
   const [search, setSearch] = useState("");
+
+  /**
+   * Tokens the seed list has never heard of, resolved from the chain and remembered here.
+   *
+   * The basket is any ERC-20 the treasury was created with, so the thirteen shipped equities are a
+   * convenience rather than the boundary. Everything downstream — the weight rows, the summary —
+   * looks a name up here when `stocks` does not have it, which is what stops a custom entry from
+   * rendering as a bare address in the one screen where a creator is deciding.
+   */
+  const [custom, setCustom] = useState<Record<string, { symbol: string | null; decimals: number }>>({});
+  const [pasted, setPasted] = useState("");
+  const [pasteBusy, setPasteBusy] = useState(false);
+  const [pasteError, setPasteError] = useState<string | null>(null);
 
   const [predicted, setPredicted] = useState<string | null>(null);
   const [salt, setSalt] = useState<string | null>(null);
@@ -128,6 +150,19 @@ export function IndexBuilder({ stocks, platformBps }: { stocks: IndexStock[]; pl
         ?? `${quote.slice(0, 8)}…`;
   /** The basket holds the pairing itself — the `allocate()` path, not a swap. */
   const selfPicked = quote !== ZERO && picked.some((a) => a.toLowerCase() === quote.toLowerCase());
+  /**
+   * The two conflicts a creator can walk into AFTER picking, because the quote and the coin are
+   * chosen in a later step than the basket. Checked as standing conditions rather than only at the
+   * moment of pasting, so changing the pairing cannot leave an invalid basket behind it.
+   */
+  const wethPicked = quote === ZERO && picked.some((a) => a.toLowerCase() === WETH);
+  const coinPicked = isAddress(coinInput.trim())
+    && picked.some((a) => a.toLowerCase() === coinInput.trim().toLowerCase());
+  const blocked = wethPicked
+    ? "This basket holds WETH, and a treasury paid in ether treats the two as one asset. Remove it, or pair against a token instead."
+    : coinPicked
+      ? "This basket holds the coin it collects for, which binding refuses. Remove it."
+      : null;
   const maxNames = shape === "single" ? 1 : 12;
   const total = weights.reduce((a, b) => a + b, 0);
   const rest = 10_000 - platformBps;
@@ -244,8 +279,61 @@ export function IndexBuilder({ stocks, platformBps }: { stocks: IndexStock[]; pl
     [maxNames, shape]
   );
 
+  /** What a picked address is called: the seed list, then what the chain said, then the address. */
+  const nameOf = useCallback(
+    (address: string) => {
+      const listed = stocks.find((x) => x.address.toLowerCase() === address.toLowerCase());
+      if (listed) return listed.ticker ?? listed.symbol;
+      return custom[address.toLowerCase()]?.symbol ?? `${address.slice(0, 6)}…${address.slice(-4)}`;
+    },
+    [custom, stocks],
+  );
+
+  /**
+   * Resolve a pasted contract, then add it — in that order, and never the other way round.
+   *
+   * The basket has no setter, so an address that is not a token cannot be taken back out: its slice
+   * of every future fee would simply never be spent. The chain is asked first, and a refusal keeps
+   * the entry out rather than letting it through with a warning.
+   */
+  const addPasted = useCallback(async () => {
+    const address = pasted.trim();
+    setPasteError(null);
+    if (!isAddress(address)) return setPasteError("That is not a contract address.");
+    const key = address.toLowerCase();
+    if (picked.some((a) => a.toLowerCase() === key)) return setPasteError("That one is already in.");
+    if (quote !== ZERO && key === quote.toLowerCase()) {
+      return setPasteError("That is the asset the fees arrive in — it is allocated, not bought.");
+    }
+    if (quote === ZERO && key === WETH) {
+      return setPasteError("A treasury paid in ether treats WETH as the same asset, so it cannot also buy it.");
+    }
+    if (coinInput.trim().toLowerCase() === key) {
+      return setPasteError("A basket cannot hold the coin it collects for — binding refuses it.");
+    }
+    if (shape === "basket" && picked.length >= maxNames) {
+      return setPasteError(`A basket holds at most ${maxNames} names.`);
+    }
+    setPasteBusy(true);
+    try {
+      const response = await fetch(`/api/indices/token?address=${address}`);
+      const body = await response.json();
+      if (!response.ok || !body?.found) {
+        return setPasteError(body?.reason ?? body?.error ?? "That token could not be read.");
+      }
+      setCustom((prev) => ({ ...prev, [key]: { symbol: body.symbol ?? null, decimals: body.decimals } }));
+      toggle(body.address ?? address);
+      setPasted("");
+    } catch {
+      setPasteError("That token could not be read. Try again.");
+    } finally {
+      setPasteBusy(false);
+    }
+  }, [maxNames, pasted, picked, quote, shape, toggle]);
+
   const canCreate =
-    indicesLive && !!account && !!predicted && !!salt && (isBuyback || (picked.length > 0 && total === 10_000));
+    indicesLive && !!account && !!predicted && !!salt && !blocked
+    && (isBuyback || (picked.length > 0 && total === 10_000));
 
   async function create() {
     if (!account || !predicted || !salt) return;
@@ -379,13 +467,55 @@ export function IndexBuilder({ stocks, platformBps }: { stocks: IndexStock[]; pl
                 ))}
               </div>
 
+              {/* The thirteen above are a convenience, not the boundary: a treasury takes any ERC-20
+                  that holds code, and the launchpads pair against more than equities now. */}
+              <div className="builder-paste">
+                <label htmlFor="paste-token">Not listed? Paste its contract address</label>
+                <div className="builder-paste-row">
+                  <input
+                    id="paste-token"
+                    onChange={(e) => { setPasted(e.target.value); setPasteError(null); }}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void addPasted(); } }}
+                    placeholder="0x…"
+                    spellCheck={false}
+                    value={pasted}
+                  />
+                  <button disabled={pasteBusy || pasted.trim() === ""} onClick={() => void addPasted()} type="button">
+                    {pasteBusy ? "Checking…" : "Add"}
+                  </button>
+                </div>
+                {pasteError ? (
+                  <p className="builder-paste-error">{pasteError}</p>
+                ) : (
+                  <p className="builder-paste-hint">
+                    Checked on-chain before it is added. The basket is fixed at creation, so a name
+                    that cannot be traded later keeps its share of the fees unspent.
+                  </p>
+                )}
+              </div>
+
+              {/* Picked entries the grid cannot show, so a custom choice is visible and removable. */}
+              {picked.some((a) => !stocks.some((x) => x.address.toLowerCase() === a.toLowerCase())) && (
+                <div className="builder-picked">
+                  {picked
+                    .filter((a) => !stocks.some((x) => x.address.toLowerCase() === a.toLowerCase()))
+                    .map((address) => (
+                      <button key={address} onClick={() => toggle(address)} type="button">
+                        <b>{nameOf(address)}</b>
+                        <small>{address.slice(0, 6)}…{address.slice(-4)}</small>
+                        <span aria-hidden="true">×</span>
+                        <span className="sr-only">Remove</span>
+                      </button>
+                    ))}
+                </div>
+              )}
+
               {picked.length > 0 && shape === "basket" && (
                 <div className="builder-weights">
                   {picked.map((address, i) => {
-                    const s = stocks.find((x) => x.address === address);
                     return (
                       <label key={address}>
-                        <span>{s?.ticker}</span>
+                        <span>{nameOf(address)}</span>
                         <input
                           max={10_000}
                           min={0}
@@ -621,6 +751,9 @@ export function IndexBuilder({ stocks, platformBps }: { stocks: IndexStock[]; pl
                 <li>Nothing else. The keeper notices, binds the coin, and runs the cycle from then on.</li>
               </ol>
 
+              {/* A conflict the contract would refuse, said here rather than as a reverted
+                  transaction: the basket has no setter, so the creation is the only chance. */}
+              {blocked && <p className="builder-error">{blocked}</p>}
               {error && <p className="builder-error">{error}</p>}
               {txHash ? (
                 <p className="builder-ok">
