@@ -57,7 +57,7 @@ const SHAPES: Record<Shape, { mode: 0 | 1; title: string; blurb: string; detail:
     title: "A basket",
     blurb: "Fees buy several assets by weight and pay them all out.",
     detail:
-      "Each name accrues on its own and is bought only when its slice is worth the gas, so more names means rarer payouts — the figure below moves as you add them.",
+      "Equities, another launch's coin, anything with liquidity — mixed freely. Each name accrues on its own and is bought only when its slice is worth the gas, so more names means rarer payouts.",
   },
   buyback: {
     mode: 1,
@@ -103,10 +103,22 @@ export function IndexBuilder({ stocks, platformBps }: { stocks: IndexStock[]; pl
    * looks a name up here when `stocks` does not have it, which is what stops a custom entry from
    * rendering as a bare address in the one screen where a creator is deciding.
    */
-  const [custom, setCustom] = useState<Record<string, { symbol: string | null; decimals: number }>>({});
+  const [custom, setCustom] = useState<
+    Record<string, { symbol: string | null; decimals: number; routable: boolean | null }>
+  >({});
   const [pasted, setPasted] = useState("");
   const [pasteBusy, setPasteBusy] = useState(false);
   const [pasteError, setPasteError] = useState<string | null>(null);
+  /**
+   * A token that resolved but that the router would not price, held back for one more click.
+   *
+   * Not refused, because Velora can be wrong and liquidity can arrive later — a token with no
+   * market today may have one before the launch it collects for. Not admitted silently either: the
+   * basket has no setter, so a name that never becomes tradable keeps its share of every future fee
+   * unspent for the life of the treasury. An explicit second click is the honest middle.
+   */
+  const [risky, setRisky] = useState<{ address: string; symbol: string | null; decimals: number } | null>(null);
+  const [routeNote, setRouteNote] = useState<string | null>(null);
 
   const [predicted, setPredicted] = useState<string | null>(null);
   const [salt, setSalt] = useState<string | null>(null);
@@ -296,9 +308,18 @@ export function IndexBuilder({ stocks, platformBps }: { stocks: IndexStock[]; pl
    * of every future fee would simply never be spent. The chain is asked first, and a refusal keeps
    * the entry out rather than letting it through with a warning.
    */
-  const addPasted = useCallback(async () => {
-    const address = pasted.trim();
+  /**
+   * Admit one address, whichever control asked for it.
+   *
+   * The grid and the paste field used to be different doors: the field checked, the tiles did not.
+   * But the seed list ships names its own comment describes as having no supply, no pool and no
+   * route — the trade panel already refuses to offer them — so a creator could click TSLAc and
+   * build an immutable basket around a name nothing can fill. One path, one check, both doors.
+   */
+  const addPasted = useCallback(async (force = false, fromGrid?: string) => {
+    const address = (fromGrid ?? (force && risky ? risky.address : pasted)).trim();
     setPasteError(null);
+    setRouteNote(null);
     if (!isAddress(address)) return setPasteError("That is not a contract address.");
     const key = address.toLowerCase();
     if (picked.some((a) => a.toLowerCase() === key)) return setPasteError("That one is already in.");
@@ -314,6 +335,20 @@ export function IndexBuilder({ stocks, platformBps }: { stocks: IndexStock[]; pl
     if (shape === "basket" && picked.length >= maxNames) {
       return setPasteError(`A basket holds at most ${maxNames} names.`);
     }
+
+    const admit = (address: string, symbol: string | null, decimals: number, routable: boolean | null) => {
+      setCustom((prev) => ({ ...prev, [address.toLowerCase()]: { symbol, decimals, routable } }));
+      toggle(address);
+      if (!fromGrid) setPasted("");
+      setRisky(null);
+    };
+
+    if (force && risky) {
+      admit(risky.address, risky.symbol, risky.decimals, false);
+      setRouteNote(`${risky.symbol ?? "That token"} was added without a route. It will not be bought until it has one.`);
+      return;
+    }
+
     setPasteBusy(true);
     try {
       const response = await fetch(`/api/indices/token?address=${address}`);
@@ -321,15 +356,35 @@ export function IndexBuilder({ stocks, platformBps }: { stocks: IndexStock[]; pl
       if (!response.ok || !body?.found) {
         return setPasteError(body?.reason ?? body?.error ?? "That token could not be read.");
       }
-      setCustom((prev) => ({ ...prev, [key]: { symbol: body.symbol ?? null, decimals: body.decimals } }));
-      toggle(body.address ?? address);
-      setPasted("");
+      const resolved = body.address ?? address;
+      if (body.routable === false) {
+        setRisky({ address: resolved, symbol: body.symbol ?? null, decimals: body.decimals });
+        return setPasteError(
+          `${body.symbol ?? "That token"} is a real token, but no venue would price a 0.01 ETH buy of it. `
+          + "A name with no route keeps its share of the fees unspent, and the basket cannot be changed later.",
+        );
+      }
+      admit(resolved, body.symbol ?? null, body.decimals, body.routable ?? null);
+      setRouteNote(
+        body.routable
+          ? `Routable today${body.venues?.length ? ` via ${body.venues.slice(0, 2).join(", ")}` : ""}.`
+          : "Added. The router could not be reached, so its liquidity is unverified.",
+      );
     } catch {
       setPasteError("That token could not be read. Try again.");
     } finally {
       setPasteBusy(false);
     }
-  }, [maxNames, pasted, picked, quote, shape, toggle]);
+  }, [coinInput, maxNames, pasted, picked, quote, risky, shape, toggle]);
+
+  /** A grid tile: remove without asking, admit only after the same check the paste field runs. */
+  const pickListed = useCallback(
+    (address: string) => {
+      if (picked.some((a) => a.toLowerCase() === address.toLowerCase())) return toggle(address);
+      void addPasted(false, address);
+    },
+    [addPasted, picked, toggle],
+  );
 
   const canCreate =
     indicesLive && !!account && !!predicted && !!salt && !blocked
@@ -447,18 +502,29 @@ export function IndexBuilder({ stocks, platformBps }: { stocks: IndexStock[]; pl
             </p>
           ) : (
             <>
+              {/* Said before the tiles, not after: thirteen logos in a grid read as the whole menu,
+                  and a creator who wanted something else would never think to look for the field. */}
+              <p className="builder-note">
+                The equities below are the shortcut, not the limit. A treasury buys any ERC-20 a
+                venue can fill — another launch&apos;s coin, a stablecoin, anything with liquidity.
+                Pick from the grid, or paste a contract underneath.
+              </p>
               <input
                 className="builder-search"
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search NVDA, Apple, Coinbase…"
+                placeholder="Search the listed equities…"
                 value={search}
               />
               <div className="builder-grid">
                 {visible.map((s) => (
                   <button
-                    className={picked.includes(s.address) ? "is-picked" : undefined}
+                    className={[
+                      picked.includes(s.address) ? "is-picked" : "",
+                      custom[s.address.toLowerCase()]?.routable === false ? "is-unrouted" : "",
+                    ].filter(Boolean).join(" ") || undefined}
+                    disabled={pasteBusy}
                     key={s.address}
-                    onClick={() => toggle(s.address)}
+                    onClick={() => pickListed(s.address)}
                     type="button"
                   >
                     <StockLogo logo={undefined} stock={{ symbol: s.symbol, domain: s.domain }} />
@@ -470,26 +536,33 @@ export function IndexBuilder({ stocks, platformBps }: { stocks: IndexStock[]; pl
               {/* The thirteen above are a convenience, not the boundary: a treasury takes any ERC-20
                   that holds code, and the launchpads pair against more than equities now. */}
               <div className="builder-paste">
-                <label htmlFor="paste-token">Not listed? Paste its contract address</label>
+                <label htmlFor="paste-token">Not listed? Paste any token&apos;s contract address</label>
                 <div className="builder-paste-row">
                   <input
                     id="paste-token"
-                    onChange={(e) => { setPasted(e.target.value); setPasteError(null); }}
+                    onChange={(e) => { setPasted(e.target.value); setPasteError(null); setRisky(null); setRouteNote(null); }}
                     onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void addPasted(); } }}
                     placeholder="0x…"
                     spellCheck={false}
                     value={pasted}
                   />
-                  <button disabled={pasteBusy || pasted.trim() === ""} onClick={() => void addPasted()} type="button">
-                    {pasteBusy ? "Checking…" : "Add"}
+                  <button
+                    disabled={pasteBusy || (pasted.trim() === "" && !risky)}
+                    onClick={() => void addPasted(!!risky)}
+                    type="button"
+                  >
+                    {pasteBusy ? "Checking…" : risky ? "Add anyway" : "Add"}
                   </button>
                 </div>
                 {pasteError ? (
                   <p className="builder-paste-error">{pasteError}</p>
+                ) : routeNote ? (
+                  <p className="builder-paste-ok">{routeNote}</p>
                 ) : (
                   <p className="builder-paste-hint">
-                    Checked on-chain before it is added. The basket is fixed at creation, so a name
-                    that cannot be traded later keeps its share of the fees unspent.
+                    Any ERC-20 with liquidity, not only the equities above — the treasury buys
+                    whatever a venue can fill. Checked on-chain and priced against a real route
+                    before it is added.
                   </p>
                 )}
               </div>
@@ -500,9 +573,18 @@ export function IndexBuilder({ stocks, platformBps }: { stocks: IndexStock[]; pl
                   {picked
                     .filter((a) => !stocks.some((x) => x.address.toLowerCase() === a.toLowerCase()))
                     .map((address) => (
-                      <button key={address} onClick={() => toggle(address)} type="button">
+                      <button
+                        className={custom[address.toLowerCase()]?.routable === false ? "is-unrouted" : undefined}
+                        key={address}
+                        onClick={() => toggle(address)}
+                        type="button"
+                      >
                         <b>{nameOf(address)}</b>
-                        <small>{address.slice(0, 6)}…{address.slice(-4)}</small>
+                        <small>
+                          {custom[address.toLowerCase()]?.routable === false
+                            ? "no route yet"
+                            : `${address.slice(0, 6)}…${address.slice(-4)}`}
+                        </small>
                         <span aria-hidden="true">×</span>
                         <span className="sr-only">Remove</span>
                       </button>

@@ -2928,6 +2928,11 @@ a.pool-row:hover { background: var(--surface-2); }
 .builder-paste-row button:not(:disabled):hover { opacity: .86; }
 .builder-paste-hint { color: var(--ink-3); font-size: .76rem; margin: 7px 0 0; }
 .builder-paste-error { color: var(--warn-fg); font-size: .78rem; margin: 7px 0 0; }
+.builder-paste-ok { color: var(--payout-fg); font-size: .78rem; margin: 7px 0 0; }
+/* A name admitted without a route: shown as chosen, but never as ordinary. */
+.builder-picked button.is-unrouted { background: var(--warn-bg); border-color: var(--warn-line); color: var(--warn-fg); }
+.builder-grid button.is-unrouted { border-color: var(--warn-line); }
+.builder-grid button:disabled { cursor: progress; opacity: .55; }
 
 /* Anything picked that the grid above cannot show, so a custom choice stays visible and removable. */
 .builder-picked { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
