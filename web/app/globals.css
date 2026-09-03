@@ -2203,7 +2203,10 @@ a.hub-row:hover .hub-go { color: var(--link); opacity: 1; transform: translateX(
 [data-theme="dark"] .trade-facts .is-down { color: #ff8f85; }
 
 .detail-grid { align-items: start; display: grid; gap: 24px; grid-template-columns: minmax(0, 1fr) 348px; margin-top: 24px; }
-.detail-main, .detail-side { display: grid; align-content: start; gap: 24px; min-width: 0; }
+/* The explicit track matters as much as `min-width`. These columns hold the price chart, whose SVG
+   has a fixed height and an intrinsic ratio: with an implicit `auto` track the chart's min-content
+   sized the column — 629px inside a 350px phone — and the range buttons ended up off-screen. */
+.detail-main, .detail-side { display: grid; align-content: start; gap: 24px; grid-template-columns: minmax(0, 1fr); min-width: 0; }
 /* The trade card follows the reader down a long pool table — the panel they might act on should
    not be the one they have to scroll back up to find. */
 @media (min-width: 981px) {
@@ -2320,10 +2323,14 @@ a.hub-row:hover .hub-go { color: var(--link); opacity: 1; transform: translateX(
   font-size: .76rem;
   font-variant-numeric: tabular-nums;
   gap: 10px;
-  grid-template-columns: 1.3fr 1.2fr 1fr 1fr 1fr .7fr;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) minmax(0, .7fr);
   padding: 10px 14px;
   text-decoration: none;
 }
+/* Pool figures come from whatever pairs exist against the token, and a pool quoting nonsense
+   reserves prints a forty-digit number. Held to its own cell it is merely wrong; left to size the
+   track it pushed every other column out of the table's clipped box. */
+.pool-row > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pool-row + .pool-row { border-top: 1px solid var(--line); }
 .pool-row > span:not(:first-child):not(:nth-child(2)) { text-align: right; }
 a.pool-row:hover { background: var(--surface-2); }
@@ -2534,8 +2541,8 @@ a.pool-row:hover { background: var(--surface-2); }
   /* Trade first on a phone: someone who opened a stock page on their phone came to look or to buy,
      and the pool table is not the thing to lead with. */
   .detail-side { order: -1; }
-  .fact-grid { grid-template-columns: repeat(2, 1fr); }
-  .fact-grid-tight { grid-template-columns: repeat(3, 1fr); }
+  .fact-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .fact-grid-tight { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 
 @media (max-width: 860px) {
@@ -2549,7 +2556,7 @@ a.pool-row:hover { background: var(--surface-2); }
     border-radius: var(--r-md);
     box-shadow: var(--shadow-1);
     gap: 12px;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     padding: 15px 16px;
     position: relative;
   }
@@ -2572,7 +2579,7 @@ a.pool-row:hover { background: var(--surface-2); }
   /* Stacked, not dropped. Hiding the render on a phone removed the one thing on the page that says
      at a glance what a "tokenized stock" is; below the copy it costs a scroll and keeps saying it.
      Centred and capped so it never becomes a full-width banner on a wide phone. */
-  .hub-head { grid-template-columns: 1fr; }
+  .hub-head { grid-template-columns: minmax(0, 1fr); }
   .hub-render {
     height: auto;
     justify-self: center;
@@ -2584,18 +2591,18 @@ a.pool-row:hover { background: var(--surface-2); }
 }
 
 @media (max-width: 760px) {
-  .detail-prices { grid-template-columns: 1fr; }
+  .detail-prices { grid-template-columns: minmax(0, 1fr); }
   .price-block + .price-block { border-left: 0; border-top: 1px solid var(--line); }
   .price-block > strong { font-size: 1.55rem; }
   /* Six columns of pool data do not fit; the pair and the 24h move go, price and depth stay. */
-  .pool-row { font-size: .72rem; grid-template-columns: 1.2fr 1fr 1fr; }
+  .pool-row { font-size: .72rem; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr); }
   .pool-row > span:nth-child(2), .pool-row > span:nth-child(5), .pool-row > span:nth-child(6) { display: none; }
   .detail-id h1 { font-size: 1.7rem; }
 }
 
 @media (max-width: 560px) {
-  .hub-row, .dist-row { grid-template-columns: repeat(2, 1fr); }
-  .fact-grid, .fact-grid-tight { grid-template-columns: repeat(2, 1fr); }
+  .hub-row, .dist-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .fact-grid, .fact-grid-tight { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .chart-svg { height: 190px; }
 }
 
@@ -2605,18 +2612,18 @@ a.pool-row:hover { background: var(--surface-2); }
   /* Restored: an unanchored regex removing the pre-launch section's styles took this rule's
      declaration with it, and with it the hero's collapse — the swap panel stayed in a second column
      and ran off the side of every phone. */
-  .hero-inner, .parameters-inner, .operation-inner, .eligibility { grid-template-columns: 1fr; }
+  .hero-inner, .parameters-inner, .operation-inner, .eligibility { grid-template-columns: minmax(0, 1fr); }
   .hero-inner { gap: 44px; padding-top: 68px; }
   .hero-swap, .index-showcase .index-universe, .swap-panel { max-width: 540px; width: 100%; }
     .parameters-inner, .operation-inner { gap: 44px; }
-  .index-showcase { gap: 36px; grid-template-columns: 1fr; }
+  .index-showcase { gap: 36px; grid-template-columns: minmax(0, 1fr); }
   .index-showcase .index-universe { margin-left: 0; }
-  .steps-grid, .roles-grid { grid-template-columns: repeat(2, 1fr); }
-  .equity-grid { grid-template-columns: repeat(3, 1fr); }
-  .index-head { grid-template-columns: 1fr; }
+  .steps-grid, .roles-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .equity-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .index-head { grid-template-columns: minmax(0, 1fr); }
   .eligibility { gap: 36px; padding: 42px 0; }
   .eligibility dl { margin: 0 32px; }
-  .desk-metrics { grid-template-columns: repeat(2, 1fr); }
+  .desk-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .operation-inner > div:last-child { align-self: auto; }
   .page-intro-render { height: 116px; width: 116px; }
   .docs-layout { gap: 42px; grid-template-columns: 150px 1fr; }
@@ -2671,7 +2678,7 @@ a.pool-row:hover { background: var(--surface-2); }
   .flow-strip strong { font-size: .82rem; margin-top: 5px; }
   .flow-strip-out { text-align: left; }
 
-  .stats-inner { grid-template-columns: repeat(2, 1fr); }
+  .stats-inner { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .stats-inner > div { padding: 20px; }
   .stats-inner > div + div { border-left: 0; }
   .stats-inner > div + div::before, .stats-inner > div::after { display: none; }
@@ -2682,7 +2689,7 @@ a.pool-row:hover { background: var(--surface-2); }
 
   .section-head h2 { font-size: 2.1rem; }
   .section-head > p:last-child { font-size: .92rem; }
-  .steps-grid, .roles-grid, .equity-grid { grid-template-columns: 1fr; }
+  .steps-grid, .roles-grid, .equity-grid { grid-template-columns: minmax(0, 1fr); }
   .step-card { min-height: 0; }
   .step-card h3 { padding-top: 30px; }
   .roles-grid article { min-height: 0; }
@@ -2715,7 +2722,18 @@ a.pool-row:hover { background: var(--surface-2); }
   .ledger-pager a, .ledger-pager span { padding: 7px 10px; }
   .payout-list article { gap: 14px; grid-template-columns: auto 1fr auto; }
   .payout-list p { font-size: .74rem; }
-  .eligibility { border-left: 0; border-radius: 0; border-right: 0; margin-left: -20px; margin-right: -20px; }
+  /* Full-bleed card. `.wrap` also matches it, so its gutter has to be zeroed here as well as the
+     margin pulled: keeping both left the border box 40px wider than the viewport, clipped rather
+     than visible only because `.site-shell` clips its overflow. */
+  .eligibility {
+    border-left: 0;
+    border-radius: 0;
+    border-right: 0;
+    margin-left: 0;
+    margin-right: 0;
+    padding-left: 0;
+    padding-right: 0;
+  }
   .eligibility > div, .eligibility dl { margin: 0; padding-left: 20px; padding-right: 20px; }
   .eligibility h2 { font-size: 2rem; }
   .eligibility dl > div { align-items: start; flex-direction: column; gap: 6px; }
@@ -2800,10 +2818,10 @@ a.pool-row:hover { background: var(--surface-2); }
   .docs-section-label { align-items: center; display: flex; gap: 9px; margin-bottom: 16px; }
   .docs-section-label span { margin: 0; }
   .docs-section-body > h2 { font-size: 1.62rem; }
-  .docs-flow { gap: 6px; grid-template-columns: 1fr; padding: 12px; }
+  .docs-flow { gap: 6px; grid-template-columns: minmax(0, 1fr); padding: 12px; }
   .docs-flow > div, .docs-flow > div:nth-of-type(3), .docs-flow > div:nth-of-type(4) { grid-column: auto; min-height: 66px; }
   .docs-flow > i, .docs-flow > i:nth-of-type(2) { display: none; }
-  .docs-contracts, .docs-split-grid, .docs-launch-grid { grid-template-columns: 1fr; }
+  .docs-contracts, .docs-split-grid, .docs-launch-grid { grid-template-columns: minmax(0, 1fr); }
   .docs-contracts article, .docs-split-grid article { padding: 15px; }
   .docs-contract-head code { max-width: 145px; }
   .docs-split-grid h3 { margin-top: 21px; }
@@ -2822,10 +2840,20 @@ a.pool-row:hover { background: var(--surface-2); }
 }
 
 @media (max-width: 440px) {
-  .equity-grid { grid-template-columns: repeat(2, 1fr); }
+  .equity-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .equity-card { padding: 13px; }
   .equity-foot > span { display: none; }
   .equity-name strong { font-size: .92rem; }
+}
+
+/* Five nav links on one row need 309px of pill at the sizes above, and a 320px phone gives the row
+   268px — so "Shop" sat outside the pill and off the screen. Tighter chips rather than a wrap: a
+   second nav line costs more vertical space here than the two points of type size are worth. */
+@media (max-width: 400px) {
+  .site-nav { padding: 0 10px; }
+  .site-nav-inner { padding-left: 10px; padding-right: 8px; }
+  .site-links { gap: 0; }
+  .site-links a { font-size: .72rem; padding: 7px 6px; }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -3549,6 +3577,24 @@ a.idx-row:hover { background: var(--surface-2); }
 @media (max-width: 860px) {
   .mkt-teaser-copy { display: none; }
   .mkt-teaser-inner { justify-content: space-between; }
+}
+
+/* Match the gutter every other band uses below this width; 24px here left the strip a step out of
+   line with the sections above and below it. */
+@media (max-width: 660px) {
+  .mkt-teaser-inner { padding-left: 20px; padding-right: 20px; }
+}
+
+/* Label and link together need ~437px of row. Narrower than that they were still laid out side by
+   side, and "Jump to the charts" ran off the right edge — invisibly, since the shell clips. */
+@media (max-width: 440px) {
+  .mkt-teaser-inner {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
+    padding-bottom: 11px;
+    padding-top: 11px;
+  }
 }
 
 /* The hub table's fold control — a full-width bar in the table's own footer position. */
