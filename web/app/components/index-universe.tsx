@@ -16,7 +16,7 @@ export type IndexSlice = {
 };
 
 /**
- * The dividend index as a donut — the four equities the vault actually buys, at their on-chain
+ * The dividend index as a donut — the equities the vault actually buys, at their on-chain
  * weights.
  *
  * It used to draw all thirteen listed assets grouped by sector, sized by TITLE COUNT, with a
@@ -27,8 +27,8 @@ export type IndexSlice = {
  * Slices come from the server, which reads `stockAt()`. Ownership can change them between cycles.
  *
  * Each arc carries its company's OWN colour rather than a slot from a house palette, and the legend
- * carries the mark. Four blues told a reader which slice was which only by position; NVIDIA green
- * next to Apple silver is legible without the legend at all.
+ * carries the mark. A row of blues told a reader which slice was which only by position; NVIDIA
+ * green next to Apple silver is legible without the legend at all.
  */
 const RADIUS = 58;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;

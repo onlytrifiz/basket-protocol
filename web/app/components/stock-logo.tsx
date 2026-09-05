@@ -9,9 +9,10 @@ type StockLogoProps = {
  * The asset's mark, preferring the one the token names itself.
  *
  * `contractURI()` carries Coinbase's official equity icon, so an equity Base lists tomorrow arrives
- * correctly branded with nothing added to this repo. The favicon fallback covers the assets with no
- * on-chain icon to read — SPCXc has never set one. The surrounding ticker and name remain the
- * accessible label; this image is deliberately decorative.
+ * correctly branded with nothing added to this repo. Every listed asset answers it today — SPCXc,
+ * the last holdout, set one when SpaceX listed — so the favicon fallback now covers a read that did
+ * not land rather than an issuer that never published, which is why it stays. The surrounding
+ * ticker and name remain the accessible label; this image is deliberately decorative.
  */
 export function StockLogo({ stock, logo, size = "regular" }: StockLogoProps) {
   const src = logo ?? (stock.domain ? `https://www.google.com/s2/favicons?domain=${stock.domain}&sz=128` : undefined);

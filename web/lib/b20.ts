@@ -11,9 +11,11 @@ import { stocks, type IndexStock } from "./stocks";
  *
  * Two facts drive the hub page:
  *
- *   1. SUPPLY IS THE HEADLINE. Most of these have never been issued — `totalSupply()` is literally
- *      zero for the majority today. A listing page that shows thirteen tickers as if they were
- *      thirteen markets is lying by omission; this one reads the number and says so.
+ *   1. SUPPLY IS THE HEADLINE. Issuance has spread — ten of the thirteen report a non-zero
+ *      `totalSupply()` today, where once it was four — but supply is still not a market: a name can
+ *      be issued and have no pool anywhere, and three remain at literally zero. A listing page that
+ *      shows thirteen tickers as if they were thirteen markets is lying by omission; this one reads
+ *      the number and says so.
  *
  *   2. THE MULTIPLIER IS COSMETIC. Under ERC-8056 it rescales what a holder is SHOWN without
  *      touching any raw balance — it is how Base represents a stock split. Raw units stay canonical
@@ -74,7 +76,8 @@ const SIG = {
  * `contractURI()` returns a base64 data-URI carrying `{name, symbol, image}` where `image` points at
  * Coinbase's own equity icon. Reading it means a ticker Base lists tomorrow arrives with correct
  * branding and no asset added to this repo — the difference between a hub and a hardcoded list.
- * Two assets have nothing to read (SPCXc never set one) and fall back to a favicon.
+ * Every listed asset answers it today, so the favicon fallback covers a read that did not land
+ * rather than an issuer that never published one.
  */
 function decodeContractURI(result: CallResult): { name?: string; symbol?: string; image?: string } | undefined {
   const uri = decodeString(result);

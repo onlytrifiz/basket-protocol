@@ -9,15 +9,20 @@ import { stocks } from "../stocks";
  * padded out with memecoins says something blander, and every entry that cannot
  * actually fill is a promise the checkout has to break later.
  *
- * So it is the four equities the vault actually buys and distributes, plus the
+ * So it is the equities the vault actually buys and distributes, plus the
  * protocol's own token, plus the two cash legs. Everything else Base carries is
  * still reachable by selling it yourself first; the list is a shortcut, not a
  * gate.
  *
- * ONLY THE EQUITIES WITH SUPPLY. `lib/stocks` marks four assets `inIndex`, and
- * that flag is what the swap panel already filters on for the same reason: the
- * other nine report `totalSupply() == 0` on Base, so there is no pool and no
- * route. Offering one would be offering a payment that cannot be made.
+ * ONLY THE EQUITIES THAT ROUTE. This list is derived from the `inIndex` flag in
+ * `lib/stocks`, which the swap panel already filters on for the same reason: an
+ * index member has an Aerodrome Slipstream USDC pool with depth, because the
+ * keeper could not buy it otherwise. Membership is the stronger test, not just
+ * a longer one — several listed names now have supply and still have no pool,
+ * and offering one would be offering a payment that cannot be made.
+ *
+ * Because it is derived, admitting an asset to the index adds it here too. That
+ * is the intended coupling: what the vault pays you in is what this shop spends.
  *
  * Measured with live exact-output quotes for a $25 order, the day this was
  * written: NVDAc 0.11976811 for exactly 25.00 USDC (~0.1% over spot), AAPLc

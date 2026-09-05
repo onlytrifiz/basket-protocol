@@ -90,7 +90,7 @@ A listed venue can therefore make a leg fail; it cannot take custody of more tha
 
 ## The B20 index
 
-The active index is read from the chain — `stocksLength()` and `stockAt(i)`. `script/Deploy.s.sol` seeds thirteen assets at effectively equal weight (twelve at `769 bps`, `TSLAc` at `772 bps`), but the deployed vault has been reconfigured since and the deploy list is not the live one. Never read the index from a document.
+The active index is read from the chain — `stocksLength()` and `stockAt(i)`. `script/Deploy.s.sol` seeds five assets at `2,000 bps` each (`NVDAc`, `AAPLc`, `GOOGLc`, `METAc`, `SPCXc`), but the deployed vault is reconfigured independently and the deploy list is not the live one. Never read the index from a document. To rotate it, use `script/SetIndex.s.sol`: it pre-flights the vault's two refusals (`ConfigDuringCycle`, weights ≠ 10,000 bps), flags assets new to the distribution set, and prints the owner calldata. Run it with **`base-forge`** — standard Foundry executes the B20 precompile byte locally and reports a false `InvalidIndex()`.
 
 B20 assets are validated via ERC-20 reads rather than bytecode checks, because they are Base Rust precompiles: `eth_getCode` returns a single `0xef` byte for a token and nothing for the factory. Note that `IndexTreasury.initialize` does gate basket entries on `code.length != 0`, which passes only because of that one-byte stub — an undocumented dependency worth remembering if B20 representation ever changes.
 

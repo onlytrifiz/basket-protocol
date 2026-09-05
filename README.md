@@ -58,7 +58,7 @@ Listing a venue grants no custody. For each leg the vault sizes the input itself
 
 The active index is **read from the chain**, never from this file: `stocksLength()` and `stockAt(i)` are the source of truth, and the owner can replace the index and its weights atomically between cycles. Any asset ever admitted remains eligible for distribution, so removing it from future buys cannot strand stock already held by the vault.
 
-`script/Deploy.s.sol` seeds a thirteen-asset universe at effectively equal weight (twelve at `769 bps`, TSLA at `772 bps`, totalling exactly `10,000 bps`):
+`script/Deploy.s.sol` seeds **five** of them at equal weight — `NVDAc`, `AAPLc`, `GOOGLc`, `METAc` and `SPCXc`, `2,000 bps` each, totalling exactly `10,000 bps`. It seeds only those five because the keeper skips the *entire* purchase when any active asset lacks a complete route, so a name with no supply or no Aerodrome Slipstream USDC pool would stall every buy rather than just its own leg. The full catalogue Coinbase has listed on Base is:
 
 | Symbol | Company | B20 address |
 | --- | --- | --- |
@@ -76,7 +76,7 @@ The active index is **read from the chain**, never from this file: `stocksLength
 | SPCXc | SpaceX | `0xb2000000000000000000007b9fcbd005511acbd5` |
 | TSLAc | Tesla | `0xb2000000000000000000001e800a7f5189430cd0` |
 
-**This table is the deployment default, not the live index.** The website reads the vault directly for exactly this reason.
+**This table is the catalogue, not the live index, and not the deploy seed either.** The website reads the vault directly for exactly this reason. Admitting one of the remaining names is `setIndex` plus a `inIndex: true` in `web/lib/stocks.ts` — see `script/SetIndex.s.sol`, which prints the calldata and dry-runs the rotation.
 
 The vault validates ERC-20 read compatibility rather than `extcodesize`: B20 assets are Base Rust precompiles and are not assumed to expose normal EVM bytecode. B20 remains ERC-20-compatible, but can enforce sender/receiver transfer policies. The vault uses raw ERC-20 `balanceOf`/`transfer` units, never the separate B20 UI-scaled display methods. A rejected dividend transfer is skipped rather than blocking the round; its exact share stays attributed to that holder and is retried later, never redivided to other holders.
 
@@ -132,7 +132,7 @@ web/app/components/shop/
 
 `/api/shop/pay` is where that is enforced. The source must be on the pay-with allowlist and its decimals come from there rather than from the request — the equities are 8-decimal tokens, and a client-supplied 18 would quote a payment a hundred million times too large. The destination is pinned to the settlement asset. The receiver must be given and is checked again against the calldata that comes back: a quote built without one pays the sender, the transaction succeeds, the buyer is told it worked, and the order is never paid.
 
-**What can be paid with is deliberately short**: the four B20 equities the vault actually distributes, `STFY`, and the two cash legs. The other nine listed equities report `totalSupply() == 0` on Base — no supply, no pool, no route — so offering them would be offering a payment that cannot be made.
+**What can be paid with is deliberately short**: the B20 equities the vault actually distributes, `STFY`, and the two cash legs. The list is derived from index membership rather than maintained separately, and membership is the stronger test — several catalogued equities now have supply and still have no pool to route through, so offering one would be offering a payment that cannot be made.
 
 **`STFY` is two transactions, on purpose.** An aggregator will quote it against USDC and route through a pool holding a few hundred dollars, next to the STFY/ETH pool holding tens of thousands. That pool also cannot carry the hook, which only fires when `currency0` is native ETH — so selling there would pay the vault nothing. Instead `StockifyRouter` sells STFY into ETH at the real pool, paying the same 3% hook fee as any other sale, and the ETH pays the order. The sale's `minOut` is set to what the second step spends, so if the first transaction succeeds the second is provably payable; whatever ETH is left over stays in the buyer's wallet.
 

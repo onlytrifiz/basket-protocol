@@ -109,9 +109,9 @@ contract Deploy is Script {
         console2.log("Pool deliberately uninitialized. Next: decide price/LP, then initialize and seed ETH/STFY.");
     }
 
-    /// @dev Only the B20 assets that are actually issued on Base today. The other nine names in
-    /// the catalogue report `totalSupply() == 0`, and the keeper skips the entire purchase whenever
-    /// any active asset lacks a complete route — so including them would stall every buy forever.
+    /// @dev Only the B20 assets that are actually issued on Base AND deep enough to route today.
+    /// The keeper skips the entire purchase whenever any active asset lacks a complete route, so a
+    /// name with no supply or no Slipstream USDC pool would stall every buy forever.
     /// Additional names can be admitted later with `setIndex` once they have supply and liquidity.
     /// @dev Venues the keeper may route purchases through, each verified on-chain before listing.
     /// Uniswap's Universal Router is deliberately absent: its pulls go through Permit2, which does
@@ -128,17 +128,18 @@ contract Deploy is Script {
     }
 
     function _initialIndex() private pure returns (address[] memory stocks, uint16[] memory weights) {
-        stocks = new address[](4);
-        weights = new uint16[](4);
+        stocks = new address[](5);
+        weights = new uint16[](5);
 
         stocks[0] = 0xb20000000000000000000078ee7ce2fE4908108C; // NVDAc
         stocks[1] = 0xb200000000000000000000C2e324d24d7eEcd1fb; // AAPLc
         stocks[2] = 0xb2000000000000000000002D0BA3164cc74f58B7; // GOOGLc
         stocks[3] = 0xb2000000000000000000008bC8786B856E61707C; // METAc
+        stocks[4] = 0xb2000000000000000000007b9fcbd005511aCBd5; // SPCXc
 
-        // Four equal weights divide exactly into 10,000 bps.
-        for (uint256 i; i < 4; ++i) {
-            weights[i] = 2_500;
+        // Five equal weights divide exactly into 10,000 bps.
+        for (uint256 i; i < 5; ++i) {
+            weights[i] = 2_000;
         }
     }
 }
