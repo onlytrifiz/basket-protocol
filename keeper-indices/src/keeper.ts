@@ -153,6 +153,26 @@ function revertName(e: unknown): string | null {
 }
 
 /**
+ * The name of the contract error a call reverted with — and ONLY that.
+ *
+ * Stricter than `revertName`, for the one place the distinction costs money. viem labels any
+ * `-32603` from a node as a revert and carries the node's message as the reason, so a node that
+ * has not seen our last block answers "Unknown block" and it arrives looking like the contract
+ * said no. Three of five payout batches were skipped on exactly that: the simulation was pinned
+ * to the block batch one landed in, a lagging node had not got there yet, and "refused by the
+ * contract: Unknown block" went in the log. A refusal the ABI can decode is the contract's; anything
+ * else is the node's, and the node's problems are retried, never obeyed.
+ */
+function declaredRevert(e: unknown): string | null {
+  const err = e as { walk?: (fn: (x: unknown) => boolean) => unknown };
+  if (typeof err?.walk !== "function") return null;
+  const reverted = err.walk((x) => x instanceof ContractFunctionRevertedError) as
+    | ContractFunctionRevertedError
+    | null;
+  return reverted?.data?.errorName ?? null;
+}
+
+/**
  * The block of our most recent transaction this cycle, or undefined before the first one.
  *
  * Reads that follow a write are pinned to it. Without that the keeper decides on state older than
@@ -244,7 +264,7 @@ async function sendRetrying(tx: (nonce?: number) => Promise<Hex>, what: string, 
       const nonce = await publicClient.getTransactionCount({ address: account.address, blockTag: "pending" });
       return await tx(nonce);
     } catch (e) {
-      const named = revertName(e);
+      const named = declaredRevert(e);
       if (named) throw new Error(`${what} reverted with ${named}`);
       if (attempt >= attempts) throw e;
       const wait = 2_000 * 2 ** (attempt - 1);
@@ -928,21 +948,35 @@ async function payOut(
 async function payBatch(treasury: Address, index: number, share: bigint, batch: Address[], gasLimit: bigint): Promise<boolean> {
   const what = `batch of ${batch.length}`;
   const args = [BigInt(index), share, batch] as const;
-  try {
-    await publicClient.simulateContract({
-      address: treasury,
-      abi: treasuryAbi,
-      functionName: "distributeAmount",
-      args,
-      account,
-      gas: gasLimit,
-      ...(pinBlock === undefined ? {} : { blockNumber: pinBlock }),
-    });
-  } catch (e) {
-    const named = revertName(e);
-    if (named) {
-      console.error(`      ${what} refused by the contract: ${named}`);
-      return false;
+  /**
+   * The simulation waits for the node the way `pinnedRead` does: a node that has not caught up to
+   * our last block cannot judge this batch, and "Unknown block" from it is not an answer. Only a
+   * refusal the ABI decodes counts; if the node never manages to answer, the batch is sent anyway —
+   * the send path has its own retries and `confirm()` reads the outcome.
+   */
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try {
+      await publicClient.simulateContract({
+        address: treasury,
+        abi: treasuryAbi,
+        functionName: "distributeAmount",
+        args,
+        account,
+        gas: gasLimit,
+        ...(pinBlock === undefined ? {} : { blockNumber: pinBlock }),
+      });
+      break;
+    } catch (e) {
+      const named = declaredRevert(e);
+      if (named) {
+        console.error(`      ${what} refused by the contract: ${named}`);
+        return false;
+      }
+      if (attempt === 4) {
+        console.error(`      ${what}: could not be simulated (${why(e).split("\n")[0]}) — sending anyway`);
+        break;
+      }
+      await sleep(700 * (attempt + 1));
     }
   }
   try {
