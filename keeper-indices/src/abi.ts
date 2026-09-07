@@ -86,6 +86,15 @@ export const treasuryAbi = [
   { type: "error", name: "BadConfig", inputs: [] },
   { type: "function", name: "interval", stateMutability: "view", inputs: [], outputs: [{ type: "uint32" }] },
   { type: "function", name: "batchWindow", stateMutability: "view", inputs: [], outputs: [{ type: "uint32" }] },
+  /**
+   * The open round, per basket entry — what lets a payout that stopped between batches be picked up
+   * where it left off instead of abandoned. Budget and paid are in the entry's own units; the cursor
+   * is the highest address paid so far, and the next batch has to start above it.
+   */
+  { type: "function", name: "lastDistribution", stateMutability: "view", inputs: [{ type: "uint256" }], outputs: [{ type: "uint256" }] },
+  { type: "function", name: "roundBudget", stateMutability: "view", inputs: [{ type: "uint256" }], outputs: [{ type: "uint256" }] },
+  { type: "function", name: "roundPaid", stateMutability: "view", inputs: [{ type: "uint256" }], outputs: [{ type: "uint256" }] },
+  { type: "function", name: "roundCursor", stateMutability: "view", inputs: [{ type: "uint256" }], outputs: [{ type: "address" }] },
   { type: "function", name: "minHolderBalance", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
   { type: "function", name: "spendableQuote", stateMutability: "view", inputs: [], outputs: [{ type: "uint256" }] },
   { type: "function", name: "excluded", stateMutability: "view", inputs: [{ type: "address" }], outputs: [{ type: "bool" }] },

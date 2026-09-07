@@ -170,6 +170,16 @@ let pinBlock: bigint | undefined;
 async function confirm(hash: Hex) {
   const receipt = await publicClient.waitForTransactionReceipt({ hash });
   if (pinBlock === undefined || receipt.blockNumber > pinBlock) pinBlock = receipt.blockNumber;
+  /**
+   * Mined is not the same as done.
+   *
+   * Every write here names its own gas, so viem never simulates first: a call the contract would
+   * refuse is broadcast anyway, mined as a revert, and comes back with a perfectly ordinary receipt.
+   * Waiting for that receipt and reading nothing off it is how a reverted payout batch would be
+   * counted as paid — its holders got nothing, its slice was written off as spent, and the log said
+   * "batch 2/5" like any other.
+   */
+  if (receipt.status !== "success") throw new Error(`transaction ${hash} reverted on-chain`);
   return receipt;
 }
 
@@ -211,6 +221,36 @@ async function send(tx: (nonce?: number) => Promise<Hex>): Promise<Hex> {
     const nonce = await publicClient.getTransactionCount({ address: account.address, blockTag: "pending" });
     console.log(`      nonce moved under us — resending at ${nonce}`);
     return tx(nonce);
+  }
+}
+
+/**
+ * A write that is retried when the failure is the node's, and never when it is the contract's.
+ *
+ * `revertName` is the line between the two: a contract that says no will say no again, so that is
+ * thrown straight back. Anything else is worth another go — a dropped connection, a timeout, or the
+ * live case: an endpoint that confirmed the first of five payout batches and answered "Missing or
+ * invalid parameters" to the second, one second later. One such answer used to end the round for
+ * the other four batches, which is 583 holders paid nothing while the first 150 were paid in full.
+ *
+ * The nonce is re-read from `pending` before every retry rather than left to viem, because a
+ * load-balanced endpoint can hand back a stale one right after our own transaction lands, and a
+ * stale nonce is exactly the kind of thing that comes back as "invalid parameters".
+ */
+async function sendRetrying(tx: (nonce?: number) => Promise<Hex>, what: string, attempts = 5): Promise<Hex> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      if (attempt === 1) return await send(tx);
+      const nonce = await publicClient.getTransactionCount({ address: account.address, blockTag: "pending" });
+      return await tx(nonce);
+    } catch (e) {
+      const named = revertName(e);
+      if (named) throw new Error(`${what} reverted with ${named}`);
+      if (attempt >= attempts) throw e;
+      const wait = 2_000 * 2 ** (attempt - 1);
+      console.error(`      ${what}: ${why(e).split("\n")[0]} — retrying in ${wait / 1000}s (${attempt}/${attempts - 1})`);
+      await sleep(wait);
+    }
   }
 }
 
@@ -737,6 +777,19 @@ async function eligibleHolders(coin: Address, treasury: Address, floor: bigint):
  * share of the round's total, computed off the same snapshot, so the proportions survive the split.
  * The contract fixes the round's budget when the first batch opens it, which is what stops a swap
  * landing mid-round from being paid out as if it had been there all along.
+ *
+ * A BATCH THAT FAILS DOES NOT END THE ROUND. The batches are pages of one address-ordered list, so
+ * whatever stops the round after page one stops it at the same 150 wallets every time: they are
+ * paid, the round expires, their unpaid neighbours' slice rolls into the next budget, and that
+ * budget is split over the whole list again — the same 150 first. That is what "some get too much,
+ * others too little" looked like on the live index: 733 holders, five batches, one landed. Now a
+ * failed batch is retried, then skipped, and the rest of the list is still paid; its own slice is
+ * never handed to anyone else, it simply waits for the next round.
+ *
+ * `resume` continues a round an earlier pass left open — see `runIndex` — from above the contract's
+ * cursor, with what its budget still allows. Same proportions: what is left is exactly the unpaid
+ * holders' share of the original budget, so splitting it over them by weight reproduces the split
+ * that would have happened in one pass.
  */
 async function payOut(
   treasury: Address,
@@ -752,45 +805,57 @@ async function payOut(
    * transfers were always right; only the account of them was wrong, which is the kind of error that
    * survives because nothing reverts.
    */
-  decimals: number | null
+  decimals: number | null,
+  resume?: { cursor: Address; remaining: bigint }
 ) {
   const gas = (n: number) => GAS_BASE + GAS_PER_HOLDER * BigInt(n);
 
-  if (holders.length <= MAX_HOLDERS_PER_TX) {
+  if (resume) {
+    // Only who is still owed: the contract refuses any address at or below its cursor.
+    const cursor = BigInt(resume.cursor);
+    holders = holders.filter((h) => BigInt(h) > cursor);
+    amount = resume.remaining;
+    if (holders.length === 0) {
+      return console.log(`    pay [${index}] nothing to resume: no eligible holder is above the cursor`);
+    }
+    console.log(`    pay [${index}] resuming an open round: ${fmt(amount, decimals)} left for ${holders.length} holders`);
+  } else if (holders.length <= MAX_HOLDERS_PER_TX) {
     console.log(`    pay [${index}] ${fmt(amount, decimals)} to ${holders.length} holders`);
     if (DRY_RUN) return;
-    const hash = await send((nonce) =>
-      wallet.writeContract({
-        address: treasury,
-        abi: treasuryAbi,
-        functionName: "distribute",
-        args: [BigInt(index), holders],
-        gas: gas(holders.length),
-        nonce,
-      })
+    const hash = await sendRetrying(
+      (nonce) =>
+        wallet.writeContract({
+          address: treasury,
+          abi: treasuryAbi,
+          functionName: "distribute",
+          args: [BigInt(index), holders],
+          gas: gas(holders.length),
+          nonce,
+        }),
+      "payout"
     );
     const receipt = await confirm(hash);
     await announce(`Paid out ${fmt(amount, decimals)} to ${holders.length} holders`, receipt.transactionHash);
     return;
-  }
-
-  /**
-   * Read what is actually there, as late as possible.
-   *
-   * `distribute()` reads the balance itself, so the single-batch path cannot get this wrong. The
-   * batched path has to name an amount, and an amount read before the buy it was meant to hand out
-   * is an amount that pays the previous round's dust instead: one round moved 61 wei to ten holders
-   * while 2.23 shares sat untouched in the treasury.
-   */
-  const [onHand] = (await publicClient.readContract({
-    address: treasury,
-    abi: treasuryAbi,
-    functionName: "pending",
-    args: [BigInt(index)],
-  })) as [bigint, bigint];
-  if (onHand !== amount) {
-    console.log(`    pay [${index}] balance moved since the round was sized: ${fmt(amount, decimals)} → ${fmt(onHand, decimals)}`);
-    amount = onHand;
+  } else {
+    /**
+     * Read what is actually there, as late as possible.
+     *
+     * `distribute()` reads the balance itself, so the single-batch path cannot get this wrong. The
+     * batched path has to name an amount, and an amount read before the buy it was meant to hand out
+     * is an amount that pays the previous round's dust instead: one round moved 61 wei to ten holders
+     * while 2.23 shares sat untouched in the treasury.
+     */
+    const [onHand] = (await publicClient.readContract({
+      address: treasury,
+      abi: treasuryAbi,
+      functionName: "pending",
+      args: [BigInt(index)],
+    })) as [bigint, bigint];
+    if (onHand !== amount) {
+      console.log(`    pay [${index}] balance moved since the round was sized: ${fmt(amount, decimals)} → ${fmt(onHand, decimals)}`);
+      amount = onHand;
+    }
   }
   if (amount === 0n) return;
 
@@ -810,28 +875,169 @@ async function payOut(
   }
   if (grand === 0n) return;
 
-  console.log(`    pay [${index}] ${fmt(amount, decimals)} to ${holders.length} holders in ${batches.length} batches`);
+  /**
+   * Every batch's slice is fixed here, off the one snapshot, before anything is sent.
+   *
+   * It used to be "the last batch takes whatever is left", which is right only when every batch
+   * before it landed: after a failure it hands the failed batch's slice to the last one, paying its
+   * holders for other people's coins. Only the rounding dust goes to the last batch now, and a slice
+   * whose batch did not land stays in the treasury for the next round.
+   */
+  const shares = weights.map((w) => (amount * w) / grand);
+  shares[shares.length - 1] += amount - shares.reduce((s, x) => s + x, 0n);
+
+  console.log(
+    `    pay [${index}] ${fmt(amount, decimals)} to ${holders.length} holders in ${batches.length} batches` +
+      (resume ? " (resumed)" : "")
+  );
   if (DRY_RUN) return;
 
-  let spent = 0n;
+  let paid = 0n;
+  let paidHolders = 0;
+  const unpaid: number[] = [];
   for (let k = 0; k < batches.length; k++) {
-    // The last batch takes the remainder rather than its own rounded share, so the batches add up to
-    // exactly the round's budget and never one wei over it.
-    const share = k === batches.length - 1 ? amount - spent : (amount * weights[k]) / grand;
-    if (share <= 0n) continue;
-    const hash = await send((nonce) =>
-      wallet.writeContract({
-        address: treasury,
-        abi: treasuryAbi,
-        functionName: "distributeAmount",
-        args: [BigInt(index), share, batches[k]],
-        gas: gas(batches[k].length),
-        nonce,
-      })
+    if (shares[k] <= 0n) continue;
+    const ok = await payBatch(treasury, index, shares[k], batches[k], gas(batches[k].length));
+    if (ok) {
+      paid += shares[k];
+      paidHolders += batches[k].length;
+      console.log(`      batch ${k + 1}/${batches.length}: ${fmt(shares[k], decimals)}`);
+    } else {
+      unpaid.push(k);
+      console.error(`      batch ${k + 1}/${batches.length}: NOT PAID — ${batches[k].length} holders wait for the next round`);
+    }
+  }
+
+  const left = amount - paid;
+  const summary =
+    `Paid out ${fmt(paid, decimals)} to ${paidHolders} holders` +
+    (unpaid.length ? ` — ${holders.length - paidHolders} holders in ${unpaid.length} batch(es) NOT paid, ${fmt(left, decimals)} held for the next round` : "");
+  if (unpaid.length) console.error(`    ${summary}`);
+  await announce(summary);
+}
+
+/**
+ * One batch, landed or not. Never throws: the caller decides what a miss means for the round.
+ *
+ * Simulated first, because every batch names its own gas and would otherwise be broadcast blind: a
+ * batch the contract refuses would burn a full payout's gas to be mined as a revert, and the reason
+ * would be lost. The simulation is pinned to our last transaction's block so a lagging node cannot
+ * judge batch N against a chain that has not seen batch N-1. A node that cannot simulate at all is
+ * not a contract saying no, and the batch is sent regardless.
+ */
+async function payBatch(treasury: Address, index: number, share: bigint, batch: Address[], gasLimit: bigint): Promise<boolean> {
+  const what = `batch of ${batch.length}`;
+  const args = [BigInt(index), share, batch] as const;
+  try {
+    await publicClient.simulateContract({
+      address: treasury,
+      abi: treasuryAbi,
+      functionName: "distributeAmount",
+      args,
+      account,
+      gas: gasLimit,
+      ...(pinBlock === undefined ? {} : { blockNumber: pinBlock }),
+    });
+  } catch (e) {
+    const named = revertName(e);
+    if (named) {
+      console.error(`      ${what} refused by the contract: ${named}`);
+      return false;
+    }
+  }
+  try {
+    const hash = await sendRetrying(
+      (nonce) =>
+        wallet.writeContract({
+          address: treasury,
+          abi: treasuryAbi,
+          functionName: "distributeAmount",
+          args,
+          gas: gasLimit,
+          nonce,
+        }),
+      what
     );
     await confirm(hash);
-    spent += share;
-    console.log(`      batch ${k + 1}/${batches.length}: ${fmt(share, decimals)}`);
+    return true;
+  } catch (e) {
+    console.error(`      ${what} failed: ${why(e).split("\n")[0]}`);
+    return false;
+  }
+}
+
+/**
+ * Finish what an earlier pass started, before anything else.
+ *
+ * A payout that stops between batches — a crash, a redeploy, an endpoint that refuses the second
+ * batch — leaves the contract holding an OPEN round: budget fixed, cursor at the last holder paid,
+ * and `pending()` already reporting the next round as a whole interval away. Nothing in the
+ * readiness check would ever look at it again. Left there, the round expires, the unpaid slice rolls
+ * into the next budget and is split over EVERYONE again — so the holders below the cursor are paid
+ * twice and the ones above it not at all, and because the list is address-ordered it is the same
+ * holders on each side every time.
+ *
+ * The contract allows a round to be continued inside `batchWindow` from above its cursor, so it is,
+ * here, first. Past the window there is nothing to do but say so: the slice is not lost, it joins the
+ * next round.
+ */
+async function resumeOpenRounds(treasury: Address, coin: Address, tokens: Address[]) {
+  const read = <T,>(functionName: string, args: unknown[] = []) =>
+    publicClient.readContract({ address: treasury, abi: treasuryAbi, functionName, args } as never) as Promise<T>;
+
+  /**
+   * Best-effort, and never in the way of the pass that follows.
+   *
+   * These getters are read on every cycle, so a clone whose implementation lacks one — or a node
+   * having a bad minute — must cost this step, not the harvest, buy and payout behind it. The
+   * previous behaviour on a missing resume was "nothing", and a thrown read would be worse.
+   */
+  let window: number;
+  try {
+    window = Number(await read<bigint>("batchWindow"));
+  } catch (e) {
+    return console.error(`    open rounds not checked: ${why(e).split("\n")[0]}`);
+  }
+  for (let i = 0; i < tokens.length; i++) {
+    let opened: bigint, budget: bigint, paid: bigint, cursor: Address;
+    try {
+      [opened, budget, paid, cursor] = await Promise.all([
+        read<bigint>("lastDistribution", [BigInt(i)]),
+        read<bigint>("roundBudget", [BigInt(i)]),
+        read<bigint>("roundPaid", [BigInt(i)]),
+        read<Address>("roundCursor", [BigInt(i)]),
+      ]);
+    } catch (e) {
+      console.error(`    [${i}] open round not checked: ${why(e).split("\n")[0]}`);
+      continue;
+    }
+    if (opened === 0n || paid >= budget) continue;
+
+    const decimals = await decimalsOf(tokens[i]);
+    const left = budget - paid;
+    const closesAt = Number(opened) + window;
+    // A batch that lands a few seconds after the window is a revert paid for in gas, so the last
+    // seconds are treated as already closed rather than raced.
+    if (now() + 15 > closesAt) {
+      console.log(
+        `    [${i}] an open round expired unfinished: ${fmt(left, decimals)} left for holders above ${short(cursor)} — it joins the next round`
+      );
+      continue;
+    }
+    console.log(`    [${i}] an open round is unfinished: ${fmt(left, decimals)} left, ${closesAt - now()}s to close it`);
+    if (DRY_RUN) continue;
+
+    const floor = await read<bigint>("minHolderBalance");
+    const holders = await eligibleHolders(coin, treasury, floor);
+    if (holders === null) {
+      console.error("    holder list unavailable — open round not resumed");
+      continue;
+    }
+    try {
+      await payOut(treasury, coin, i, 0n, holders, decimals, { cursor, remaining: left });
+    } catch (e) {
+      console.error(`    resume [${i}] failed: ${(e as Error).message.split("\n")[0]}`);
+    }
   }
 }
 
@@ -975,6 +1181,8 @@ async function runIndex(treasury: Address) {
       publicClient.readContract({ address: t, abi: erc20Abi, functionName: "symbol" }).catch(() => short(t))
     )
   );
+
+  await resumeOpenRounds(treasury, coin, tokens);
 
   // Which names' rounds have come due — on time alone, because the buy happens after this.
   const ready: number[] = [];
