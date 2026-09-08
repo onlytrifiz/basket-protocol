@@ -128,6 +128,16 @@ export default async function IndexPage({
   const visible = events.slice((page - 1) * PER_PAGE, page * PER_PAGE);
   const burnCount = events.filter((e) => e.kind === "burn").length;
 
+  /**
+   * The history was never read, which is NOT the same as a history of nothing.
+   *
+   * These two rendered identically until they had to be told apart: every treasury past the visible
+   * page had no activity fetched for it at all, and the page reported them as indexes that had paid
+   * nobody. The read is fixed in `lib/indices`; this is the half that makes the next such gap show
+   * as a gap instead of quietly becoming a fact about the index.
+   */
+  const unread = history === null;
+
   /** What a holding calls itself: the seed list, then what the chain said, then nothing. */
   const symbolOfHolding = (token?: string) => {
     if (!token) return null;
@@ -199,13 +209,15 @@ export default async function IndexPage({
                 })()}
               </strong>
               <small>
-                {burns
-                  ? history?.burnedUnits
-                    ? `${fmtShares(history.burnedUnits)} ${index.coinSymbol ?? "coins"} destroyed`
-                    : "nothing yet"
-                  : history?.paidUnits.length
-                    ? history.paidUnits.map((p) => `${amount(p.units)} ${p.symbol}`).join(" · ")
-                    : "nothing yet"}
+                {unread
+                  ? "could not be read"
+                  : burns
+                    ? history?.burnedUnits
+                      ? `${fmtShares(history.burnedUnits)} ${index.coinSymbol ?? "coins"} destroyed`
+                      : "nothing yet"
+                    : history?.paidUnits.length
+                      ? history.paidUnits.map((p) => `${amount(p.units)} ${p.symbol}`).join(" · ")
+                      : "nothing yet"}
               </small>
             </div>
             {/* "Rounds paid: 0" beside "$60 burned" reads as an index that has done nothing. A
@@ -214,17 +226,25 @@ export default async function IndexPage({
               <span>{burns ? "Burns run" : "Rounds paid"}</span>
               <strong>{history ? (burns ? burnCount : history.rounds) : "—"}</strong>
               <small>
-                {burns
-                  ? burnCount > 0 ? "supply destroyed each time" : "none yet"
-                  : history && history.rounds > 0
-                    ? `${history.payments.toLocaleString("en-US")} wallet payments`
-                    : "none yet"}
+                {unread
+                  ? "could not be read"
+                  : burns
+                    ? burnCount > 0 ? "supply destroyed each time" : "none yet"
+                    : history && history.rounds > 0
+                      ? `${history.payments.toLocaleString("en-US")} wallet payments`
+                      : "none yet"}
               </small>
             </div>
             <div>
               <span>Fees collected</span>
               <strong>{history?.feesUsd ? usdCompact(history.feesUsd) : "—"}</strong>
-              <small>{history?.feesUnits ? `${amount(history.feesUnits)} ${quoteLabel}` : "none yet"}</small>
+              <small>
+                {unread
+                  ? "could not be read"
+                  : history?.feesUnits
+                    ? `${amount(history.feesUnits)} ${quoteLabel}`
+                    : "none yet"}
+              </small>
             </div>
             <div>
               <span>Creator earnings</span>

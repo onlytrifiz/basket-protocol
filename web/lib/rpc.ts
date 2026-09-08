@@ -89,6 +89,118 @@ async function batchOnce(calls: RpcCall[], rpc: string): Promise<CallResult[]> {
 }
 
 /**
+ * Multicall3 — the same address on Base as on nearly every chain that has one.
+ *
+ * WHY THIS EXISTS. A JSON-RPC batch is still N calls as far as the endpoint is concerned.
+ * `BATCH_LIMIT` is ten because that is what Base's public RPC accepts, its rate limit applies PER
+ * ELEMENT inside the batch, and the chunks therefore have to be paced apart. The indices hub asks
+ * 100 treasuries for 7 fields each: 700 calls, 70 paced chunks, and 13.8 seconds of them measured
+ * on the live site against a cold cache.
+ *
+ * Packed into `aggregate3` the same 700 are four `eth_call`s, because the node runs the whole array
+ * inside one call and the rate limit counts one. The three states survive intact: a sub-call that
+ * reverts comes back `success: false`, which is still an ANSWER and not a gap, while a chunk the
+ * endpoint never served leaves every call in it unavailable for the plain path below to retry.
+ *
+ * Base's B20 equities are Rust precompiles rather than EVM bytecode. Verified on-chain before
+ * relying on it: they answer a `staticcall` arriving from inside Multicall3 exactly as they answer
+ * a top-level one, `decimals()` and `balanceOf()` both.
+ */
+const MULTICALL3 = "0xcA11bde05977b3631167028862bE2a173976CA11";
+/**
+ * Sub-calls per packed request. Set to 0 or 1 to turn packing off and keep only the plain path.
+ *
+ * Read without the `|| default` idiom the knobs above use, because that idiom cannot express zero:
+ * `Number("0") || 200` is 200, so the one value that turns the feature off would silently turn it
+ * on — and an off switch that does nothing is worse than no off switch, since it is reached exactly
+ * when something has gone wrong and someone is trying to rule this out.
+ */
+const MULTICALL_SIZE = (() => {
+  const raw = process.env.BASE_RPC_MULTICALL_SIZE;
+  if (raw === undefined || raw.trim() === "") return 200;
+  const value = Number(raw);
+  return Number.isFinite(value) && value >= 0 ? Math.floor(value) : 200;
+})();
+const AGGREGATE3 = "0x82ad56cb";
+
+/** `aggregate3((address target, bool allowFailure, bytes callData)[])`, encoded by hand. */
+function encodeAggregate3(calls: RpcCall[]): string {
+  // Each element is a dynamic tuple, so it is written in the data section and pointed at from the
+  // head. Inside the tuple the `bytes` offset is relative to the TUPLE's start, not the array's.
+  const bodies = calls.map((call) => {
+    const data = call.data.replace(/^0x/, "");
+    const length = Math.floor(data.length / 2);
+    const padded = data.padEnd(Math.ceil(length / 32) * 64, "0");
+    return pad(call.to) + pad("1") + pad("60") + pad(length.toString(16)) + padded;
+  });
+
+  let cursor = calls.length * 32;
+  const heads: string[] = [];
+  for (const body of bodies) {
+    heads.push(pad(cursor.toString(16)));
+    cursor += body.length / 2;
+  }
+
+  return AGGREGATE3 + pad("20") + pad(calls.length.toString(16)) + heads.join("") + bodies.join("");
+}
+
+/**
+ * The `(bool success, bytes returnData)[]` that comes back.
+ *
+ * Returns null rather than a partial answer whenever the shape is not what was asked for: a decode
+ * that guesses would hand the caller data belonging to a different call, which is worse than the
+ * unavailable it would otherwise report.
+ */
+function decodeAggregate3(result: string, expected: number): CallResult[] | null {
+  const body = result.replace(/^0x/, "");
+  const word = (i: number) => body.slice(i * 64, (i + 1) * 64);
+  const num = (hex: string) => {
+    if (!/^[0-9a-fA-F]{64}$/.test(hex)) return NaN;
+    const value = Number(BigInt(`0x${hex}`));
+    return Number.isSafeInteger(value) ? value : NaN;
+  };
+
+  if (num(word(0)) !== 0x20 || num(word(1)) !== expected) return null;
+
+  const out: CallResult[] = [];
+  for (let i = 0; i < expected; i++) {
+    const at = num(word(2 + i));
+    if (!Number.isFinite(at) || at % 32 !== 0) return null;
+    const head = 2 + at / 32;
+    const success = num(word(head));
+    const to = num(word(head + 1));
+    if (!Number.isFinite(success) || !Number.isFinite(to) || to % 32 !== 0) return null;
+    const lengthAt = head + to / 32;
+    const length = num(word(lengthAt));
+    if (!Number.isFinite(length)) return null;
+    const data = body.slice((lengthAt + 1) * 64, (lengthAt + 1) * 64 + length * 2);
+    if (data.length !== length * 2) return null;
+    out.push(success === 1 ? { state: "ok", data: `0x${data}` } : { state: "reverted" });
+  }
+  return out;
+}
+
+/** One packed request, or null when this endpoint did not serve it in the shape it was asked. */
+async function multicallOnce(calls: RpcCall[], rpc: string): Promise<CallResult[] | null> {
+  const response = await fetch(rpc, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 0,
+      method: "eth_call",
+      params: [{ to: MULTICALL3, data: encodeAggregate3(calls) }, "latest"],
+    }),
+    cache: "no-store",
+  });
+  if (!response.ok) return null;
+
+  const payload = await response.json() as { result?: unknown };
+  if (typeof payload?.result !== "string") return null;
+  return decodeAggregate3(payload.result, calls.length);
+}
+
+/**
  * Batched `eth_call`s, chunked, paced, and retried until only real answers remain.
  *
  * Retries target the SPECIFIC calls that came back unavailable rather than whole chunks, so a
@@ -100,6 +212,29 @@ export async function batchCall(calls: RpcCall[]): Promise<CallResult[]> {
   if (calls.length === 0) return [];
   const out: CallResult[] = calls.map(() => UNAVAILABLE);
   let pending = calls.map((_, index) => index);
+
+  /**
+   * One packed pass first, then the plain path for whatever it left unanswered.
+   *
+   * Additive on purpose. If the endpoint will not serve `aggregate3` — an old node, a gas cap, a
+   * proxy that rewrites `eth_call` — the loop below runs exactly as it did before and the only cost
+   * is the one attempt, which is why the first refusal breaks out instead of paying for the rest.
+   */
+  if (MULTICALL_SIZE > 1) {
+    for (let i = 0; i < pending.length; i += MULTICALL_SIZE) {
+      const slice = pending.slice(i, i + MULTICALL_SIZE);
+      let packed: CallResult[] | null = null;
+      try {
+        packed = await multicallOnce(slice.map((index) => calls[index]), RPCS[0]);
+      } catch {
+        packed = null;
+      }
+      if (!packed) break;
+      packed.forEach((result, j) => { out[slice[j]] = result; });
+      if (i + MULTICALL_SIZE < pending.length) await sleep(BATCH_GAP_MS);
+    }
+    pending = pending.filter((index) => out[index].state === "unavailable");
+  }
 
   for (let round = 0; round < MAX_ROUNDS && pending.length > 0; round++) {
     const rpc = RPCS[Math.min(round, RPCS.length - 1)];

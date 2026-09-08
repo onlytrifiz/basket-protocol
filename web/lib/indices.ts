@@ -231,6 +231,54 @@ async function loadIndices(): Promise<Index[]> {
   return (await loadIndexRows(addresses)).reverse();
 }
 
+/**
+ * Every treasury the factory has minted — addresses only, and deliberately NOT capped at
+ * `PAGE_LIMIT`.
+ *
+ * `PAGE_LIMIT` is a decision about how long a VISIBLE LIST should be. It was also, by accident,
+ * deciding which treasuries the activity log ever asked the chain about: `loadActivity` handed it
+ * the page, `readActivityLogs` filters `getLogs` by address, and the stored cursor then recorded
+ * that page as the set it had covered. So the 110 newest of 210 treasuries had their history
+ * fetched by nobody — and because the detail page renders an address it has no activity for exactly
+ * like one whose activity is zero, each of them read as an index that had never paid anything. DOC
+ * distributed 4.24 AAPLc to 150 holders and the page said "nothing yet".
+ *
+ * The visible list stays paged. The scan does not: it is the registry's own length that decides it.
+ * Rows are not loaded here — 210 addresses is one call, 210 rows is 1,470.
+ */
+async function loadAllAddresses(): Promise<string[]> {
+  if (!indicesLive) return [];
+
+  const [countRes] = await batchCall([{ to: FACTORY, data: SEL.indexCount }]);
+  // Same rule as everywhere else here: a count nobody would give us is not a count of zero.
+  if (countRes.state === "unavailable") throw new Error("indices: indexCount unread");
+  const count = Number(toBigInt(countRes) ?? 0n);
+  if (count === 0) return [];
+
+  const PAGE = 500;
+  const out: string[] = [];
+  for (let offset = 0; offset < count; offset += PAGE) {
+    const limit = Math.min(PAGE, count - offset);
+    const [res] = await batchCall([
+      { to: FACTORY, data: SEL.indexesPaged + pad(offset.toString(16)) + pad(limit.toString(16)) },
+    ]);
+    if (res.state === "unavailable") throw new Error("indices: indexesPaged unread");
+    if (res.state !== "ok" || !res.data) throw new Error("indices: indexesPaged unread");
+
+    const body = res.data.replace(/^0x/, "");
+    const n = Number(BigInt(`0x${body.slice(64, 128)}`));
+    for (let i = 0; i < n; i++) out.push(`0x${body.slice(128 + i * 64 + 24, 128 + (i + 1) * 64)}`);
+    // A page shorter than asked for means the registry ended early; nothing follows it.
+    if (n < limit) break;
+  }
+  return out;
+}
+
+/** Throws rather than returning [], so `cached` serves its last good list instead of an empty one. */
+function readAllAddresses(): Promise<string[]> {
+  return cached("indices:addresses", 60_000, loadAllAddresses);
+}
+
 /** How many the list reads in one page. The registry itself is not capped — see `readIndex`. */
 export const PAGE_LIMIT = 100;
 
@@ -419,8 +467,9 @@ export function readActivity(): Promise<Map<string, IndexActivity> | null> {
 }
 
 async function loadActivity(): Promise<Map<string, IndexActivity> | null> {
-  const all = await readIndices();
-  if (all.length === 0) return new Map();
+  // Every treasury, not the visible page — see `loadAllAddresses` for what that cost.
+  const addresses = await readAllAddresses();
+  if (addresses.length === 0) return new Map();
 
   /**
    * Read through the stored log rather than re-derived from the chain.
@@ -429,11 +478,11 @@ async function loadActivity(): Promise<Map<string, IndexActivity> | null> {
    * full `FACTORY_BLOCK`-to-head scan on every cold cache, which cost 1.9s when the explorer
    * answered and 27.7s when it did not, and grew by ~43,000 blocks a day either way.
    */
-  const logs = await readActivityLogs(all.map((i) => i.address), Object.values(TOPIC));
+  const logs = await readActivityLogs(addresses, Object.values(TOPIC));
   if (logs === null) return null;
 
   const out = new Map<string, IndexActivity>();
-  for (const index of all) out.set(index.address.toLowerCase(), emptyActivity());
+  for (const address of addresses) out.set(address.toLowerCase(), emptyActivity());
 
   for (const log of logs) {
     const key = log.address.toLowerCase();
