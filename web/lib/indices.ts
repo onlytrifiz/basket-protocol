@@ -19,6 +19,21 @@ import { readActivityLogs } from "./indexActivityLog";
  * pays, and no record of ours could be more authoritative than the contract itself.
  */
 const FACTORY = process.env.NEXT_PUBLIC_INDEX_FACTORY ?? "";
+
+/**
+ * How long a list or a history may be reused.
+ *
+ * Sixty seconds was sized for a page that read a hundred rows. It now reads the whole registry and
+ * a four-megabyte activity document, and the expensive path is not the steady state — it is the
+ * render that finds the cache expired: measured at 9.7s against 0.36s warm. A round is fifteen
+ * minutes apart at its fastest, so a figure up to a few minutes old is the same figure; paying that
+ * cold path every sixty seconds bought staleness nobody could perceive.
+ *
+ * `cached` still serves the last good answer past the TTL when a load fails, so a longer window
+ * never means a longer outage — only a longer reuse.
+ */
+const LIST_TTL_MS = Math.max(1_000, Number(process.env.INDEX_LIST_TTL_MS) || 180_000);
+const ACTIVITY_TTL_MS = Math.max(1_000, Number(process.env.INDEX_ACTIVITY_TTL_MS) || 300_000);
 const isAddress = (v: string) => /^0x[a-fA-F0-9]{40}$/.test(v);
 
 export const indicesLive = isAddress(FACTORY);
@@ -120,7 +135,7 @@ function decodeBasket(hex: string): { tokens: string[]; bps: number[] } {
 
 /** Every index the factory has minted, newest first. */
 export function readIndices(): Promise<Index[]> {
-  return cached("indices:all", 60_000, loadIndices).catch(() => []);
+  return cached("indices:all", LIST_TTL_MS, loadIndices).catch(() => []);
 }
 
 /**
@@ -275,7 +290,7 @@ async function loadAllAddresses(): Promise<string[]> {
 
 /** Throws rather than returning [], so `cached` serves its last good list instead of an empty one. */
 function readAllAddresses(): Promise<string[]> {
-  return cached("indices:addresses", 60_000, loadAllAddresses);
+  return cached("indices:addresses", LIST_TTL_MS, loadAllAddresses);
 }
 
 /**
@@ -468,7 +483,7 @@ const emptyActivity = (): IndexActivity => ({
  * happened", and the pages render it as unread rather than as zero.
  */
 export function readActivity(): Promise<Map<string, IndexActivity> | null> {
-  return cached("indices:activity", 120_000, loadActivity).catch(() => null);
+  return cached("indices:activity", ACTIVITY_TTL_MS, loadActivity).catch(() => null);
 }
 
 async function loadActivity(): Promise<Map<string, IndexActivity> | null> {
@@ -689,7 +704,7 @@ function hasRun(row: IndexRow): boolean {
 
 /** Every index with its history priced, newest first. */
 export function readIndexRows(): Promise<{ rows: IndexRow[]; totals: IndexTotals }> {
-  return cached("indices:rows", 60_000, loadRows).catch(() => ({
+  return cached("indices:rows", LIST_TTL_MS, loadRows).catch(() => ({
     rows: [],
     totals: { returnedUsd: null, count: 0, withRounds: 0, rounds: 0, payments: 0, truncated: false },
   }));
