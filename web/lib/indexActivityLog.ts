@@ -38,6 +38,25 @@ const FACTORY_BLOCK = Math.max(0, Number(process.env.INDEX_FACTORY_DEPLOY_BLOCK)
  */
 const STALE_BLOCKS = Math.max(1, Number(process.env.INDEX_ACTIVITY_STALE_BLOCKS) || 5_000);
 
+/**
+ * How many never-seen treasuries one request may backfill.
+ *
+ * A backfill covers the factory's whole life, which is wide enough to route to the explorer — and
+ * the explorer takes ONE ADDRESS PER REQUEST. So the cost of this branch is linear in how many
+ * addresses are new, and the day the caller stopped truncating its list to a page it went from
+ * "one new treasury now and then" to 110 at once: ~82 seconds of explorer calls, comfortably past
+ * the function timeout, on a request that would then have written nothing and started over.
+ *
+ * Bounded instead, newest first, and the cursor records only what was actually fetched. Coverage
+ * converges over a handful of requests, and every one of them commits its share.
+ *
+ * EIGHT, because the explorer answers in ~500ms per address measured against the live factory: at
+ * eight that is four seconds on the one render that does the work, and at twenty-five it was twelve.
+ * Sized for the steady state rather than for a migration — treasuries appear one or two at a time,
+ * so this ceiling should never be the thing that binds once coverage has caught up.
+ */
+const BACKFILL_LIMIT = Math.max(1, Number(process.env.INDEX_ACTIVITY_BACKFILL) || 8);
+
 type Stored = {
   version: number;
   /** Every block up to and including this one has been scanned, for every address in `covered`. */
@@ -133,11 +152,16 @@ export async function readActivityLogs(addresses: string[], keepTopics: string[]
   // A treasury the cursor never asked about is backfilled on its own, once, over the range the
   // cursor already claims. Its first log cannot predate its creation, so this is one cheap request
   // per new address rather than a reason to rewind the cursor for everybody.
+  //
+  // Newest first: the tail of the registry is what people are looking at, and a treasury created an
+  // hour ago is the one whose absent history reads as a fact about it rather than as a gap.
   const unseen = addresses.filter((a) => !covered.has(a.toLowerCase()));
-  if (unseen.length > 0 && stored.lastBlock > FACTORY_BLOCK) {
-    const backfill = await getLogs(unseen, [], FACTORY_BLOCK, stored.lastBlock);
+  const batch = unseen.slice(-BACKFILL_LIMIT);
+  if (batch.length > 0 && stored.lastBlock > FACTORY_BLOCK) {
+    const backfill = await getLogs(batch, [], FACTORY_BLOCK, stored.lastBlock);
     if (backfill === null) return null;
     fresh.push(...keep(backfill));
+    for (const a of batch) covered.add(a.toLowerCase());
   }
 
   const from = stored.lastBlock > 0 ? stored.lastBlock + 1 : FACTORY_BLOCK;
@@ -145,18 +169,30 @@ export async function readActivityLogs(addresses: string[], keepTopics: string[]
     const recent = await getLogs(addresses, [], from, tip);
     if (recent === null) return null;
     fresh.push(...keep(recent));
+    // A scan that starts at the factory's own block leaves nothing earlier to backfill: this one
+    // pass covers every address it asked about, and saying so is what stops a rebuilt document from
+    // then backfilling all of them a batch at a time over ranges it has already read.
+    if (from <= FACTORY_BLOCK) for (const a of addresses) covered.add(a.toLowerCase());
   }
 
   const seen = new Set(stored.logs.map(key));
   const added = fresh.filter((log) => !seen.has(key(log)));
   const logs = [...stored.logs, ...added].sort((a, b) => a.blockNumber - b.blockNumber || a.logIndex - b.logIndex);
 
-  const grew = added.length > 0 || unseen.length > 0;
+  const grew = added.length > 0 || batch.length > 0;
   if (grew || tip - stored.lastBlock >= STALE_BLOCKS) {
     try {
       await put(
         PATHNAME,
-        JSON.stringify({ version: VERSION, lastBlock: tip, covered: addresses.map((a) => a.toLowerCase()), logs } satisfies Stored),
+        /**
+         * `covered` is what was actually FETCHED over the cursor's range, not what was asked for.
+         *
+         * Writing the request list instead would mark a treasury as covered on the pass that
+         * deferred it — the backfill is bounded, so most passes defer most of them — and it would
+         * never be fetched again. The set only ever grows, so a deferred address stays pending
+         * until some pass gets to it.
+         */
+        JSON.stringify({ version: VERSION, lastBlock: tip, covered: [...covered], logs } satisfies Stored),
         { access: "public", allowOverwrite: true, cacheControlMaxAge: 60, contentType: "application/json" },
       );
     } catch {
