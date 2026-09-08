@@ -210,41 +210,40 @@ async function loadIndices(): Promise<Index[]> {
   const count = Number(toBigInt(countRes) ?? 0n);
   if (count === 0) return [];
 
-  // One page. Past this the LIST is truncated — reported as `totals.truncated`, which the set page
-  // says out loud — but no index becomes unreachable: `readIndex` reads a treasury directly when it
-  // is not on the page.
-  const limit = Math.min(count, PAGE_LIMIT);
-  const [pageRes] = await batchCall([
-    { to: FACTORY, data: SEL.indexesPaged + pad("0") + pad(limit.toString(16)) },
-  ]);
-  if (pageRes.state === "unavailable") throw new Error("indices: indexesPaged unread");
-  if (pageRes.state !== "ok" || !pageRes.data) return [];
-
-  const body = pageRes.data.replace(/^0x/, "");
-  const n = Number(BigInt(`0x${body.slice(64, 128)}`));
-  const addresses = Array.from(
-    { length: n },
-    (_, i) => `0x${body.slice(128 + i * 64 + 24, 128 + (i + 1) * 64)}`
-  );
+  /**
+   * The whole registry, newest first — and the cut, when there is one, keeps the NEW end.
+   *
+   * This used to read `indexesPaged(0, PAGE_LIMIT)`, which is the OLDEST hundred, because a row
+   * costs seven `eth_call`s and 210 rows was 1,470 of them: 70 paced chunks and thirteen seconds.
+   * `batchCall` packs them now, so the same 1,470 are a handful of requests and the cap has stopped
+   * paying for itself — while the page called "Every index" was quietly missing the 110 newest, DOC
+   * among them, and the note explaining the cut said "the most recent page of the registry" about a
+   * list that was the least recent one.
+   *
+   * `ROW_LIMIT` stays as a ceiling, because an unbounded row load is a thing that works until the
+   * registry is big enough that it does not. It is sized to be reached by growth, not by today.
+   */
+  const addresses = await loadAllAddresses();
+  const listed = addresses.length > ROW_LIMIT ? addresses.slice(-ROW_LIMIT) : addresses;
 
   // Newest first: the factory appends, so the tail is the most recent.
-  return (await loadIndexRows(addresses)).reverse();
+  return (await loadIndexRows(listed)).reverse();
 }
 
 /**
- * Every treasury the factory has minted — addresses only, and deliberately NOT capped at
- * `PAGE_LIMIT`.
+ * Every treasury the factory has minted — addresses only, and never cut.
  *
- * `PAGE_LIMIT` is a decision about how long a VISIBLE LIST should be. It was also, by accident,
- * deciding which treasuries the activity log ever asked the chain about: `loadActivity` handed it
- * the page, `readActivityLogs` filters `getLogs` by address, and the stored cursor then recorded
- * that page as the set it had covered. So the 110 newest of 210 treasuries had their history
- * fetched by nobody — and because the detail page renders an address it has no activity for exactly
- * like one whose activity is zero, each of them read as an index that had never paid anything. DOC
- * distributed 4.24 AAPLc to 150 holders and the page said "nothing yet".
+ * A cap on the visible list was also, by accident, deciding which treasuries the activity log ever
+ * asked the chain about: `loadActivity` handed it the page, `readActivityLogs` filters `getLogs` by
+ * address, and the stored cursor then recorded that page as the set it had covered. So the 110
+ * newest of 210 treasuries had their history fetched by nobody — and because the detail page
+ * renders an address it has no activity for exactly like one whose activity is zero, each of them
+ * read as an index that had never paid anything. DOC distributed 4.24 AAPLc across 224 holders and
+ * its page said "nothing yet".
  *
- * The visible list stays paged. The scan does not: it is the registry's own length that decides it.
- * Rows are not loaded here — 210 addresses is one call, 210 rows is 1,470.
+ * Kept separate from the rows even now that the list loads all of them, because the two are priced
+ * differently: 210 addresses is one call, 210 rows is 1,470 — so a ceiling belongs on the second
+ * and never on this.
  */
 async function loadAllAddresses(): Promise<string[]> {
   if (!indicesLive) return [];
@@ -279,8 +278,14 @@ function readAllAddresses(): Promise<string[]> {
   return cached("indices:addresses", 60_000, loadAllAddresses);
 }
 
-/** How many the list reads in one page. The registry itself is not capped — see `readIndex`. */
-export const PAGE_LIMIT = 100;
+/**
+ * The most rows the list will load at once. Not a page: the ceiling before the set is cut.
+ *
+ * Reached by growth rather than by the registry as it stands, so `totals.truncated` stays false
+ * and the set page keeps its name. `readIndex` still reads a treasury directly when it is past it,
+ * so nothing is unreachable either way.
+ */
+export const ROW_LIMIT = Math.max(1, Number(process.env.INDEX_ROW_LIMIT) || 400);
 
 /** Is this address a treasury this factory minted? The only thing that makes a direct read safe. */
 async function factoryKnows(address: string): Promise<boolean> {
@@ -292,8 +297,8 @@ async function factoryKnows(address: string): Promise<boolean> {
 /**
  * One index, or null when nothing at that address answers as one.
  *
- * Served from the paged list when it is on it, and read DIRECTLY when it is not. The list stops at
- * `PAGE_LIMIT`, and resolving a detail page out of it meant index 101 rendering as "Nothing at this
+ * Served from the loaded list when it is on it, and read DIRECTLY when it is not. The list stops at
+ * `ROW_LIMIT`, and resolving a detail page out of it meant index 101 rendering as "Nothing at this
  * address is an index" — the same sentence a wrong address gets, for one that exists and is running.
  * `isIndex()` on the factory is what makes the direct read safe: without it any address at all
  * would decode into a row of empty fields.
@@ -574,7 +579,7 @@ export type IndexTotals = {
    *
    * Surfaced rather than left implicit because a page titled "Every index" is a claim. Nothing goes
    * missing — `readIndex` reads a treasury directly whichever page it falls on — but the LIST stops
-   * at `PAGE_LIMIT`, and a truncated list that says nothing is the same kind of confident wrong
+   * at `ROW_LIMIT`, and a truncated list that says nothing is the same kind of confident wrong
    * answer this module refuses everywhere else.
    */
   truncated: boolean;
@@ -814,7 +819,7 @@ async function loadRows(): Promise<{ rows: IndexRow[]; totals: IndexTotals }> {
     rounds: bound.reduce((sum, r) => sum + r.rounds, 0),
     payments: bound.reduce((sum, r) => sum + r.payments, 0),
     // A full page is the only signal available here that there may be another one behind it.
-    truncated: all.length >= PAGE_LIMIT,
+    truncated: all.length >= ROW_LIMIT,
   };
 
   return { rows: bound, totals };
