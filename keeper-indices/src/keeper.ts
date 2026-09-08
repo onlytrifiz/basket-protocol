@@ -69,7 +69,23 @@ import { announce } from "./notify.js";
 
 
 const account = privateKeyToAccount(KEEPER_PRIVATE_KEY);
-const publicClient = createPublicClient({ chain, transport: http(RPC_URL, { batch: true, timeout: RPC_TIMEOUT_MS }) });
+/**
+ * `batch.multicall` packs concurrent `readContract` calls into one `aggregate3`; the transport's own
+ * `batch` still bundles what is left into single HTTP requests. They solve different halves: the
+ * provider bills per element inside a JSON-RPC batch, so only the first one lowers the bill.
+ *
+ * It groups by block, so pinned reads batch among themselves and never with the live ones. Base's
+ * B20 equities are Rust precompiles rather than EVM code, and were checked on-chain to answer a
+ * `staticcall` from inside Multicall3 with the same values as a direct read before this was turned
+ * on for a process that moves money.
+ */
+const publicClient = createPublicClient({
+  chain,
+  // 1024 bytes is viem's default window and it is small: it splits a 50-address balance read into
+  // two requests where one would do. These are short calls; give them room.
+  batch: { multicall: { batchSize: 16_384 } },
+  transport: http(RPC_URL, { batch: true, timeout: RPC_TIMEOUT_MS }),
+});
 const wallet = createWalletClient({ account, chain, transport: http(RPC_URL, { timeout: RPC_TIMEOUT_MS }) });
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -287,14 +303,41 @@ const unbindable = new Map<Address, string>();
 const curveCache = new Map<Address, Address | null>();
 const partyPoolCache = new Map<Address, Address | null>();
 /**
- * Coin lookups, including the misses.
+ * Which coin points its whole fee stream at which treasury — built at most ONCE per cycle.
  *
- * A basket that is not bound yet costs a log scan to work out, and without remembering the miss the
- * keeper would redo that scan every single cycle — which is how a public RPC starts answering 429 to
- * everything, payouts included. A miss is retried, just not on every pass.
+ * This replaces a per-treasury lookup, and the reason is that the lookup never depended on the
+ * treasury. Every unbound basket walked the SAME `CreatorSplitSet` window and read the SAME
+ * `splitsOf` for the same candidates, then compared the answer to its own address. With 73 of 213
+ * baskets unbound that was 73 identical scans a cycle: ~53 `getLogs` and up to 200 reads each,
+ * which priced out at roughly 89% of this keeper's entire RPC bill, and took most of the thirteen
+ * minutes a pass over the registry was taking.
+ *
+ * Built once, it answers all 73 from memory, and a basket that has been waiting for its launch for
+ * a month costs exactly as much as one created a minute ago: nothing. That is why there is no TTL
+ * here any more and no reason to give up on a stale basket — the thing a TTL was rationing is now
+ * a single scan whoever asks for it.
+ *
+ * `tried` is separate from the map so that a scan that FAILED is not retried by every remaining
+ * basket in the same pass. It is reset per cycle, so the next pass tries again.
  */
-const coinCache = new Map<Address, { coin: Address | null; at: number }>();
-const COIN_MISS_TTL = Number(process.env.COIN_MISS_TTL_SEC ?? "1800");
+let splitIndex: Map<string, Address> | null = null;
+/**
+ * When the index was last BUILT — not last used, and stamped before the build rather than after.
+ *
+ * Two jobs. It stops a pass from rebuilding once per unbound basket if the build fails, which is the
+ * whole reason the old per-treasury cache existed. And it decouples the scan from the pass, which
+ * matters because the loop wakes early whenever a round comes due: a keeper doing its job well can
+ * make many passes an hour, and rebuilding on each would hand back the saving this change exists
+ * for. A split that moves is picked up within the window, same as it always was.
+ */
+let splitIndexAt = 0;
+let splitIndexOk = false;
+const SPLIT_INDEX_TTL = Math.max(60, Number(process.env.SPLIT_INDEX_TTL_SEC) || INTERVAL_SEC);
+/** A failed build is retried sooner than a good one is refreshed, but still not once per basket. */
+const SPLIT_RETRY_SEC = Math.max(30, Number(process.env.SPLIT_RETRY_SEC) || 120);
+
+/** Unbound baskets seen in this pass, counted rather than printed one line each. */
+let unboundThisCycle = 0;
 /** Baskets whose static exclusions have been checked this process. */
 const exclusionsDone = new Set<Address>();
 
@@ -350,32 +393,33 @@ async function liquidityHolders(coin: Address): Promise<Address[]> {
 }
 
 /**
- * Which coin an unbound treasury collects for, read off the locker rather than assumed.
+ * Which coin each unbound treasury collects for, read off the locker rather than assumed.
  *
  * The sibling protocol needed two hops — an escrow credit naming a curve, then a launch record
  * turning that curve into a coin. Here it is one: `CreatorSplitSet` says a coin's split changed, and
- * `splitsOf` says whether this treasury is what it now points at. Nobody can forge that pair without
- * actually pointing a real launch's fees here, which is what makes it safe for the keeper to bind
+ * `splitsOf` says which treasury it now points at. Nobody can forge that pair without actually
+ * pointing a real launch's fees somewhere, which is what makes it safe for the keeper to bind
  * rather than asking the creator to.
  *
  * The scan is bounded and walks backwards from the tip. A basket is created within hours of the
- * launch it collects for, so the first chunk normally answers — and an unbounded scan from block
+ * launch it collects for, so the first chunks normally carry it — and an unbounded scan from block
  * zero is exactly what ran a sibling project's RPC bill up once before.
  *
- * Returns null when nothing points here yet: the ordinary case for a basket created ahead of its
- * launch, and a reason to wait rather than to guess.
+ * The candidates' `splitsOf` go out as ONE multicall rather than one read apiece: they are up to
+ * two hundred reads that used to be two hundred requests, and a basket nothing points at exhausted
+ * every one of them before concluding so.
  */
-async function resolveCoinFor(treasury: Address, _quoteToken: Address): Promise<Address | null> {
-  const seen = coinCache.get(treasury);
-  if (seen?.coin) return seen.coin;
-  if (seen && now() - seen.at < COIN_MISS_TTL) return null;
-
-  const found = await _resolveCoinFor(treasury);
-  coinCache.set(treasury, { coin: found, at: now() });
-  return found;
+async function buildSplitIndex(): Promise<Map<string, Address> | null> {
+  for (let attempt = 0; ; attempt++) {
+    const built = await splitIndexOnce();
+    if (built || attempt >= 2) return built;
+    // 53 sequential getLogs from a container that has just booted is exactly the shape a provider
+    // rate-limits. One refusal used to cost one treasury its scan; shared, it costs all of them.
+    await sleep(500 * (attempt + 1));
+  }
 }
 
-async function _resolveCoinFor(treasury: Address): Promise<Address | null> {
+async function splitIndexOnce(): Promise<Map<string, Address> | null> {
   try {
     const tip = await publicClient.getBlockNumber();
     const floor = tip > SPLIT_LOOKBACK ? tip - SPLIT_LOOKBACK : 0n;
@@ -398,21 +442,71 @@ async function _resolveCoinFor(treasury: Address): Promise<Address | null> {
       if (from === floor) break;
     }
 
-    for (const coin of candidates) {
-      const splits = (await publicClient.readContract({
+    if (candidates.length === 0) return new Map();
+
+    const answers = await publicClient.multicall({
+      contracts: candidates.map((coin) => ({
         address: FEE_LOCKER,
         abi: lockerAbi,
         functionName: "splitsOf",
         args: [coin],
-      })) as readonly { to: Address; bps: bigint }[];
-      // The treasury binds on a whole stream only, so anything else is not its coin.
-      if (splits.length === 1 && splits[0].bps === 10_000n && eq(splits[0].to, treasury)) return coin;
+      })),
+      allowFailure: true,
+      // viem packs to 1024 bytes of calldata by default, which splits ~115 of these across five
+      // requests. They are 36 bytes each; one window holds the lot.
+      batchSize: 16_384,
+    });
+
+    /**
+     * ONE unread split voids the whole index, and that is not caution for its own sake.
+     *
+     * `allowFailure` turns a failed read into a skipped candidate, silently. If the skipped one is
+     * the NEWEST coin pointing at a treasury and an older coin points at the same treasury too, the
+     * map hands `bind()` the older one — and the treasury's own re-derivation would ACCEPT it, since
+     * that coin really does point there. `bind` cannot be undone, and `coin` is what every future
+     * round's payout is read over. The old per-treasury scan threw on a failed read and bound
+     * nothing; that is the behaviour worth keeping.
+     */
+    const unread = answers.filter((a) => a.status !== "success").length;
+    if (unread > 0) {
+      console.error(`  split scan: ${unread}/${answers.length} splits unread — not binding this pass`);
+      return null;
     }
-    return null;
+
+    /**
+     * A treasury binds on a WHOLE stream only, so anything else is not its coin — and the first
+     * candidate to claim a recipient keeps it, which preserves the old behaviour of judging a
+     * repointed coin on its newest split, since the candidates are already newest-first.
+     */
+    const map = new Map<string, Address>();
+    answers.forEach((answer, i) => {
+      if (answer.status !== "success") return;
+      const splits = answer.result as readonly { to: Address; bps: bigint }[];
+      if (splits.length !== 1 || splits[0].bps !== 10_000n) return;
+      const key = splits[0].to.toLowerCase();
+      if (!map.has(key)) map.set(key, candidates[i]);
+    });
+    return map;
   } catch (e) {
-    console.error(`    coin lookup failed: ${(e as Error).message.split("\n")[0]}`);
+    console.error(`  split scan failed: ${(e as Error).message.split("\n")[0]}`);
     return null;
   }
+}
+
+/**
+ * Returns null when nothing points at this treasury yet: the ordinary case for a basket created
+ * ahead of its launch, and a reason to wait rather than to guess.
+ */
+async function resolveCoinFor(treasury: Address): Promise<Address | null> {
+  const age = now() - splitIndexAt;
+  if (age >= (splitIndexOk ? SPLIT_INDEX_TTL : SPLIT_RETRY_SEC)) {
+    // Stamped BEFORE the await: whatever happens, the next basket in this pass reads the result
+    // rather than starting a second build.
+    splitIndexAt = now();
+    splitIndex = await buildSplitIndex();
+    splitIndexOk = splitIndex !== null;
+  }
+  return splitIndex?.get(treasury.toLowerCase()) ?? null;
 }
 
 async function ensureExclusions(treasury: Address, coin: Address) {
@@ -1091,8 +1185,10 @@ async function runIndex(treasury: Address) {
     const refused = unbindable.get(treasury);
     if (refused) return console.log(`  ${short(treasury)} ${refused}`);
 
-    const found = await resolveCoinFor(treasury, quoteToken);
-    if (!found) return console.log(`  ${short(treasury)} not bound, and no launch has paid it yet`);
+    const found = await resolveCoinFor(treasury);
+    // One line each was 73 identical lines a pass, which is how a log stops being read at all.
+    // Counted here and reported once at the end of the cycle.
+    if (!found) { unboundThisCycle += 1; return; }
     console.log(`  ${short(treasury)} binding ${short(found)} (from the launchpad's own events)`);
     if (DRY_RUN) return;
     // Simulate first: a basket cloned from an older implementation will refuse, and sending anyway
@@ -1344,6 +1440,7 @@ async function runIndex(treasury: Address) {
 async function cycle() {
   pinBlock = undefined;
   soonestReady = null;
+  unboundThisCycle = 0;
   const count = (await publicClient.readContract({
     address: FACTORY,
     abi: factoryAbi,
@@ -1370,6 +1467,10 @@ async function cycle() {
     } catch (e) {
       console.error(`  ${short(b)} failed: ${(e as Error).message.split("\n")[0]}`);
     }
+  }
+
+  if (unboundThisCycle > 0) {
+    console.log(`${unboundThisCycle} not bound yet — no launch has pointed its fees at them`);
   }
 }
 

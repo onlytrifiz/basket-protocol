@@ -19,6 +19,14 @@ export const chain = defineChain({
   nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
   rpcUrls: { default: { http: [RPC_URL] } },
   blockExplorers: { default: { name: "Basescan", url: "https://basescan.org" } },
+  /**
+   * Multicall3, so viem can pack concurrent reads into one `eth_call`.
+   *
+   * Without the address on the chain, `batch: { multicall: true }` has nowhere to send them and
+   * every read goes out on its own. A JSON-RPC batch does not help: providers bill and rate-limit
+   * per element inside one, so ten reads in a batch are ten reads. Packed they are one.
+   */
+  contracts: { multicall3: { address: "0xcA11bde05977b3631167028862bE2a173976CA11", blockCreated: 5022 } },
 });
 
 export const ZERO = "0x0000000000000000000000000000000000000000" as Address;
@@ -210,5 +218,3 @@ export const SPLIT_CANDIDATES = Number(process.env.SPLIT_CANDIDATES ?? "200");
  */
 export const LAUNCH_FEE_TIER = Number(process.env.LAUNCH_FEE_TIER ?? "10000");
 
-/** How long an unnamed basket waits before its coin is looked for again. */
-export const COIN_MISS_TTL = Number(process.env.COIN_MISS_TTL_SEC ?? "1800");
