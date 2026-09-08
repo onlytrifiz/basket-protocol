@@ -55,7 +55,7 @@ const STALE_BLOCKS = Math.max(1, Number(process.env.INDEX_ACTIVITY_STALE_BLOCKS)
  * Sized for the steady state rather than for a migration — treasuries appear one or two at a time,
  * so this ceiling should never be the thing that binds once coverage has caught up.
  */
-const BACKFILL_LIMIT = Math.max(1, Number(process.env.INDEX_ACTIVITY_BACKFILL) || 8);
+const BACKFILL_LIMIT = Math.max(1, Number(process.env.INDEX_ACTIVITY_BACKFILL) || 4);
 
 type Stored = {
   version: number;

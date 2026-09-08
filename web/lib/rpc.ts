@@ -291,6 +291,9 @@ const EXPLORER = "https://api.etherscan.io/v2/api";
 const EXPLORER_KEY = process.env.ETHERSCAN_API_KEY;
 /** The API's own page size. A contract busier than this is paged, not truncated. */
 const EXPLORER_PAGE = 1_000;
+/** How long to wait between addresses, and how many times a rate-limited page is retried. */
+const EXPLORER_GAP_MS = Math.max(0, Number(process.env.BASE_RPC_EXPLORER_GAP_MS) || 250);
+const EXPLORER_RETRIES = Math.max(0, Number(process.env.BASE_RPC_EXPLORER_RETRIES) || 3);
 /** Below this many chunks the public RPC is measurably quicker; above it, it stops being bounded. */
 const EXPLORER_FROM_CHUNKS = Math.max(1, Number(process.env.BASE_RPC_EXPLORER_AFTER) || 4);
 
@@ -303,7 +306,11 @@ async function explorerLogs(
   if (!EXPLORER_KEY) return null;
   const collected: Log[] = [];
 
-  for (const address of addresses) {
+  for (const [index, address] of addresses.entries()) {
+    // Paced, because the limit is per second and this loop is the only thing in the process that
+    // can trip it: one address after another, as fast as the network allows.
+    if (index > 0) await sleep(EXPLORER_GAP_MS);
+    let attempt = 0;
     for (let page = 1; page <= 50; page++) {
       const query = new URLSearchParams({
         chainid: "8453",
@@ -332,8 +339,29 @@ async function explorerLogs(
       if (!Array.isArray(payload.result)) {
         // An empty window is an answer; anything else means we did not get one.
         if (payload.status === "0" && /no records found/i.test(String(payload.message ?? ""))) break;
+
+        /**
+         * A rate limit is a "come back in a moment", not a refusal — and treating it as one is
+         * expensive in a way that does not look like it.
+         *
+         * Etherscan answers it as `status: "0"` with the reason in `result` AS A STRING, so it lands
+         * in this branch beside the real failures. Returning null here abandons the explorer for
+         * EVERY address in the call, and `getLogs` then falls back to walking the same range over
+         * the RPC: 86 chunks of 9,500 blocks for a backfill, which is how a cold `/indices` render
+         * went from 13.8s to 42.7s the day the backfill started asking for eight addresses at once.
+         *
+         * So it is waited out rather than surrendered to. Three attempts, widening, and only then
+         * the fallback — which is still there for the failures that really are ones.
+         */
+        if (/rate limit/i.test(String(payload.result ?? "")) && attempt < EXPLORER_RETRIES) {
+          attempt += 1;
+          await sleep(400 * attempt);
+          page -= 1;
+          continue;
+        }
         return null;
       }
+      attempt = 0;
 
       for (const entry of payload.result as Array<Record<string, unknown>>) {
         collected.push({
