@@ -248,12 +248,29 @@ async function pinnedRead<T>(args: Record<string, unknown>): Promise<T> {
  * worked out moments earlier — and all three are fixed the same way, by asking what the nonce is
  * now and sending again. Anything that is not a nonce complaint is a real failure and is rethrown.
  */
+/**
+ * Errors that mean "our transaction was refused, ask what the nonce is now and send again".
+ *
+ * `replacement transaction underpriced` is one of them and did not used to be read as one, because
+ * the word `nonce` does not appear in it. It is the plainest form of this situation: a transaction
+ * with the SAME nonce is already pooled — the vault keeper shares this wallet, and it moves faster
+ * now that a pass takes minutes instead of a quarter of an hour — and ours was rejected for not
+ * outbidding it. Ours never entered the pool, so re-sending at the pending nonce sends it once.
+ *
+ * `already known` is deliberately NOT here, and the distinction is the whole point. There the pool
+ * has our transaction, identical hash and all, so it WAS accepted; re-sending it at a fresh nonce
+ * would make two of it. On a burn that costs a reverted call, on a distribute it pays a round twice.
+ * The rule is: recover only from a refusal, never from an acceptance we failed to recognise.
+ */
+const recoverableNonce = (msg: string) =>
+  msg.includes("nonce") || msg.includes("replacement transaction underpriced");
+
 async function send(tx: (nonce?: number) => Promise<Hex>): Promise<Hex> {
   try {
     return await tx();
   } catch (e) {
     const msg = why(e).toLowerCase();
-    if (!msg.includes("nonce")) throw e;
+    if (!recoverableNonce(msg)) throw e;
     const nonce = await publicClient.getTransactionCount({ address: account.address, blockTag: "pending" });
     console.log(`      nonce moved under us — resending at ${nonce}`);
     return tx(nonce);
