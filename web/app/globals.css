@@ -2592,21 +2592,12 @@ code, kbd, samp, pre {
 /* One name at 100%, and that name is the coin — so the bar is a band of the coin's own artwork,
    squeezed to the full width so it shows the picture's colours in the picture's order. The same
    trick as the cap: no pixel is decoded, the browser averages it down for us. */
-/* No artwork, no colour to take: the burn register, which at least is not a lie. */
-.index-card-bar.is-burn-bar { background: linear-gradient(90deg, var(--burn-fg), color-mix(in srgb, var(--burn-fg) 62%, var(--burn-line))); }
-/* With artwork the bar says which ASSET, and on a buyback the asset is the coin — so it takes the
-   coin's own picture. Blurred, not squeezed: a 128px image crushed into a 5px band comes out as
-   stripes and reads as noise beside two flat bars. */
-.index-card.has-art .index-card-bar.is-burn-bar { background: none; overflow: hidden; position: relative; }
-.index-card.has-art .index-card-bar.is-burn-bar::before {
-  background-image: var(--art);
-  background-position: center;
-  background-size: cover;
-  content: "";
-  filter: blur(7px) saturate(1.45);
-  inset: -400%;
-  position: absolute;
-}
+/* FLAT, and the same whether the artwork loads or not.
+   It was a blur of the coin's own picture, which on a two-tone logo came out half one colour and
+   half another — a muddy band beside two clean ones, and a band that changed the moment a third
+   party did or did not answer. A bar that looks different depending on whether an image arrived is
+   not a bar, it is a status light for something the reader cannot see. */
+.index-card-bar.is-burn-bar { background: var(--blue); }
 /* The coin's own picture, where a holding's mark sits on the other cards. */
 .index-card.has-art .index-chip .coin-mark {
   background-image: var(--art);
