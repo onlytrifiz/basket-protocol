@@ -4,6 +4,7 @@ import type { B20Asset } from "../../lib/b20";
 import { MODE, returnedUsd, type IndexRow } from "../../lib/indices";
 import { usdCompact } from "../../lib/format";
 import { stockByAddress, washColor } from "../../lib/stocks";
+import { CoinArtClient } from "./coin-art-client";
 import { LogoSprite } from "./logo-sprite";
 import { StockLogo } from "./stock-logo";
 
@@ -60,19 +61,18 @@ export function IndexCard({ row, assets, logo }: { row: IndexRow; assets: Map<st
   return (
     <Link
       className={`index-card${burns ? " is-burn" : ""}${logo ? " has-art" : ""}`}
+      data-coin={row.coin.toLowerCase()}
       href={`/indices/${row.address}`}
-      style={{ "--tint": tint } as React.CSSProperties}
+      style={{ "--tint": tint, ...(logo ? { "--art": `url("${logo}")` } : {}) } as React.CSSProperties}
     >
       <span className="index-card-cap">
         {/* The coin's own artwork behind its own name, blurred past recognition. It is not there to
             be read — it is there so the cap is the colour of the coin without anyone having to
             decode a pixel to find out what that colour is. */}
-        {logo && <span aria-hidden="true" className="index-card-wash" style={{ backgroundImage: `url("${logo}")` }} />}
+        <span aria-hidden="true" className="index-card-wash" />
         <span aria-hidden="true" className="index-card-ghost">{symbol}</span>
         <span className="index-card-mark">
-          {logo
-            ? <img alt="" loading="lazy" src={logo} />
-            : <i aria-hidden="true">{symbol.slice(0, 2)}</i>}
+          <i aria-hidden="true">{symbol.slice(0, 2)}</i>
         </span>
         <strong>{symbol}</strong>
         <span className="index-card-kind">
@@ -98,15 +98,11 @@ export function IndexCard({ row, assets, logo }: { row: IndexRow; assets: Map<st
                 picture rather than the burn register — that register belongs to the figure in the
                 footer, which is where the destruction is reported. Without artwork there is no
                 colour to take, and it falls back to the burn brown. */}
-            <span
-              aria-hidden="true"
-              className={`index-card-bar${logo ? " is-art-bar" : " is-burn-bar"}`}
-              style={logo ? ({ "--art": `url("${logo}")` } as React.CSSProperties) : undefined}
-            />
+            <span aria-hidden="true" className="index-card-bar is-burn-bar" />
             <span className="index-card-holds">
               <span className="index-chip">
-                <span className="stock-logo stock-logo-small" aria-hidden="true">
-                  {logo ? <img alt="" loading="lazy" src={logo} /> : <i>{symbol.slice(0, 2)}</i>}
+                <span className="stock-logo stock-logo-small coin-mark" aria-hidden="true">
+                  <i>{symbol.slice(0, 2)}</i>
                 </span>
                 <b>{symbol}</b>
                 <i>100%</i>
@@ -151,6 +147,8 @@ export function IndexCards({
   return (
     <div className="index-cards">
       <LogoSprite marks={[...assets.values()]} />
+      {/* One request, and only for the cards the server did not fill. See `coin-art-client`. */}
+      <CoinArtClient coins={rows.map((row) => row.coin.toLowerCase())} />
       {rows.map((row) => (
         <IndexCard assets={assets} key={row.address} logo={logos?.get(row.coin.toLowerCase())} row={row} />
       ))}

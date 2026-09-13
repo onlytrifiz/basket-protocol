@@ -2510,6 +2510,7 @@ code, kbd, samp, pre {
    cheapest honest way to make the cap the colour of the logo: no pixel is decoded, the browser
    just averages it for us. */
 .index-card-wash {
+  background-image: var(--art);
   background-position: center;
   background-size: cover;
   filter: blur(26px) saturate(1.5);
@@ -2545,7 +2546,12 @@ code, kbd, samp, pre {
   overflow: hidden;
   width: 44px;
 }
-.index-card-mark img { display: block; height: 100%; object-fit: cover; width: 100%; }
+.index-card.has-art .index-card-mark {
+  background-image: var(--art);
+  background-position: center;
+  background-size: cover;
+}
+.index-card.has-art .index-card-mark i { display: none; }
 .index-card-mark i {
   color: color-mix(in srgb, var(--tint) 60%, var(--ink));
   font: 600 .78rem var(--mono-stack);
@@ -2586,12 +2592,13 @@ code, kbd, samp, pre {
 /* One name at 100%, and that name is the coin — so the bar is a band of the coin's own artwork,
    squeezed to the full width so it shows the picture's colours in the picture's order. The same
    trick as the cap: no pixel is decoded, the browser averages it down for us. */
-/* Blurred, not squeezed. A 128px picture crushed into a 5px band comes out as stripes — it reads
-   as noise beside two flat bars. Blurred inside its own clip it becomes what it is for: a smear of
-   the coin's colours in the coin's order. The url arrives as `--art` rather than as the element's
-   own background, so this rule can own the painting. */
-.index-card-bar.is-art-bar { overflow: hidden; position: relative; }
-.index-card-bar.is-art-bar::before {
+/* No artwork, no colour to take: the burn register, which at least is not a lie. */
+.index-card-bar.is-burn-bar { background: linear-gradient(90deg, var(--burn-fg), color-mix(in srgb, var(--burn-fg) 62%, var(--burn-line))); }
+/* With artwork the bar says which ASSET, and on a buyback the asset is the coin — so it takes the
+   coin's own picture. Blurred, not squeezed: a 128px image crushed into a 5px band comes out as
+   stripes and reads as noise beside two flat bars. */
+.index-card.has-art .index-card-bar.is-burn-bar { background: none; overflow: hidden; position: relative; }
+.index-card.has-art .index-card-bar.is-burn-bar::before {
   background-image: var(--art);
   background-position: center;
   background-size: cover;
@@ -2600,10 +2607,13 @@ code, kbd, samp, pre {
   inset: -400%;
   position: absolute;
 }
-/* No artwork, no colour to take: the burn register, which at least is not a lie. */
-.index-card-bar.is-burn-bar { background: linear-gradient(90deg, var(--burn-fg), color-mix(in srgb, var(--burn-fg) 62%, var(--burn-line))); }
 /* The coin's own picture, where a holding's mark sits on the other cards. */
-.index-chip .stock-logo img { height: 100%; object-fit: cover; width: 100%; }
+.index-card.has-art .index-chip .coin-mark {
+  background-image: var(--art);
+  background-position: center;
+  background-size: cover;
+}
+.index-card.has-art .index-chip .coin-mark i { display: none; }
 
 .index-card-holds { display: flex; flex-wrap: wrap; gap: 5px; }
 .index-chip {
