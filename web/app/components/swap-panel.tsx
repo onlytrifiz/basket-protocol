@@ -106,9 +106,21 @@ export function SwapPanel() {
   const assets = useMemo<TradeAsset[]>(() => [
     { address: NATIVE_ETH, name: "Ether", symbol: "ETH", decimals: 18 },
     { address: stockifyAddress, name: "Stockify protocol token", symbol: "STFY", decimals: 18 },
-    // Straight from `lib/stocks`, which is what entitles this to the constant rather than a read:
-    // the panel only ever offers assets from the seed list. See `lib/decimals`.
-    ...stocks.filter((stock) => stock.inIndex)
+    /* EVERY LISTED EQUITY, not just the five the vault buys.
+     *
+     * `inIndex` answers "does the dividend vault buy this one", and that was never the same question
+     * as "can this be traded" — it was standing in for routability because the two overlapped. They
+     * do not: a name can have an Aerodrome pool without being in the index, and the index can drop a
+     * name that still trades. Filtering on it hid eight assets the panel could have priced.
+     *
+     * What it does NOT do is promise a route. Three of the thirteen report zero supply, and the
+     * aggregator answers "no routes with enough liquidity" for a pair it cannot fill — which reaches
+     * the reader as a notice on the card rather than as a broken quote. Letting the market answer is
+     * honest; guessing on its behalf from a flag about something else was not.
+     *
+     * Index members lead, because those are the ones with depth today.
+     */
+    ...[...stocks].sort((a, b) => Number(b.inIndex ?? false) - Number(a.inIndex ?? false))
       .map((stock) => ({ address: stock.address, name: stock.name, stock, symbol: stock.symbol, decimals: B20_DECIMALS })),
   ], []);
   const { account, connect, provider } = useWallet();

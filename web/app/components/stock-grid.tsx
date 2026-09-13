@@ -1,6 +1,6 @@
 import Link from "next/link";
 
-import { stocks } from "../../lib/stocks";
+import { stocks, washColor } from "../../lib/stocks";
 import { StockLogo } from "./stock-logo";
 
 /**
@@ -15,7 +15,15 @@ export function StockGrid({ children, compact = false }: { children?: React.Reac
   return (
     <div className={`equity-grid${compact ? " equity-grid-compact" : ""}`}>
       {stocks.map((stock) => (
-        <Link className="equity-card" href={`/stocks/${stock.symbol.toLowerCase()}`} key={stock.symbol}>
+        <Link
+          className="equity-card"
+          href={`/stocks/${stock.symbol.toLowerCase()}`}
+          key={stock.symbol}
+          /* The company's colour, used only on hover — see `.equity-card:hover` in globals. A tile
+             that is tinted at rest would make thirteen of them a paintbox; one that tints under the
+             cursor tells you what you are pointing at. */
+          style={{ "--brand": washColor(stock) } as React.CSSProperties}
+        >
           <StockLogo stock={stock} size="small" />
           <span className="equity-name">
             <strong>{stock.symbol}</strong>

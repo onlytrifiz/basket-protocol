@@ -101,8 +101,10 @@ export function IndexUniverse({ slices }: { slices: IndexSlice[] }) {
               onFocus={() => setActive(index)}
               onMouseEnter={() => setActive(index)}
               onMouseLeave={() => setActive(null)}
+              style={{ "--arc": arc.color } as React.CSSProperties}
               type="button"
             >
+              <i aria-hidden="true" className="legend-swatch" />
               <StockLogo logo={arc.logo} size="small" stock={{ symbol: arc.symbol, domain: arc.domain }} />
               <span>{arc.name}</span>
               <b>{(arc.weightBps / 100).toFixed(0)}%</b>

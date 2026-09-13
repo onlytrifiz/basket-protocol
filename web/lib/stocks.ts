@@ -41,18 +41,37 @@ export type IndexStock = {
    * panel it is legible on its own.
    */
   brand: string;
+  /**
+   * The company's colour on a LIGHT surface, when the ring colour is the wrong answer there.
+   *
+   * `brand` above is chosen to survive the donut: five arcs on dark navy that have to stay apart
+   * from each other, which is why SpaceX's is amber rather than the black its own icon is, and why
+   * Alphabet takes the blue out of a four-colour mark. Neither constraint exists on a white card —
+   * there is nothing to be legible against and nothing to be told apart from — so a card can wear
+   * the colour the company actually uses. Absent, the ring colour is already right for both.
+   */
+  wash?: string;
   referencePrice?: string;
 };
+
+/**
+ * The colour a company wears on a LIGHT surface — a card wash, a tinted border, a hover.
+ *
+ * `wash` when the listing declares one, the ring colour otherwise, and the house blue for a
+ * listing this repo has never seen. Centralised so a company cannot end up two different colours
+ * on two pages that both claim to show its brand.
+ */
+export const washColor = (stock?: IndexStock) => stock?.wash ?? stock?.brand ?? "#7aa8ff";
 
 export const stocks: IndexStock[] = [
   { inIndex: true, symbol: "NVDAc", name: "NVIDIA", domain: "nvidia.com", ticker: "NVDA", brand: "#76B900", address: "0xb20000000000000000000078ee7ce2fe4908108c", referencePrice: "479.490" },
   { inIndex: true, symbol: "AAPLc", name: "Apple", domain: "apple.com", ticker: "AAPL", brand: "#A2AAAD", address: "0xb200000000000000000000c2e324d24d7eecd1fb", referencePrice: "333.730" },
-  { inIndex: true, symbol: "GOOGLc", name: "Alphabet", domain: "google.com", ticker: "GOOGL", brand: "#4285F4", address: "0xb2000000000000000000002d0ba3164cc74f58b7", referencePrice: "294.914" },
-  { inIndex: true, symbol: "METAc", name: "Meta Platforms", domain: "about.meta.com", ticker: "META", brand: "#0866FF", address: "0xb2000000000000000000008bc8786b856e61707c", referencePrice: "172.185" },
-  { inIndex: true, symbol: "SPCXc", name: "SpaceX", domain: "spacex.com", ticker: "SPCX", brand: "#D9702F", address: "0xb2000000000000000000007b9fcbd005511acbd5", referencePrice: "149.383" },
+  { inIndex: true, symbol: "GOOGLc", name: "Alphabet", domain: "google.com", ticker: "GOOGL", brand: "#4285F4", wash: "#EA4335", address: "0xb2000000000000000000002d0ba3164cc74f58b7", referencePrice: "294.914" },
+  { inIndex: true, symbol: "METAc", name: "Meta", domain: "about.meta.com", ticker: "META", brand: "#0866FF", address: "0xb2000000000000000000008bc8786b856e61707c", referencePrice: "172.185" },
+  { inIndex: true, symbol: "SPCXc", name: "SpaceX", domain: "spacex.com", ticker: "SPCX", brand: "#D9702F", wash: "#111111", address: "0xb2000000000000000000007b9fcbd005511acbd5", referencePrice: "149.383" },
   { symbol: "AMZNc", name: "Amazon", domain: "amazon.com", ticker: "AMZN", brand: "#FF9900", address: "0xb200000000000000000000d9192b6b456483c2e8" },
-  { symbol: "COINc", name: "Coinbase Global", domain: "coinbase.com", ticker: "COIN", brand: "#0052FF", address: "0xb200000000000000000000c85a31389d71f3ecfb" },
-  { symbol: "CRCLc", name: "Circle Internet Group", domain: "circle.com", ticker: "CRCL", brand: "#3ECFAF", address: "0xb20000000000000000000019f6e7c675b73c2e4d" },
+  { symbol: "COINc", name: "Coinbase", domain: "coinbase.com", ticker: "COIN", brand: "#0052FF", address: "0xb200000000000000000000c85a31389d71f3ecfb" },
+  { symbol: "CRCLc", name: "Circle", domain: "circle.com", ticker: "CRCL", brand: "#3ECFAF", address: "0xb20000000000000000000019f6e7c675b73c2e4d" },
   { symbol: "INTCc", name: "Intel", domain: "intel.com", ticker: "INTC", brand: "#0F8FE0", address: "0xb2000000000000000000004aff16039ba04bdfbc" },
   { symbol: "MSFTc", name: "Microsoft", domain: "microsoft.com", ticker: "MSFT", brand: "#00A4EF", address: "0xb200000000000000000000ab99cfa739e253872b" },
   { symbol: "MSTRc", name: "Strategy", domain: "strategy.com", ticker: "MSTR", brand: "#E8352B", address: "0xb2000000000000000000004884b426556b92883d" },

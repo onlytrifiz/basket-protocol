@@ -2,12 +2,16 @@ import Image from "next/image";
 import Link from "next/link";
 
 import { readAssets } from "../lib/b20";
-import { stockByAddress } from "../lib/stocks";
+import { readDecimals, toUnits } from "../lib/decimals";
+import { readLedger } from "../lib/ledger";
+import { marketBoard } from "../lib/market";
+import { stockByAddress, washColor } from "../lib/stocks";
 import { readVault } from "../lib/vault";
 import { IndexUniverse } from "./components/index-universe";
 import { RingMarker } from "./components/segment-ring";
 import { SiteFooter, SiteHeader } from "./components/site-chrome";
 import { StockGrid } from "./components/stock-grid";
+import { StockStage, type StageStock } from "./components/stock-stage";
 import { SwapPanel } from "./components/swap-panel";
 
 /**
@@ -67,8 +71,64 @@ export default async function Home() {
   // shows the vault would be two answers to one question.
   // Weights from the vault, marks from the tokens themselves — the same `contractURI()` icons the
   // hub uses, so a ticker Base lists tomorrow arrives correctly branded here too.
-  const [vault, assets] = await Promise.all([readVault(), readAssets()]);
+  const [vault, assets, ledger] = await Promise.all([readVault(), readAssets(), readLedger()]);
   const byAddress = new Map(assets.map((a) => [a.address.toLowerCase(), a]));
+
+  /**
+   * What each equity has actually paid out, all time — the same walk /dividends makes.
+   *
+   * KEYED ON THE LEDGER, NOT ON INDEX MEMBERSHIP. `setIndex` rotates names out, and a cycle that
+   * bought one before it left keeps its row forever; asking "is it in the index today" would erase
+   * a real distribution the moment ownership changed the set. A stock has distributed something or
+   * it has not, and that is a fact about the past.
+   */
+  const distributedAddresses = [...new Set(ledger.cycles.flatMap((c) => c.bought.map((b) => b.address.toLowerCase())))];
+  const decimals = distributedAddresses.length ? await readDecimals(distributedAddresses) : new Map<string, number>();
+  const distributedByAsset = new Map<string, number>();
+  for (const cycle of ledger.cycles) {
+    for (const bought of cycle.bought) {
+      const key = bought.address.toLowerCase();
+      // An asset whose scale went unread contributes nothing rather than a number at the wrong
+      // scale — the same rule every other surface in this repo follows for an unread balance.
+      const units = toUnits(bought.receivedRaw, decimals.get(key) ?? null);
+      if (units === null) continue;
+      distributedByAsset.set(key, (distributedByAsset.get(key) ?? 0) + units);
+    }
+  }
+  const paidTickers = distributedAddresses.map((a) => byAddress.get(a)?.ticker).filter(Boolean) as string[];
+  const market = paidTickers.length ? await marketBoard(paidTickers) : { quotes: {}, series: {}, degraded: true };
+
+  /* The fan below the donut, built from the LIVE listing rather than from the seed file: a ticker
+     Base lists tomorrow arrives with its own icon and its own supply, and only its colour falls
+     back to the house blue. Index members lead, so the strip under the fan opens on a weight
+     instead of on "not bought by the vault". */
+  const weightByAddress = new Map(vault.holdings.map((h) => [h.address.toLowerCase(), h.weightBps]));
+  const stageStocks: StageStock[] = assets
+    .map((asset) => ({
+      symbol: asset.symbol,
+      /* The SEED name in preference to the chain's. `name()` returns the legal entity — "Meta
+         Platforms", "Circle Internet Group" — and this card has one line for it. A listing the
+         seed file does not know still falls back to whatever the token calls itself. */
+      name: stockByAddress(asset.address)?.name ?? asset.name,
+      domain: asset.domain,
+      brand: washColor(stockByAddress(asset.address)),
+      logo: asset.logo,
+      weightBps: weightByAddress.get(asset.address.toLowerCase()) ?? null,
+      shares: asset.shares,
+      distributed: distributedByAsset.get(asset.address.toLowerCase()) ?? 0,
+      distributedValue: (() => {
+        const units = distributedByAsset.get(asset.address.toLowerCase());
+        const price = asset.ticker ? market.quotes[asset.ticker]?.price : undefined;
+        // No quote is not zero dollars. The card says "unpriced" rather than inventing a figure.
+        return units && price ? units * price : null;
+      })(),
+    }))
+    /* THE FIVE THE VAULT BUYS, PLUS COINBASE. Thirteen cards made the band a catalogue; the five
+       that actually pay out are the claim the page is making, and Coinbase is on it because it is
+       the issuer of every one of these tokens rather than because the vault holds it. The full
+       thirteen are one section down, as a grid, which is the shape a catalogue wants. */
+    .filter((stock) => stock.weightBps !== null || stock.symbol === "COINc")
+    .sort((a, b) => (b.weightBps ?? -1) - (a.weightBps ?? -1));
 
   const slices = vault.holdings.map((h) => {
     const asset = byAddress.get(h.address.toLowerCase());
@@ -99,12 +159,17 @@ export default async function Home() {
             </div>
             <div className="hero-swap"><SwapPanel /></div>
           </div>
-          <div className="flow-strip">
-            <Image alt="" fill priority sizes="100vw" src="/header-transparent.png" />
-            <div className="flow-strip-labels">
-              <div><span>Fees in</span><strong>3% hook fee</strong></div>
-              <div className="flow-strip-out"><span>Stocks out</span><strong>B20 stocks to holders</strong></div>
-            </div>
+          {/* THE BAND UNDER THE HERO. It was a 3:1 render of coins; it is now the thirteen assets
+              themselves, which is the same sentence told with the subject present. The two labels
+              stay because they are what the band is FOR — fees in on one side, stocks out on the
+              other — and the fan between them is the second half of that arrow.
+
+              The render is kept in the repo rather than deleted: it is still the OG image's
+              subject, and this swap is a layout decision that may want undoing. */}
+          <div className={`flow-strip${stageStocks.length > 0 ? " is-stage" : ""}`}>
+            {stageStocks.length > 0
+              ? <StockStage stocks={stageStocks} variant="band" />
+              : <Image alt="" fill priority sizes="100vw" src="/header-transparent.png" />}
           </div>
         </header>
 
@@ -117,7 +182,8 @@ export default async function Home() {
 
         <section className="section wrap" id="how"><div className="section-head"><p className="eyebrow">THE DIVIDEND LOOP</p><h2>A stock dividend that starts with volume.</h2><p>Stockify does not reflect another token into your wallet. The vault acquires the B20 assets themselves and pushes the resulting entitlement to holders.</p></div><div className="steps-grid">{mechanics.map((step) => <article className="step-card" key={step.number}><RingMarker filled={step.filled} label={step.number} lit={step.lit} /><h3>{step.title}</h3><p>{step.copy}</p></article>)}</div></section>
 
-        <section className="section wrap" id="index"><div className="index-showcase"><div className="section-head index-head"><div><p className="eyebrow">THE B20 STOCKS UNIVERSE</p><h2>Thirteen listed. Five in the index.</h2></div><p>Every B20 equity Coinbase has issued on Base. The dividend vault buys a configurable subset of them, and the index can change between cycles.</p></div><IndexUniverse slices={slices} /></div><StockGrid compact>
+        <section className="section wrap" id="index"><div className="index-showcase"><div className="section-head index-head"><div><p className="eyebrow">THE B20 STOCKS UNIVERSE</p><h2>Thirteen listed. Five in the index.</h2></div><p>Every B20 equity Coinbase has issued on Base. The dividend vault buys a configurable subset of them, and the index can change between cycles.</p></div><IndexUniverse slices={slices} /></div>
+          <StockGrid compact>
             {/* The two ways out sit IN the grid rather than under it: thirteen assets across five
                 columns leave exactly two empty cells, and an action shaped like the things it acts
                 on reads as part of the set instead of as a banner below it. */}
@@ -127,7 +193,8 @@ export default async function Home() {
             <Link className="equity-card is-action" href="/dividends">
               <span className="equity-name"><strong>The vault</strong><span>What it buys</span></span>
             </Link>
-          </StockGrid></section>
+          </StockGrid>
+        </section>
 
         {/* WHAT THIS SITE IS, in three lines, after the universe it is built on.
             Here rather than at the top because each one only means something once you know what a

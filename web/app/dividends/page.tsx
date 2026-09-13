@@ -4,13 +4,15 @@ import Link from "next/link";
 import { readAssets } from "../../lib/b20";
 import { readDecimals, toUnits } from "../../lib/decimals";
 import { readLedger } from "../../lib/ledger";
+import { stockByAddress, washColor } from "../../lib/stocks";
 import { marketBoard } from "../../lib/market";
 import { readVault } from "../../lib/vault";
 import { shares as fmtShares, stamp, until, usd, usdCompact } from "../../lib/format";
+import { AssetCard, type AssetCardRow } from "../components/asset-card";
 import { BrandRender } from "../components/brand-render";
-import { RingMarker, SegmentRing } from "../components/segment-ring";
+import { CycleProgress } from "../components/cycle-progress";
+import { RingMarker } from "../components/segment-ring";
 import { SiteFooter, SiteHeader } from "../components/site-chrome";
-import { StockLogo } from "../components/stock-logo";
 
 export const metadata: Metadata = {
   title: "Dividends — Stockify",
@@ -25,6 +27,10 @@ export const metadata: Metadata = {
  * revalidated here was a log scan, and that no longer happens at render time at all.
  */
 const PER_PAGE = 5;
+
+/* Points in an asset's staircase. Enough to show whether payouts kept coming, few enough that a
+   540-cycle history stays a 260px graphic rather than a wall of risers. */
+const SPARK_POINTS = 56;
 
 /* The sequence closes when assets reach holders — the one lime-lit step. */
 const phases = [
@@ -101,14 +107,44 @@ export default async function DividendPage({ searchParams }: PageProps<"/dividen
     }
   }
 
+  /**
+   * The same walk again, kept as a RUNNING total per asset instead of a final one.
+   *
+   * One point per settled cycle, oldest first, including the cycles that bought nothing of this
+   * asset — those are the flat runs in the staircase, and dropping them would compress a month of
+   * silence into the same width as a month of payouts. Sampled down to `SPARK_POINTS` at the end,
+   * which a monotonic series survives without distortion: between two samples the total can only
+   * have gone up, so no peak can hide between them.
+   */
+  const tracked = vault.holdings.map((h) => h.address.toLowerCase());
+  const seriesByAsset = new Map<string, number[]>(tracked.map((address) => [address, []]));
+  {
+    const running = new Map<string, number>(tracked.map((address) => [address, 0]));
+    // The ledger is stored newest first; a history is read the other way round.
+    for (let i = ledger.cycles.length - 1; i >= 0; i -= 1) {
+      for (const bought of ledger.cycles[i].bought) {
+        const key = bought.address.toLowerCase();
+        if (!running.has(key)) continue;
+        const units = toUnits(bought.receivedRaw, scaleOf(key));
+        if (units === null) continue;
+        running.set(key, (running.get(key) ?? 0) + units);
+      }
+      for (const address of tracked) seriesByAsset.get(address)!.push(running.get(address) ?? 0);
+    }
+  }
+  const sampled = (points: number[]) => {
+    if (points.length <= SPARK_POINTS) return points;
+    const stride = (points.length - 1) / (SPARK_POINTS - 1);
+    return Array.from({ length: SPARK_POINTS }, (_, i) => points[Math.round(i * stride)]);
+  };
+
   const rows = vault.holdings.map((holding) => {
     const asset = byAddress.get(holding.address.toLowerCase());
     const quote = asset?.ticker ? market.quotes[asset.ticker] : undefined;
     const held = toUnits(holding.heldRaw, holding.decimals);
-    const unpaid = toUnits(holding.unpaidRaw, holding.decimals);
     const distributed = distributedByAsset.get(holding.address.toLowerCase()) ?? 0;
     return {
-      holding, asset, quote, held, unpaid, distributed,
+      holding, asset, quote, held, distributed,
       distributedValue: quote?.price ? distributed * quote.price : null,
       value: held !== null && quote?.price ? held * quote.price : null,
     };
@@ -197,6 +233,49 @@ export default async function DividendPage({ searchParams }: PageProps<"/dividen
         </section>
 
 
+        <section className="section wrap hub-section">
+          <div className="section-head">
+            <p className="eyebrow">THE ACTIVE INDEX</p>
+            <h2>{vault.holdings.length || "No"} stocks in the index.</h2>
+            <p>Stockify dividends are currently distributing the following stocks:</p>
+          </div>
+
+          {vault.live && rows.length > 0 ? (
+            <div className="asset-cards">
+              {rows.map(({ holding, asset, quote, distributed, distributedValue }) => (
+                <AssetCard
+                  key={holding.address}
+                  row={{
+                    address: holding.address,
+                    symbol: holding.symbol,
+                    name: holding.name,
+                    weightBps: holding.weightBps,
+                    asset,
+                    price: quote?.price,
+                    distributed,
+                    distributedValue,
+                    brand: washColor(stockByAddress(holding.address)),
+                    series: sampled(seriesByAsset.get(holding.address.toLowerCase()) ?? []),
+                  } satisfies AssetCardRow}
+                />
+              ))}
+            </div>
+          ) : (
+            <p className="detail-empty">
+              The dividend vault did not answer, so its index cannot be shown. Nothing is filled in
+              with an assumed set.
+            </p>
+          )}
+
+          {!anyDistributed && vault.live && (
+            <p className="hub-note-degraded">
+              Nothing has been distributed yet. The vault is accruing hook
+              fees{eth !== null && eth > 0 ? ` — ${eth.toFixed(4)} ETH so far` : ""}, and the first
+              push happens when a cycle runs.
+            </p>
+          )}
+        </section>
+
         {/* THE LEDGER. Every cycle the vault has ever settled, decoded once from
             `DistributionCycleCompleted` and the `StockBought` logs preceding it, then kept. */}
         <section className="desk-panel" id="ledger">
@@ -206,16 +285,17 @@ export default async function DividendPage({ searchParams }: PageProps<"/dividen
                 <p>SETTLED DIVIDENDS</p>
                 <h2>{ledger.cycles.length === 0 ? "No cycles yet." : `${ledger.cycles.length} settled ${ledger.cycles.length === 1 ? "cycle" : "cycles"}.`}</h2>
               </div>
-              <div className="desk-cycle">
-                <SegmentRing filled={vault.cycleActive ? 8 : 1} lit motion={vault.cycleActive ? "spin" : "sweep"} size={46} stroke={9} />
-                <div className="desk-cycle-meta">
-                  <span>Cycle</span>
-                  <b>{vault.cycleActive ? "Running" : latest ? `#${latest.n}` : "—"}</b>
-                </div>
-                <span className="waiting-chip">
-                  <i /> {vault.cycleActive ? "Distributing" : ledger.cycles.length ? "Idle" : "Awaiting first cycle"}
-                </span>
-              </div>
+              {/* A ring, a number and an "Idle" chip said three versions of one fact and none of
+                  them said how far through the wait the vault is. The bar does: it runs from the
+                  settlement that actually happened to the earliest start the vault reports, and it
+                  ticks, because a frozen progress bar claims motion it does not have. */}
+              <CycleProgress
+                active={vault.cycleActive}
+                from={latest?.timestamp ?? 0}
+                label={vault.cycleActive ? "running" : latest ? `#${latest.n + 1}` : "one"}
+                now={Date.now() / 1000}
+                to={vault.nextDistribution}
+              />
             </div>
 
             <div className="desk-metrics">
@@ -242,10 +322,14 @@ export default async function DividendPage({ searchParams }: PageProps<"/dividen
                 <strong>{threshold === null ? "—" : fmtShares(threshold)}</strong>
                 <small>STFY to qualify</small>
               </div>
+              {/* WAS a second countdown to the next cycle, which the bar above now ticks live. Two
+                  readings of one clock taken a second apart disagree by a minute and read as a bug.
+                  This card takes the other end of the same interval instead — where the bar starts —
+                  so the two describe the window together rather than competing over its right edge. */}
               <div>
-                <span>Next cycle</span>
-                <strong>{vault.nextDistribution > 0 ? until(vault.nextDistribution) : "—"}</strong>
-                <small>{vault.nextDistribution > 0 ? "earliest start" : "no cycle has run"}</small>
+                <span>Last settled</span>
+                <strong>{latest ? stamp(latest.timestamp) : "—"}</strong>
+                <small>{latest ? `cycle #${latest.n}` : "no cycle has run"}</small>
               </div>
             </div>
 
@@ -334,89 +418,6 @@ export default async function DividendPage({ searchParams }: PageProps<"/dividen
           </div>
         </section>
 
-        <section className="section wrap hub-section">
-          <div className="section-head">
-            <p className="eyebrow">THE ACTIVE INDEX</p>
-            <h2>{vault.holdings.length || "No"} stocks in the index.</h2>
-            <p>
-              Ownership can change this set and its weights between cycles, so what you see here is
-              whatever the vault will actually buy next.
-            </p>
-          </div>
-
-          {vault.live && rows.length > 0 ? (
-            <div className="hub-table" role="table" aria-label="Dividend index holdings">
-              <div className="hub-row dist-row hub-row-head" role="row">
-                <span role="columnheader">Asset</span>
-                <span role="columnheader">Target weight</span>
-                <span role="columnheader">Share price</span>
-                <span role="columnheader">Distributed</span>
-                <span role="columnheader">Owed to holders</span>
-                <span aria-hidden="true" />
-              </div>
-
-              {rows.map(({ holding, asset, quote, held, unpaid, distributed, distributedValue }) => (
-                <Link
-                  className="hub-row dist-row"
-                  href={asset ? `/stocks/${asset.symbol.toLowerCase()}` : `/stocks`}
-                  key={holding.address}
-                  role="row"
-                >
-                  <span className="hub-asset" role="cell">
-                    <StockLogo stock={{ symbol: holding.symbol, domain: asset?.domain }} logo={asset?.logo} />
-                    <span className="hub-asset-id">
-                      <strong>{holding.symbol}</strong>
-                      <small>{holding.name}</small>
-                    </span>
-                  </span>
-
-                  <span className="hub-num" data-label="Target weight" role="cell">
-                    <b>{(holding.weightBps / 100).toFixed(0)}%</b>
-                    <small>of each stock budget</small>
-                  </span>
-
-                  <span className="hub-num" data-label="Share price" role="cell">
-                    <b>{usd(quote?.price)}</b>
-                    <small>{quote ? "Nasdaq" : "unavailable"}</small>
-                  </span>
-
-                  {/* Distributed is the cumulative figure; what the vault currently holds rides
-                      along underneath it, because between cycles that is almost always nothing. */}
-                  <span className="hub-num" data-label="Distributed" role="cell">
-                    <b>{distributed > 0 ? fmtShares(distributed) : "—"}</b>
-                    <small>
-                      {distributed > 0
-                        ? distributedValue !== null ? usdCompact(distributedValue) : "shares"
-                        : held !== null && held > 0 ? `${fmtShares(held)} held` : "none yet"}
-                    </small>
-                  </span>
-
-                  <span className="hub-num" data-label="Owed to holders" role="cell">
-                    <b>{fmtShares(unpaid)}</b>
-                    <small>{unpaid === null ? "unread" : unpaid > 0 ? "queued for transfer" : "nothing queued"}</small>
-                  </span>
-
-                  <svg aria-hidden="true" className="hub-go" viewBox="0 0 6 10" focusable="false">
-                    <path d="M1 1l4 4-4 4" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.6" />
-                  </svg>
-                </Link>
-              ))}
-            </div>
-          ) : (
-            <p className="detail-empty">
-              The dividend vault did not answer, so its index cannot be shown. Nothing is filled in
-              with an assumed set.
-            </p>
-          )}
-
-          {!anyDistributed && vault.live && (
-            <p className="hub-note-degraded">
-              Nothing has been distributed yet. The vault is accruing hook
-              fees{eth !== null && eth > 0 ? ` — ${eth.toFixed(4)} ETH so far` : ""}, and the first
-              push happens when a cycle runs.
-            </p>
-          )}
-        </section>
 
         <section className="section wrap">
           <div className="section-head">

@@ -237,7 +237,6 @@ h1 em, h2 em { font-style: normal; font-weight: 600; }
 .equity-name strong,
 .universe-head, .universe-legend b, .index-universe > p,
 .desk-head p, .desk-metrics strong, .table-head, .desk-cycle-meta,
-.flow-strip span,
 .swap-leg label, .swap-currency, .swap-foot,
 .swap-slippage > span, .swap-slippage button,
 .footer-links span, .footer-meta,
@@ -343,12 +342,12 @@ code, kbd, samp, pre {
 
 /* Ghost stays deliberately flat. */
 .button-ghost {
-  background: transparent;
+  background: var(--surface);
   border-color: var(--line-2);
   color: var(--ink);
 }
-.button-ghost:hover { background: var(--surface); border-color: var(--ink-3); }
-.button-ghost:active { background: var(--surface-sunken); }
+.button-ghost:hover { border-color: var(--ink-3); box-shadow: var(--shadow-1); }
+.button-ghost:active { background: var(--surface-sunken); box-shadow: none; }
 
 /* Ghost on a dark desk. */
 .button-desk {
@@ -605,12 +604,26 @@ code, kbd, samp, pre {
 
 /* ---------- 7. Hero ------------------------------------------------------ */
 
+/* THE STAGE'S FLOOR IS NOW THE WHOLE HERO'S. The 54px grid used to start where the band started,
+   which drew a seam across the hero exactly where the two surfaces met. Run from the hero's own box
+   it is continuous by construction — the cards sit on the same floor the headline stands on, and
+   the band stops being a panel dropped into the page.
+
+   The lines are a `color-mix` off `--ink` rather than a literal navy, so the parked dark palette
+   inverts them instead of losing them. */
 .hero-card {
   background:
+    linear-gradient(color-mix(in srgb, var(--ink) 5%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in srgb, var(--ink) 5%, transparent) 1px, transparent 1px),
+    radial-gradient(58% 42% at 50% 86%, rgba(0, 82, 255, .08) 0%, transparent 66%),
     radial-gradient(120% 78% at 50% -18%, color-mix(in srgb, var(--chip) 62%, transparent) 0%, transparent 62%),
     var(--surface-2);
+  background-size: 54px 54px, 54px 54px, auto, auto, auto;
   border-bottom: 1px solid var(--line);
   border-top: 1px solid var(--line);
+  /* NO `overflow: clip` here, however tempting. The fan is already clipped by its own floor, and
+     the asset picker inside the swap card opens downward — clipping the hero would cut the
+     dropdown off at the fold. */
   position: relative;
 }
 
@@ -682,39 +695,177 @@ code, kbd, samp, pre {
    PNG's own alpha already falls off at both ends. The labels keep their contrast because the
    artwork no longer reaches them. */
 .flow-strip img { height: 100%; object-fit: contain; object-position: center; width: 100%; }
-.flow-strip-labels {
-  align-items: center;
+
+/* The band in stage mode. The fan replaces the render, so the strip loses its fixed 224px and the
+   labels stop being an overlay on artwork: they sit at the top corners and the fan plays between
+   them. Everything else — poses, parallax, wrap — is the panel's CSS unchanged; only the scale,
+   the chrome and the summary differ. */
+/* No rule between the copy and the band any more: one surface, so the line that used to separate
+   two would now cut the grid in half. */
+.flow-strip.is-stage { border-top: 0; height: auto; overflow: visible; }
+
+.stock-stage.is-band {
+  --card-w: 190px;
+  --card-h: 222px;
+  /* Tighter than the 0.78-of-a-card spread the panel variant uses. With five cards drawn the row
+     spans `card + 2 × x2`, and at the reference ratio that is 900px — wider than the rail leaves
+     between the two gutters. Pulled to 0.74 the row is ~846px and clears them. */
+  --fan-x1: 150px;  --fan-y1: 5px;   --fan-z1: -68px;
+  --fan-x2: 300px;  --fan-y2: 9px;   --fan-z2: -116px;
+  --fan-x3: 446px;  --fan-y3: 14px;  --fan-z3: -142px;
+
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  margin-top: 0;
+  overflow: visible;
+  /* The gutters are laid over the floor from here rather than from inside it: a child of the floor
+     is painted under the cards, which the floor positions absolutely. */
+  position: relative;
+}
+/* Fully transparent. The grid and the glow are the hero's now, so repeating them here would lay a
+   second lattice a few pixels out of phase with the first — which is worse than having none. What
+   stays in the band is only what belongs to the cards: the horizon they stand on and their shadow. */
+.stock-stage.is-band .stage-floor { background: none; height: 330px; }
+/* Bounded at BOTH ends, which is the part I got wrong twice. The floor clips, and a card carries a
+   `rotate()` on top of its 3D pose — so its painted top corner sits well above the `top` it is
+   given, by roughly `width x 0.045 + height x 0.02`. Too low and the bottom runs under the counter
+   and the arrows; too high and that corner is cut off by the band's edge. 22px clears both, and the
+   measurement below is what it was set from rather than the arithmetic. */
+.stock-stage.is-band .stage-card { top: 27px; }
+.stock-stage.is-band .stage-card-emblem .stock-logo { height: 76px; width: 76px; }
+.stock-stage.is-band .stage-card-ghost { font-size: 43px; top: 30px; }
+.stock-stage.is-band .stage-card-foot strong { font-size: 1.22rem; }
+.stock-stage.is-band .stage-wordmark { font-size: clamp(64px, 6.4vw, 96px); top: 14px; }
+.stock-stage.is-band .stage-horizon { bottom: -128px; height: 186px; }
+.stock-stage.is-band .stage-shadow { bottom: 42px; height: 36px; left: calc(50% - 210px); width: 420px; }
+.stock-stage.is-band .stage-controls { bottom: 12px; left: 50%; transform: translateX(-50%); }
+
+/* The two gutters either side of the fan, on the same rail the rest of the page measures off — so
+   they line up with the headline above and the stats band below rather than with the viewport. */
+.stage-flanks {
+  align-items: flex-start;
   display: flex;
-  height: 100%;
   inset: 0;
   justify-content: space-between;
   margin: 0 auto;
   max-width: var(--maxw);
-  padding: 0 24px;
+  padding: 26px 24px 0;
   pointer-events: none;
   position: absolute;
-  right: 0;
-  z-index: 2;
+  z-index: 1;
 }
-.flow-strip-labels > div { max-width: 15ch; }
-.flow-strip span {
+.stage-flank { max-width: 15ch; min-width: 0; }
+.stage-flank.is-right { text-align: right; }
+.stage-flank > span {
   color: var(--link);
   display: block;
+  font-family: var(--mono-stack);
   font-size: .62rem;
   font-weight: 600;
-  letter-spacing: .14em;
+  letter-spacing: .13em;
   text-transform: uppercase;
 }
-.flow-strip strong {
-  color: var(--ink);
+.stage-flank strong {
   display: block;
-  font-size: .95rem;
-  letter-spacing: -.03em;
-  line-height: 1.25;
-  margin-top: 8px;
+  font: 600 clamp(1.3rem, 2.1vw, 1.75rem) var(--mono-stack);
+  letter-spacing: -.04em;
+  line-height: 1.1;
+  margin-top: 9px;
 }
-.flow-strip-out { text-align: right; }
-.flow-strip-out span { color: var(--payout-fg); }
+.stage-flank small { color: var(--ink-3); display: block; font-size: .68rem; margin-top: 4px; }
+/* Distributed shares are value that reached a holder — the one register this palette reserves. */
+.stage-flank.is-paid strong { color: var(--payout-fg); }
+
+/* The band's answer to the summary panel: one line, at the bottom right, that goes where the
+   centred card points. A divider strip has no room for a panel, but a fan that leads nowhere is
+   decoration. */
+.stage-jump {
+  align-items: baseline;
+  bottom: 16px;
+  color: inherit;
+  display: flex;
+  gap: 8px;
+  position: absolute;
+  right: 18px;
+  text-decoration: none;
+  z-index: 7;
+}
+.stage-jump b { font-size: .88rem; letter-spacing: -.02em; }
+.stage-jump > span { color: var(--ink-3); font: .68rem var(--mono-stack); }
+.stage-jump i { color: var(--link); font-style: normal; transition: transform .18s var(--ease); }
+.stage-jump:hover i { display: inline-block; transform: translateX(3px); }
+
+/* Between the rail's full width and 1000px the fan keeps five cards but the gutters stop having
+   room for them: measured at 1100px the outermost card crossed into the left column by 4px. One
+   step down for both, rather than dropping to three cards, which is the thing the ring was
+   duplicated to avoid. */
+@media (max-width: 1200px) {
+  .stock-stage.is-band {
+    --card-w: 176px; --card-h: 206px;
+    --fan-x1: 139px; --fan-z1: -64px;
+    --fan-x2: 278px; --fan-z2: -110px;
+    --fan-x3: 414px; --fan-z3: -136px;
+  }
+  .stock-stage.is-band .stage-floor { height: 308px; }
+  .stock-stage.is-band .stage-card-emblem .stock-logo { height: 68px; width: 68px; }
+  .stock-stage.is-band .stage-card-ghost { font-size: 38px; top: 28px; }
+  .stage-flank { max-width: 11ch; }
+  .stage-flank strong { font-size: 1.3rem; }
+}
+
+@media (max-width: 1000px) {
+  .stock-stage.is-band {
+    --card-w: 164px; --card-h: 192px;
+    --fan-x1: 130px; --fan-z1: -60px;
+    --fan-x2: 259px; --fan-z2: -104px;
+    --fan-x3: 386px; --fan-z3: -130px;
+  }
+  .stock-stage.is-band .stage-floor { height: 294px; }
+  .stock-stage.is-band .stage-card-emblem .stock-logo { height: 64px; width: 64px; }
+}
+
+@media (max-width: 760px) {
+  /* A 15ch column either side leaves the centre card about 90px here, which is narrower than the
+     card. The two figures become a row of their own above the fan. */
+  .stage-flanks {
+    gap: 16px;
+    padding: 20px 20px 0;
+    position: static;
+  }
+  .stage-flank, .stage-flank.is-right { max-width: none; text-align: left; }
+  .stage-flank strong { font-size: 1.3rem; margin-top: 5px; }
+  .stock-stage.is-band {
+    --card-w: 140px; --card-h: 164px;
+    --fan-x1: 111px; --fan-z1: -52px;
+    --fan-x2: 221px; --fan-z2: -92px;
+    --fan-x3: 330px; --fan-z3: -118px;
+  }
+  .stock-stage.is-band .stage-floor { height: 266px; }
+  .stock-stage.is-band .stage-card-emblem .stock-logo { height: 56px; width: 56px; }
+  .stock-stage.is-band .stage-card-ghost { font-size: 34px; top: 24px; }
+  /* Counter left, jump right, both on the floor's bottom line. Stacking the jump above it put it
+     on top of the centre card, which is the one thing that line must never cover. */
+  .stock-stage.is-band .stage-controls { left: 16px; transform: none; }
+  .stage-jump { bottom: 15px; right: 16px; }
+}
+
+@media (max-width: 420px) {
+  .stock-stage.is-band {
+    --card-w: 118px; --card-h: 140px;
+    --fan-x1: 93px; --fan-z1: -46px;
+    --fan-x2: 187px; --fan-z2: -84px;
+    --fan-x3: 278px; --fan-z3: -108px;
+  }
+  .stock-stage.is-band .stage-floor { height: 244px; }
+  .stock-stage.is-band .stage-card-emblem .stock-logo { height: 48px; width: 48px; }
+  .stock-stage.is-band .stage-card-ghost { font-size: 28px; top: 20px; }
+  /* The company name is the half that will not fit next to the counter, and the ticker is the half
+     that identifies where the link goes. "Space Exploration Technologies Corp" is the measure. */
+  .stock-stage.is-band .stage-jump b { display: none; }
+  .stock-stage.is-band .stage-card-emblem .stock-logo { height: 46px; width: 46px; }
+}
 
 /* ---------- 8. Stats band ------------------------------------------------ */
 
@@ -910,7 +1061,24 @@ code, kbd, samp, pre {
   box-shadow: var(--shadow-1);
   transform: translateY(-1px);
 }
-.equity-card .stock-logo { flex: none; }
+/* THE TILE IS THE POINT, not the mark inside it. Every issuer's icon has its own aspect and its own
+   built-in padding — SpaceX's is a full-bleed black square, Meta's a thin wide glyph — so bare marks
+   on a light card come out at five different visual sizes even though every box measures the same.
+   A drawn tile with the mark contained inside it makes them one set.
+
+   `.stock-logo-small` exists for the DARK panels, where its white-alpha border reads and no tile is
+   needed; on this card that border is invisible, which is how the marks ended up floating. */
+.equity-card .stock-logo {
+  background: #fff;
+  border-color: var(--line);
+  border-radius: 6px;
+  box-shadow: none;
+  flex: none;
+  height: 24px;
+  width: 24px;
+}
+.equity-card .stock-logo img { height: 62%; width: 62%; }
+.equity-card .stock-logo i { font-size: .5rem; }
 .equity-go {
   color: var(--line-2);
   flex: none;
@@ -944,6 +1112,510 @@ code, kbd, samp, pre {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ---------- The stage: thirteen listed equities, as cards in depth --------- */
+/*
+   THE MOTION IS ENTIRELY IN THIS BLOCK. `stock-stage.tsx` sets one attribute per card
+   (`data-offset`, -3..3) and two custom properties on the floor; every position, rotation and
+   easing below is CSS, so the whole fan can be posed in devtools by editing an attribute.
+
+   The offsets are scaled off `--fan-*` rather than written out per rule, which is what lets the
+   phone breakpoints shrink the whole arrangement — spread, depth and card — by changing five
+   numbers instead of seven transforms.
+
+   `overflow: clip` on the floor is load-bearing, not tidiness: the outermost cards sit ~450px
+   either side of centre, and without it that reaches the document and scrolls the page sideways.
+*/
+.stock-stage {
+  --card-w: 178px;
+  --card-h: 226px;
+  --fan-x1: 138px;  --fan-y1: 6px;   --fan-z1: -74px;
+  --fan-x2: 278px;  --fan-y2: 11px;  --fan-z2: -130px;
+  --fan-x3: 444px;  --fan-y3: 17px;  --fan-z3: -159px;
+  --card-duration: .95s;
+  --card-ease: cubic-bezier(.4, 0, .2, 1);
+
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-xl);
+  box-shadow: var(--shadow-2);
+  margin-top: 34px;
+  overflow: hidden;
+}
+
+.stage-floor {
+  background:
+    radial-gradient(64% 82% at 50% 26%, rgba(0, 82, 255, .09) 0%, transparent 66%),
+    linear-gradient(rgba(13, 29, 59, .045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(13, 29, 59, .045) 1px, transparent 1px),
+    var(--surface-2);
+  background-size: auto, 54px 54px, 54px 54px;
+  height: 348px;
+  isolation: isolate;
+  overflow: clip;
+  perspective: 1100px;
+  position: relative;
+  touch-action: pan-y;
+}
+
+.stage-backdrop { inset: 0; pointer-events: none; position: absolute; z-index: -1; }
+
+/* The horizon. An ellipse wider than the panel, cropped by it, so the cards read as standing on
+   something rather than floating in a box. */
+.stage-horizon {
+  background: radial-gradient(ellipse at top, rgba(0, 82, 255, .1), transparent 66%);
+  border: 1px solid rgba(0, 82, 255, .26);
+  border-radius: 50%;
+  bottom: -150px;
+  box-shadow: 0 -6px 44px rgba(0, 82, 255, .1), 0 -1px rgba(0, 82, 255, .18);
+  height: 214px;
+  left: 8%;
+  position: absolute;
+  width: 84%;
+}
+.stage-horizon::before {
+  border: 1px solid rgba(0, 82, 255, .12);
+  border-radius: inherit;
+  content: "";
+  inset: 20px -66px;
+  position: absolute;
+}
+
+/* Outline only. A filled wordmark at this size is a background image competing with the cards;
+   an outlined one is texture that survives being crossed by them. */
+.stage-wordmark {
+  color: transparent;
+  font: 800 clamp(74px, 8vw, 118px)/1 var(--ui-stack);
+  left: 0;
+  letter-spacing: -.06em;
+  position: absolute;
+  text-align: center;
+  top: 20px;
+  -webkit-text-stroke: 1px rgba(13, 29, 59, .07);
+  width: 100%;
+}
+
+.stage-shadow {
+  background: radial-gradient(ellipse, rgba(13, 29, 59, .17), transparent 70%);
+  bottom: 52px;
+  height: 44px;
+  left: calc(50% - 250px);
+  position: absolute;
+  width: 500px;
+}
+
+.stage-depth {
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+  transform:
+    translate3d(var(--scene-x, 0px), var(--scene-y, 0px), 0)
+    rotateX(var(--scene-rx, 0deg))
+    rotateY(var(--scene-ry, 0deg));
+  transform-style: preserve-3d;
+  transition: transform .45s ease-out;
+}
+
+.stage-card {
+  background: transparent;
+  border: 0;
+  border-radius: 11px;
+  /* A bare <button> defaults to `buttontext`, i.e. pure black — not the ink this palette uses
+     anywhere else. Every other card on the site sets `color: inherit` for the same reason. */
+  color: var(--ink);
+  cursor: pointer;
+  height: var(--card-h);
+  left: calc(50% - var(--card-w) / 2);
+  padding: 0;
+  pointer-events: auto;
+  position: absolute;
+  -webkit-tap-highlight-color: transparent;
+  text-align: left;
+  top: 28px;
+  transform-style: preserve-3d;
+  transition: transform var(--card-duration) var(--card-ease), opacity var(--card-duration) var(--card-ease);
+  /* `--card-w` was only ever centring the card — the width itself was missing, so an absolutely
+     positioned button fell back to shrink-to-fit and every card was as wide as its own longest
+     word. That is why they read narrow and tall however much the variable grew, and why the fan
+     sat off-centre: `left` was subtracting half a width the card did not have. */
+  width: var(--card-w);
+  will-change: transform;
+}
+
+/* The seven poses. The trailing `rotate()` is a 2D turn applied on top of the 3D one, and it is
+   what stops this reading as a coverflow: the cards are not only angled away in depth, they are
+   tilted in the plane, the way cards actually fall on a table. */
+.stage-card[data-offset="0"]  { transform: translateZ(42px) rotateX(5deg) rotateY(-14deg) rotate(-5deg); }
+.stage-card[data-offset="-1"] { transform: translate3d(calc(var(--fan-x1) * -1), var(--fan-y1), var(--fan-z1)) rotateX(7deg) rotateY(22deg) rotate(-8deg); }
+.stage-card[data-offset="1"]  { transform: translate3d(var(--fan-x1), var(--fan-y1), var(--fan-z1)) rotateX(7deg) rotateY(-22deg) rotate(8deg); }
+.stage-card[data-offset="-2"] { opacity: .62; transform: translate3d(calc(var(--fan-x2) * -1), var(--fan-y2), var(--fan-z2)) rotateX(7deg) rotateY(28deg) rotate(-10deg); }
+.stage-card[data-offset="2"]  { opacity: .62; transform: translate3d(var(--fan-x2), var(--fan-y2), var(--fan-z2)) rotateX(7deg) rotateY(-28deg) rotate(10deg); }
+.stage-card[data-offset="-3"],
+.stage-card[data-offset="3"] { opacity: 0; pointer-events: none; }
+/* A six-card ring flips a card between -2 and +3, so -2 has to be transparent too or the flip
+   happens in plain sight. `data-window` is set from the count — see `visibleWindow` in the
+   component — so this is the layout following the data rather than a number tuned by hand. */
+.stage-depth[data-window="1"] .stage-card[data-offset="-2"],
+.stage-depth[data-window="1"] .stage-card[data-offset="2"] { opacity: 0; pointer-events: none; }
+.stage-card[data-offset="-3"] { transform: translate3d(calc(var(--fan-x3) * -1), var(--fan-y3), var(--fan-z3)) rotateX(7deg) rotateY(30deg) rotate(-12deg); }
+.stage-card[data-offset="3"]  { transform: translate3d(var(--fan-x3), var(--fan-y3), var(--fan-z3)) rotateX(7deg) rotateY(-30deg) rotate(12deg); }
+
+/* The relief is four STACKED shadows, three of them hard. A single blurred shadow gives a card
+   floating over a page; three offset steps of decreasing weight give it a thickness, and that is
+   the whole difference between this and a rounded rectangle. */
+.stage-card-body {
+  background: linear-gradient(145deg, #fff, var(--ink-3) 26%, #fff 56%, var(--line-2) 80%, #fff);
+  border-radius: inherit;
+  box-shadow:
+    3px 3px rgba(13, 29, 59, .2),
+    6px 6px rgba(13, 29, 59, .13),
+    8px 8px rgba(13, 29, 59, .07),
+    20px 28px 32px rgba(13, 29, 59, .18);
+  display: block;
+  height: 100%;
+  padding: 2px;
+  transform-style: preserve-3d;
+  width: 100%;
+}
+.stage-card:hover .stage-card-body,
+.stage-card:focus-visible .stage-card-body {
+  box-shadow:
+    3px 3px var(--blue),
+    6px 6px rgba(13, 29, 59, .16),
+    8px 8px rgba(13, 29, 59, .08),
+    20px 28px 32px rgba(13, 29, 59, .2);
+}
+
+.stage-card-face {
+  background:
+    radial-gradient(ellipse at 50% 44%, rgba(0, 82, 255, .07), transparent 70%),
+    linear-gradient(145deg, #fff, var(--surface-sunken) 62%, #fff);
+  border-radius: 9px;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  padding: 12px 13px;
+  position: relative;
+  z-index: 0;
+}
+/* The centre card lights up with the company's own colour rather than with the house blue — the
+   same rule the donut follows, so a card and its arc agree. Cross-faded on the card's own timing
+   so it arrives with the movement instead of after it. */
+.stage-card-face::after {
+  background:
+    radial-gradient(ellipse at 50% 42%, color-mix(in srgb, var(--brand) 11%, transparent), transparent 72%),
+    linear-gradient(145deg, #fff, var(--surface-2) 62%, #fff);
+  content: "";
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  position: absolute;
+  transition: opacity var(--card-duration) var(--card-ease);
+  z-index: -2;
+}
+.stage-card[data-offset="0"] .stage-card-face::after { opacity: 1; }
+/* A diagonal sheen, so a tilted card catches light unevenly the way a physical one would. */
+.stage-card-face::before {
+  background: linear-gradient(125deg, rgba(255, 255, 255, .9), transparent 30% 62%, rgba(0, 82, 255, .05));
+  content: "";
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+}
+
+.stage-card-top {
+  align-items: center;
+  color: var(--ink-3);
+  display: flex;
+  font: 500 9px var(--mono-stack);
+  gap: 6px;
+  letter-spacing: .05em;
+}
+/* 35%, not 55%. At nine pixels this is small text and needs 4.5:1; measured, the lighter mix put
+   Apple's silver at 3.88 and NVIDIA's green at 4.03 against the card. */
+.stage-card-top > span:last-child { color: color-mix(in srgb, var(--brand, var(--link)) 35%, var(--ink-2)); margin-left: auto; }
+
+.stage-card-ghost {
+  color: color-mix(in srgb, var(--brand, #0d1d3b) 15%, transparent);
+  font: 800 34px/1 var(--ui-stack);
+  left: 0;
+  letter-spacing: -.05em;
+  position: absolute;
+  text-align: center;
+  top: 30px;
+  width: 100%;
+  /* Always behind the content. Moving it up the card changes where it sits, never what it sits
+     under: the mark and the name stay on top of it at every size. */
+  z-index: -1;
+}
+
+.stage-card-emblem { align-items: end; display: grid; flex: 1; justify-items: center; padding: 4px 0 0; }
+.stage-card-emblem .stock-logo {
+  border-color: var(--line-2);
+  border-radius: 16px;
+  box-shadow: 0 0 0 3px rgba(0, 82, 255, .05), 0 0 0 4px rgba(0, 82, 255, .1), 4px 7px 13px rgba(13, 29, 59, .16);
+  height: 64px;
+  width: 64px;
+}
+
+.stage-card-foot { display: flex; flex-direction: column; gap: 2px; margin: 7px 0 4px; text-align: center; }
+.stage-card-foot strong {
+  color: color-mix(in srgb, var(--brand, var(--ink)) 42%, var(--ink));
+  font-size: 1.05rem;
+  letter-spacing: -.02em;
+  line-height: 1.2;
+}
+.stage-card-foot > span { color: var(--ink-3); font-size: .64rem; }
+
+.stage-controls { align-items: center; bottom: 14px; display: flex; gap: 14px; left: 18px; position: absolute; z-index: 7; }
+.stage-counter { align-items: baseline; color: var(--ink-3); display: flex; font: .72rem var(--mono-stack); gap: 7px; margin: 0; }
+.stage-counter b { color: var(--ink); font: 600 1.2rem var(--mono-stack); }
+.stage-arrows { display: flex; gap: 6px; }
+.stage-arrows button {
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--line-2);
+  border-radius: 50%;
+  color: var(--ink-2);
+  cursor: pointer;
+  display: flex;
+  height: 30px;
+  justify-content: center;
+  transition: background .18s var(--ease), border-color .18s var(--ease), color .18s var(--ease);
+  width: 30px;
+}
+.stage-arrows button:hover { background: var(--chip); border-color: var(--chip-line); color: var(--link); }
+.stage-arrows svg { height: 11px; width: 7px; }
+.stage-arrows button:first-child svg { transform: rotate(180deg); }
+
+.stage-hint { bottom: 20px; color: var(--ink-3); font-size: .7rem; margin: 0; position: absolute; right: 18px; }
+
+.stage-summary {
+  align-items: center;
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 14px 20px;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  padding: 18px 20px;
+}
+.stage-identity { min-width: 0; }
+.stage-identity strong { display: block; font-size: 1.15rem; letter-spacing: -.02em; }
+.stage-identity > span { color: var(--ink-3); display: block; font: .72rem var(--mono-stack); margin-top: 3px; }
+.stage-figure { text-align: right; }
+.stage-figure > span, .stage-figure small { color: var(--ink-3); display: block; font-size: .64rem; }
+.stage-figure > span { letter-spacing: .1em; text-transform: uppercase; }
+.stage-figure strong { display: block; font: 600 1.35rem var(--mono-stack); letter-spacing: -.02em; margin: 3px 0 2px; }
+.stage-open { white-space: nowrap; }
+
+/* A reader who asked for less motion gets the fan posed, not animated: the arrangement is the
+   information, the travel between poses is the decoration. Autoplay and parallax are refused in
+   the component; these two lines cover the transitions it does not control. */
+@media (prefers-reduced-motion: reduce) {
+  .stage-card, .stage-depth { transition: none; }
+}
+
+@media (max-width: 1000px) {
+  .stock-stage {
+    --card-w: 158px; --card-h: 202px;
+    --fan-x1: 124px; --fan-z1: -64px;
+    --fan-x2: 250px; --fan-z2: -112px;
+    --fan-x3: 392px; --fan-z3: -140px;
+  }
+  .stage-floor { height: 312px; }
+}
+
+@media (max-width: 760px) {
+  .stock-stage {
+    --card-w: 140px; --card-h: 180px;
+    --fan-x1: 110px; --fan-z1: -58px;
+    --fan-x2: 222px; --fan-z2: -100px;
+    --fan-x3: 348px; --fan-z3: -128px;
+  }
+  .stage-floor { height: 282px; }
+  .stage-hint { display: none; }
+  .stage-summary { grid-template-columns: minmax(0, 1fr) auto; }
+  /* The button spans both columns rather than squeezing a third: "Open GOOGLc →" is the longest
+     label this strip can hold, and at 360px a third column puts it under 10px of clearance. */
+  .stage-open { grid-column: 1 / -1; justify-content: center; }
+}
+
+@media (max-width: 420px) {
+  .stage-summary { grid-template-columns: minmax(0, 1fr); }
+  .stage-figure { text-align: left; }
+  .stock-stage {
+    --card-w: 118px; --card-h: 152px;
+    --fan-x1: 93px;  --fan-z1: -54px;
+    --fan-x2: 187px; --fan-z2: -94px;
+    --fan-x3: 292px; --fan-z3: -120px;
+  }
+  .stage-floor { height: 252px; }
+  .stage-card-ghost { font-size: 32px; top: 22px; }
+  .stage-card-emblem .stock-logo { height: 52px; width: 52px; }
+}
+
+/* ---------- Index assets, as cards with a payout history ------------------ */
+/*
+   Five small cards on one row rather than three large ones, so the set sits ABOVE the ledger as a
+   glance at what the vault buys next — the history below is where a reader goes to read. `auto-fit`
+   rather than a literal five: the index is whatever the vault says it is, and a grid pinned to
+   today's count breaks the day ownership rotates a sixth name in.
+
+   `min-width: 0` on the card is load-bearing. A grid item refuses by default to go narrower than
+   its own content, and a ticker plus a company name is wider than a 320px phone — without it the
+   track grows past the container and takes the document sideways with it.
+*/
+.asset-cards {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(202px, 1fr));
+  margin-top: 26px;
+}
+
+/* THE CARD WEARS ITS COMPANY'S COLOUR. `--brand` is set inline per card, from the same value the
+   donut gives that asset an arc in, so a card and its slice agree without a second palette.
+
+   It is a wash from the top-left corner and a hairline, not a fill. Two reasons for the restraint:
+   NVIDIA's green at any real strength lands on top of what `--lime` means in this system — value
+   that reached a holder — and the figure directly below it is already in that register; and five
+   saturated cards in a row stop being five assets and become a paintbox. The colour is here to
+   identify, not to decorate.
+
+   `color-mix` degrades to nothing rather than to black in a browser without it, which is why the
+   flat `--surface` stays underneath as the real background. */
+.asset-card {
+  background:
+    radial-gradient(128% 104% at 0% 0%, color-mix(in srgb, var(--brand, #7aa8ff) 15%, transparent), transparent 60%),
+    var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  color: inherit;
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  min-width: 0;
+  padding: 13px 13px 12px;
+  position: relative;
+  text-decoration: none;
+  transition: background .2s var(--ease), border-color .18s var(--ease), box-shadow .18s var(--ease), transform .18s var(--ease);
+}
+.asset-card:hover {
+  background:
+    radial-gradient(128% 104% at 0% 0%, color-mix(in srgb, var(--brand, #7aa8ff) 26%, transparent), transparent 62%),
+    var(--surface);
+  border-color: color-mix(in srgb, var(--brand, #7aa8ff) 42%, var(--line));
+  box-shadow: var(--shadow-2);
+  transform: translateY(-2px);
+}
+/* The mark's own tile picks the colour up too, so the corner wash reads as coming FROM the logo
+   rather than as a tint that happens to be near it. */
+.asset-card .stock-logo {
+  background: #fff;
+  border-color: color-mix(in srgb, var(--brand, #7aa8ff) 34%, var(--line));
+}
+
+.asset-card-head { align-items: center; display: flex; gap: 8px; min-width: 0; }
+.asset-card-head .stock-logo { border-radius: 7px; height: 26px; width: 26px; }
+.asset-card-id { min-width: 0; }
+.asset-card-id strong, .asset-card-id small { display: block; }
+.asset-card-id strong { font-family: var(--mono-stack); font-size: .76rem; letter-spacing: -.01em; }
+.asset-card-id small {
+  color: var(--ink-3);
+  font-size: .62rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.asset-card-weight {
+  background: var(--chip);
+  border: 1px solid var(--chip-line);
+  border-radius: var(--r-pill);
+  color: var(--chip-fg);
+  flex: none;
+  font: 600 .62rem var(--mono-stack);
+  margin-left: auto;
+  padding: 2px 7px;
+}
+.asset-card .equity-go { margin-left: 0; }
+.asset-card:hover .equity-go { color: var(--link); transform: translateX(2px); }
+
+.asset-card-label {
+  color: var(--ink-3);
+  display: block;
+  font-size: .58rem;
+  letter-spacing: .11em;
+  text-transform: uppercase;
+}
+.asset-card-figure strong {
+  align-items: baseline;
+  display: flex;
+  flex-wrap: wrap;
+  font: 600 clamp(1.05rem, 4.6vw, 1.28rem) var(--mono-stack);
+  gap: 1px 5px;
+  letter-spacing: -.03em;
+  margin-top: 3px;
+}
+/* The one figure on this page that means "value reached a holder", so the one allowed the payout
+   colour. `--lime` itself sits at about 1.3:1 on white; `--payout-fg` is the same register at a
+   contrast a reader can use. */
+.asset-card-figure strong.is-payout { color: var(--payout-fg); }
+.asset-card-figure strong i { color: var(--ink-3); font: .62rem var(--mono-stack); font-style: normal; }
+.asset-card-figure small {
+  color: var(--ink-3);
+  display: block;
+  font-size: .64rem;
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.asset-spark { display: block; height: 42px; width: 100%; }
+.asset-spark-line { stroke: var(--payout-fg); stroke-width: 1.4; }
+.asset-spark-fill { fill: var(--lime); opacity: .17; }
+.asset-spark-empty {
+  align-items: center;
+  border: 1px dashed var(--line-2);
+  border-radius: var(--r-sm);
+  color: var(--ink-3);
+  display: flex;
+  font-size: .62rem;
+  justify-content: center;
+  line-height: 1.35;
+  padding: 0 8px;
+  text-align: center;
+}
+
+.asset-card-foot {
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding-top: 10px;
+}
+.asset-card-foot small, .asset-card-foot b { display: block; min-width: 0; }
+.asset-card-foot small {
+  color: var(--ink-3);
+  font-size: .56rem;
+  letter-spacing: .07em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.asset-card-foot b {
+  font: 500 .74rem var(--mono-stack);
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .asset-card, .asset-card .equity-go { transition: none; }
+}
+
 
 .section-end { align-items: center; display: flex; justify-content: space-between; margin-top: 26px; }
 .section-end p { color: var(--ink-3); font-size: .76rem; margin: 0; }
@@ -1562,6 +2234,263 @@ code, kbd, samp, pre {
 .swap-action:active:not(:disabled) { background: rgba(255, 255, 255, .09); transform: translateY(1px); }
 .swap-action:disabled { box-shadow: none; cursor: not-allowed; opacity: .55; }
 .swap-foot { color: var(--desk-fg-3); font-size: .63rem; line-height: 1.5; margin: 12px 0 0; text-align: center; }
+
+/* ---------- The swap card, in the stock cards' register -------------------- */
+/*
+   THIRTY RULES ABOVE THIS ONE WERE WRITTEN FOR A DARK PANEL, and every one of them reads a
+   `--desk-*` token. So the card is not restyled here, it is REMAPPED: the tokens take light values
+   on this element, and every rule inside — legs, inputs, slippage pills, the asset menu, the
+   notice — follows without being touched. That is also the safety property. A rule added to the
+   swap card later inherits the light palette by construction instead of by someone remembering.
+
+   `--desk` itself has to stay a real colour rather than `transparent`: `.swap-divider::before`
+   uses it as the knob's 4px border, which is what punches the knob out of the card behind it.
+
+   Only the handful of rules with a colour written INTO them need restating, and they are all
+   below — a white placeholder, a white-alpha CTA, and the two sky borders.
+*/
+.swap-panel {
+  --desk: #fff;
+  --desk-2: #fff;
+  --desk-fg: var(--ink);
+  --desk-fg-2: var(--ink-2);
+  --desk-fg-3: var(--ink-3);
+  --desk-line: var(--line);
+  --desk-line-2: var(--line-2);
+  /* On navy, "glass" was a white veil that read as a raised inset. On white it has to go the other
+     way — DOWN into the card — or the two amount fields disappear into the face behind them. */
+  --desk-glass: var(--surface-sunken);
+  --desk-glass-2: var(--chip);
+  --desk-sheen: rgba(0, 82, 255, .07);
+  /* `--sky` is the data accent for dark surfaces only — see the token block at the top. On white
+     it lands around 1.7:1, so the link blue takes over inside this card. */
+  --sky: var(--link);
+
+  /* The bezel and the stacked relief the stock cards use, done with one element: the face paints
+     to the padding box and the metal gradient to the border box. Three hard steps and one soft,
+     the same signature, scaled for a panel rather than a 178px card. */
+  background:
+    radial-gradient(88% 56% at 50% -12%, var(--desk-sheen) 0%, transparent 62%) padding-box,
+    linear-gradient(#fff, #fff) padding-box,
+    linear-gradient(145deg, #fff, var(--ink-3) 26%, #fff 56%, var(--line-2) 80%, #fff) border-box;
+  border: 2px solid transparent;
+  box-shadow:
+    3px 3px rgba(13, 29, 59, .13),
+    6px 6px rgba(13, 29, 59, .09),
+    8px 8px rgba(13, 29, 59, .05),
+    24px 32px 40px rgba(13, 29, 59, .16);
+  color: var(--ink);
+}
+
+.swap-panel .swap-leg input::placeholder { color: var(--text-disabled); }
+.swap-panel .swap-leg:focus-within { border-color: var(--chip-line); }
+
+/* The CTA was a white-on-glass button because it sat on navy. On white that is invisible, so it
+   becomes what a primary action is everywhere else on this site. */
+.swap-panel .swap-action {
+  background: var(--blue);
+  border-color: var(--blue);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .18);
+  color: #fff;
+}
+.swap-panel .swap-action:hover:not(:disabled) {
+  background: var(--blue-hover);
+  border-color: var(--blue-hover);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .22), 0 8px 20px rgba(0, 82, 255, .24);
+}
+.swap-panel .swap-action:active:not(:disabled) { background: var(--blue-press); border-color: var(--blue-press); }
+
+/* The dropdown lifts off the card now instead of out of a dark panel, so it needs a real edge.
+   And it holds fifteen entries since the picker stopped filtering on index membership: at the
+   shared 264px only five showed, with nothing to say the list continued. */
+.swap-panel .asset-menu { box-shadow: var(--shadow-3); max-height: min(340px, 52vh); }
+
+/* ---------- The cycle bar on the desk ------------------------------------- */
+/*
+   Replaces a ring, a cycle number and an "Idle" chip that between them stated one fact three times
+   and never the one a reader wants: how far through the wait the vault is.
+
+   Sized to sit opposite the panel's headline, so it has a column rather than the full width — 260px
+   holds "Cycle #543" against "2h 41m" with room left at the longest either can be.
+*/
+.cycle-progress { flex: none; min-width: 0; width: 260px; }
+
+.cycle-progress-head {
+  align-items: baseline;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+.cycle-progress-id {
+  align-items: center;
+  color: var(--desk-fg-3);
+  display: inline-flex;
+  font-size: .62rem;
+  gap: 7px;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+/* The same lamp the waiting chip carried, kept because it is the one part of that chip that said
+   something the text did not: the vault is reachable and answering. */
+.cycle-progress-id i {
+  background: var(--sky);
+  border-radius: 50%;
+  box-shadow: 0 0 0 3px rgba(145, 212, 255, .16);
+  flex: none;
+  height: 6px;
+  width: 6px;
+}
+.cycle-progress-head b {
+  color: var(--desk-fg);
+  font: 500 1.05rem var(--mono-stack);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -.03em;
+}
+
+.cycle-progress-track {
+  background: var(--desk-glass-2);
+  border-radius: var(--r-pill);
+  height: 3px;
+  margin: 11px 0 9px;
+  overflow: hidden;
+}
+/* Scaled rather than sized: a transform runs on the compositor, and this element is repainted once
+   a second for as long as the page is open. */
+.cycle-progress-track > span {
+  background: linear-gradient(90deg, var(--blue), var(--sky));
+  border-radius: inherit;
+  display: block;
+  height: 100%;
+  transform-origin: left center;
+  transition: transform .9s linear;
+  width: 100%;
+}
+/* While a cycle is settling the bar is full and the fraction means nothing, so it stops being a
+   measurement and becomes a state: the payout colour, travelling. */
+.cycle-progress-track.is-active > span {
+  animation: cycle-sweep 1.6s var(--ease) infinite;
+  background: linear-gradient(90deg, var(--sky), var(--lime));
+}
+@keyframes cycle-sweep { 50% { opacity: .5; } }
+
+.cycle-progress-foot {
+  color: var(--desk-fg-3);
+  display: flex;
+  font-size: .6rem;
+  gap: 10px;
+  justify-content: space-between;
+}
+.cycle-progress-foot span:last-child { text-align: right; }
+
+@media (prefers-reduced-motion: reduce) {
+  .cycle-progress-track > span { transition: none; }
+  .cycle-progress-track.is-active > span { animation: none; }
+}
+
+@media (max-width: 760px) {
+  .cycle-progress { width: 100%; }
+}
+
+/* ---------- The universe section, and the four ways in -------------------- */
+/*
+   Three surfaces that had not been touched since the card family arrived, and now read as older
+   than everything around them. They get the same three moves, no more: a floor with texture, a
+   bezel edge, and the company's own colour where a company is named.
+*/
+
+/* THE INDEX PANEL. The same 54px lattice the hero runs, in the dark palette, so the one dark
+   surface on the page belongs to the same room. The grid is drawn from `--desk-fg` rather than as
+   a literal white so it tracks the panel if the desk colour ever moves. */
+.index-universe {
+  /* The bezel is the last layer, clipped to the BORDER box while everything above it clips to the
+     padding box. Not `border-image`: that property ignores `border-radius` outright, and the first
+     version of this rule squared off all four corners of the panel to gain an edge. */
+  background:
+    linear-gradient(color-mix(in srgb, var(--desk-fg) 3.5%, transparent) 1px, transparent 1px) padding-box,
+    linear-gradient(90deg, color-mix(in srgb, var(--desk-fg) 3.5%, transparent) 1px, transparent 1px) padding-box,
+    radial-gradient(64% 46% at 50% 106%, rgba(145, 212, 255, .1) 0%, transparent 64%) padding-box,
+    radial-gradient(88% 58% at 50% -14%, var(--desk-sheen) 0%, transparent 62%) padding-box,
+    linear-gradient(var(--desk), var(--desk)) padding-box,
+    linear-gradient(160deg, rgba(255, 255, 255, .26), rgba(255, 255, 255, .06) 46%, rgba(0, 0, 0, .22)) border-box;
+  background-size: 54px 54px, 54px 54px, auto, auto, auto, auto;
+  border: 1px solid transparent;
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-3), inset 0 1px 0 rgba(255, 255, 255, .07);
+}
+
+/* A row and its slice, tied by hue rather than by position. The mark alone could not do it: half
+   these logos are monochrome, and two of the five arcs take a colour their icon does not contain. */
+.legend-swatch {
+  background: var(--arc);
+  border-radius: 2px;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--arc) 22%, transparent);
+  display: block;
+  height: 15px;
+  width: 3px;
+}
+.universe-legend button { grid-template-columns: 3px 20px 1fr auto; gap: 9px; }
+.universe-legend button b { transition: color .18s var(--ease); }
+.universe-legend button:hover b, .universe-legend button:focus-visible b { color: var(--arc); }
+
+/* THE THIRTEEN TILES. Tinted only under the cursor: thirteen tinted at rest is a paintbox, one
+   tinted under the pointer answers "which am I on". The wash enters from the left, where the mark
+   is, so the colour reads as coming out of the logo. */
+.equity-card {
+  transition:
+    background .18s var(--ease), border-color .18s var(--ease),
+    transform .18s var(--ease), box-shadow .18s var(--ease);
+}
+.equity-card:hover {
+  background:
+    radial-gradient(94% 180% at 0% 50%, color-mix(in srgb, var(--brand, var(--blue)) 16%, transparent), transparent 66%),
+    var(--surface);
+  border-color: color-mix(in srgb, var(--brand, var(--blue)) 40%, var(--line));
+  box-shadow: 2px 2px rgba(13, 29, 59, .07), 0 8px 20px rgba(13, 29, 59, .1);
+  transform: translateY(-1px);
+}
+.equity-card:hover .stock-logo { border-color: color-mix(in srgb, var(--brand, var(--blue)) 46%, var(--line)); }
+/* The action tiles keep the house blue: they are not a company. */
+.equity-card.is-action:hover {
+  background: radial-gradient(94% 180% at 0% 50%, color-mix(in srgb, var(--blue) 18%, transparent), transparent 66%), var(--chip);
+  border-color: var(--blue);
+}
+
+/* THE FOUR WAYS IN. They were four white rectangles carrying three sizes of type — the hierarchy
+   was fine and there was nothing to look at. They join the card family: the same bezel edge, the
+   same stacked relief on hover, and a blue that arrives from the corner the arrow sits in. */
+.product-card {
+  /* A GREY metal, not a white one. The stage cards get their bezel from white segments catching a
+     tinted floor; these sit on `--paper`, which is itself near-white, so the same gradient made a
+     fainter edge than the plain `--line` border it replaced. Read against this background the
+     highlight has to be a light grey and the shade a dark one. */
+  background:
+    linear-gradient(var(--surface-2), var(--surface-2)) padding-box,
+    linear-gradient(150deg, var(--line-2), var(--ink-3) 30%, var(--line-2) 58%, var(--line) 84%, var(--line-2)) border-box;
+  border: 1.5px solid transparent;
+  box-shadow: var(--shadow-1);
+  transition:
+    background .2s var(--ease), box-shadow .2s var(--ease), transform .18s var(--ease);
+}
+.product-card:hover {
+  background:
+    radial-gradient(78% 62% at 100% 0%, color-mix(in srgb, var(--blue) 13%, transparent), transparent 64%) padding-box,
+    linear-gradient(var(--surface), var(--surface)) padding-box,
+    linear-gradient(150deg, #fff, var(--blue) 34%, #fff 62%, var(--line-2) 86%, #fff) border-box;
+  box-shadow:
+    3px 3px rgba(13, 29, 59, .12),
+    6px 6px rgba(13, 29, 59, .07),
+    18px 24px 30px rgba(13, 29, 59, .13);
+  transform: translateY(-3px);
+}
+.product-card:hover .product-name { color: var(--link); }
+.product-name { transition: color .18s var(--ease); }
+.product-card b { transition: color .18s var(--ease), transform .18s var(--ease); }
+.product-card:hover b { color: var(--link); transform: translateX(4px); }
+
+@media (prefers-reduced-motion: reduce) {
+  .equity-card, .product-card, .product-card b, .product-name { transition: none; }
+  .equity-card:hover, .product-card:hover { transform: none; }
+}
 
 /* ---------- 18. Documentation --------------------------------------------- */
 /* Deliberately a dense reference surface, not a landing page: flat panels,
@@ -2633,18 +3562,6 @@ a.pool-row:hover { background: var(--surface-2); }
   .docs-flow > div:nth-of-type(3) { grid-column: 1 / 2; }
   .docs-flow > div:nth-of-type(4) { grid-column: 3 / 4; }
   .flow-strip { height: 190px; }
-  /* Narrow enough and the contained render reaches the label; below ~660px it fills the width and
-     sits right under it. The scrim is sized in PIXELS to the label rather than as a percentage of
-     the viewport, because the artwork's left edge moves with both viewport AND band height — a
-     percentage that clears it at 1440 dims it at 900. Wide screens never load this rule at all. */
-  .flow-strip::after {
-    background: linear-gradient(90deg, var(--surface-2) 0%, color-mix(in srgb, var(--surface-2) 72%, transparent) 48%, transparent 100%);
-    content: "";
-    inset: 0 auto 0 0;
-    pointer-events: none;
-    position: absolute;
-    width: 250px;
-  }
 }
 
 @media (max-width: 660px) {
@@ -2663,20 +3580,7 @@ a.pool-row:hover { background: var(--surface-2); }
   .hero-actions { align-items: stretch; flex-direction: column; }
   .hero-actions .button { width: 100%; }
   .hero-note { font-size: .71rem; line-height: 1.45; }
-  /* "Stocks out" used to be hidden here, which removed the second half of the sentence the band
-     exists to say. Stacked instead: fees in on top, stocks out beneath, both over the scrim that
-     already keeps this corner legible. */
   .flow-strip { height: 196px; }
-  .flow-strip-labels {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 14px;
-    justify-content: center;
-    padding: 0 20px;
-  }
-  .flow-strip-labels > div { max-width: 22ch; }
-  .flow-strip strong { font-size: .82rem; margin-top: 5px; }
-  .flow-strip-out { text-align: left; }
 
   .stats-inner { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .stats-inner > div { padding: 20px; }
