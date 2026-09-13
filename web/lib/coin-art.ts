@@ -22,6 +22,21 @@ const MAX_PER_CALL = 30;
 const TTL_MS = 6 * 3_600_000;
 
 /**
+ * How long to stop asking after a refusal — and why a number between 0 and six hours is the only
+ * correct one.
+ *
+ * Returning empty on failure filed "no" as a six-hour success. Throwing instead fixed that and
+ * broke the other end: `cached()` drops a rejected key, so EVERY render then re-asked, which is
+ * exactly the behaviour that earns a 429 in the first place. Production logged one upstream call
+ * per page view.
+ *
+ * A short negative window is the answer. Success is remembered for six hours; a refusal is
+ * remembered for one minute, so a throttled upstream is retried soon but never per render.
+ */
+const COOL_MS = 60_000;
+let coolUntil = 0;
+
+/**
  * DexScreener hands back an 800×800 render by default — 84 KB measured, for a 44px avatar and a
  * backdrop that is blurred past recognition. The same image at 128 is 4 KB.
  */
@@ -98,8 +113,12 @@ async function load(addresses: string[]): Promise<Map<string, string>> {
 export function coinArt(addresses: string[]): Promise<Map<string, string>> {
   const wanted = [...new Set(addresses.map((a) => a.toLowerCase()))].sort();
   if (wanted.length === 0) return Promise.resolve(new Map());
+  // Still cooling from a refusal: no call, no log, no artwork. The cards wear initials for a minute.
+  if (Date.now() < coolUntil) return Promise.resolve(new Map());
+
   return cached(`coin-art:${wanted.join(",")}`, TTL_MS, () => load(wanted)).catch((error) => {
-    console.warn(`[coin-art] no artwork this render: ${(error as Error).message}`);
+    coolUntil = Date.now() + COOL_MS;
+    console.warn(`[coin-art] backing off ${COOL_MS / 1000}s: ${(error as Error).message}`);
     return new Map<string, string>();
   });
 }
