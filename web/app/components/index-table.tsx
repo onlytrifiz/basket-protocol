@@ -4,6 +4,8 @@ import type { B20Asset } from "../../lib/b20";
 import type { IndexRow } from "../../lib/indices";
 import { MODE, returnedUsd } from "../../lib/indices";
 import { compactNumber, usdCompact } from "../../lib/format";
+import { stockByAddress, washColor } from "../../lib/stocks";
+import { LogoSprite } from "./logo-sprite";
 import { StockLogo } from "./stock-logo";
 
 /**
@@ -27,6 +29,9 @@ export function IndexTable({
 }) {
   return (
     <div className="idx-table" role="table" aria-label="Live indices">
+      {/* Emitted HERE rather than by the page, so the stylesheet and the classes that depend on it
+          cannot drift apart: a surface that renders a row always renders the rules for its marks. */}
+      <LogoSprite marks={[...assets.values()]} />
       <div className="idx-row idx-row-head" role="row">
         <span role="columnheader">Coin</span>
         <span role="columnheader">Holds</span>
@@ -39,6 +44,20 @@ export function IndexTable({
       {rows.map((row) => {
         const burns = row.mode === MODE.buyback;
         const holds = burns ? [] : row.basket;
+
+        /* ONLY WHERE IT SAYS SOMETHING. 123 of the 168 baskets hold a single asset and 29 are
+           buybacks — a bar drawn for those is a solid block meaning "100% of one thing", which the
+           row already tells you. Rendered for the sixteen that are actually mixed, it costs about a
+           kilobyte across the page instead of thirty. */
+        const weightTotal = row.weights.reduce((sum, w) => sum + w, 0) || 1;
+        let cursor = 0;
+        const stops = holds.length > 1
+          ? holds.map((token, i) => {
+              const from = cursor * 100;
+              cursor += (row.weights[i] ?? 0) / weightTotal;
+              return `${washColor(stockByAddress(token))} ${from.toFixed(1)}% ${(cursor * 100).toFixed(1)}%`;
+            })
+          : null;
         return (
           <Link className="idx-row" href={`/indices/${row.address}`} key={row.address} role="row">
             <span className="idx-coin" role="cell">
@@ -53,13 +72,20 @@ export function IndexTable({
                 <em>buys itself back</em>
               ) : (
                 <>
+                  {stops && (
+                    <span
+                      aria-hidden="true"
+                      className="idx-bar"
+                      style={{ backgroundImage: `linear-gradient(90deg, ${stops.join(",")})` }}
+                    />
+                  )}
                   {holds.slice(0, 6).map((token, i) => {
                     const asset = assets.get(token.toLowerCase());
                     // The seed list names the equities; the chain named everything else when the
                     // row was read. An address is the mark of last resort, not the first one.
                     const symbol = asset?.symbol ?? row.basketSymbols[i] ?? token.slice(0, 6);
                     return (
-                      <StockLogo key={token} logo={asset?.logo} stock={{ symbol, domain: asset?.domain }} />
+                      <StockLogo key={token} logo={asset?.logo} sprite stock={{ symbol, domain: asset?.domain }} />
                     );
                   })}
                   {holds.length > 6 && <span className="idx-more">+{holds.length - 6}</span>}

@@ -1636,6 +1636,18 @@ code, kbd, samp, pre {
   width: 30px;
 }
 .stock-logo img { display: block; height: 70%; object-fit: contain; width: 70%; }
+/* The sprited mark. Same 70% box as the <img> it replaces, painted from a class — see
+   `logo-sprite.tsx` for why a list of 168 baskets cannot afford 264 content-hash URLs. */
+.stock-logo .sl {
+  background-color: transparent;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 70% 70%;
+  display: block;
+  font-size: 0;
+  height: 100%;
+  width: 100%;
+}
 .stock-logo-small {
   border-color: rgba(255, 255, 255, .22);
   border-radius: 6px;
@@ -2389,6 +2401,241 @@ code, kbd, samp, pre {
 
 @media (max-width: 760px) {
   .cycle-progress { width: 100%; }
+}
+
+/* ---------- Ordering and filtering the full set --------------------------- */
+/*
+   Links, not controls. Every chip here is an `<a>` to the same page with a query on it, which is
+   what lets a list of 168 be sorted and filtered without shipping a line of JavaScript — and why
+   filtering makes the page smaller rather than larger.
+*/
+.idx-controls {
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 24px;
+  justify-content: space-between;
+  margin-bottom: 18px;
+  padding-bottom: 16px;
+}
+.idx-sorts, .idx-filters { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+
+.idx-chip {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  color: var(--ink-2);
+  font-family: var(--mono-stack);
+  font-size: .68rem;
+  padding: 5px 11px;
+  text-decoration: none;
+  transition: background .16s var(--ease), border-color .16s var(--ease), color .16s var(--ease);
+  white-space: nowrap;
+}
+.idx-chip:hover { border-color: var(--chip-line); color: var(--link); }
+.idx-chip.is-on { background: var(--ink); border-color: var(--ink); color: var(--surface); }
+.idx-chip.is-on:hover { color: var(--surface); }
+
+.idx-result { color: var(--ink-3); font-size: .74rem; margin: 14px 0 0; }
+.idx-result a { color: var(--link); font-weight: 600; }
+
+/* The mixed baskets only — see the note in `index-table.tsx`. */
+.idx-bar {
+  border-radius: var(--r-pill);
+  display: block;
+  flex: none;
+  height: 4px;
+  margin-bottom: 6px;
+  width: 100%;
+}
+
+@media (max-width: 760px) {
+  .idx-controls { gap: 12px; }
+  .idx-sorts, .idx-filters { width: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .idx-chip { transition: none; }
+}
+
+/* ---------- An index as a card ------------------------------------------- */
+/*
+   For the three the overview leads with. `--tint` is set per card from the holding it buys most of,
+   so a card, its bar and its chips all agree without a second palette — and a buyback, which buys
+   nothing, takes the burn register instead.
+*/
+.index-cards { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(268px, 1fr)); margin-top: 30px; }
+
+/* The same object family as the hero cards: a metal bezel drawn with two background clips, and a
+   relief that arrives in stacked hard steps rather than one soft blur. See `.stage-card-body`. */
+.index-card {
+  background:
+    linear-gradient(var(--surface), var(--surface)) padding-box,
+    linear-gradient(150deg, var(--line-2), var(--ink-3) 28%, var(--line-2) 56%, var(--line) 84%, var(--line-2)) border-box;
+  border: 1.5px solid transparent;
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-1);
+  color: inherit;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  text-decoration: none;
+  transition: background .2s var(--ease), box-shadow .2s var(--ease), transform .18s var(--ease);
+}
+.index-card:hover {
+  background:
+    linear-gradient(var(--surface), var(--surface)) padding-box,
+    linear-gradient(150deg, var(--line-2), var(--tint) 28%, var(--line-2) 56%, var(--line) 84%, var(--line-2)) border-box;
+  box-shadow:
+    3px 3px rgba(13, 29, 59, .12),
+    6px 6px rgba(13, 29, 59, .07),
+    18px 24px 30px rgba(13, 29, 59, .13);
+  transform: translateY(-3px);
+}
+
+/* THE CAP. A wash of the coin's colour, never the colour itself — three saturated headers in a row
+   stop being three indices and become a paintbox. */
+.index-card-cap {
+  background: color-mix(in srgb, var(--tint) 11%, var(--surface));
+  border-bottom: 1px solid color-mix(in srgb, var(--tint) 18%, var(--line));
+  display: block;
+  isolation: isolate;
+  overflow: hidden;
+  padding: 18px 16px 14px;
+  position: relative;
+  text-align: center;
+}
+/* The coin's own artwork, scaled past its own edges and blurred out of legibility. It is the
+   cheapest honest way to make the cap the colour of the logo: no pixel is decoded, the browser
+   just averages it for us. */
+.index-card-wash {
+  background-position: center;
+  background-size: cover;
+  filter: blur(26px) saturate(1.5);
+  inset: -40%;
+  opacity: .5;
+  position: absolute;
+  z-index: -1;
+}
+/* The ticker as texture behind its own mark. A flat tint, not a stroke: an outline traces every
+   contour a glyph has, and the crossbar of an A then reads as a stray line. */
+.index-card-ghost {
+  color: color-mix(in srgb, var(--tint) 16%, transparent);
+  font: 800 42px/1 var(--ui-stack);
+  left: 0;
+  letter-spacing: -.05em;
+  overflow: hidden;
+  position: absolute;
+  text-align: center;
+  top: 8px;
+  white-space: nowrap;
+  width: 100%;
+  z-index: -1;
+}
+.index-card-mark {
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid color-mix(in srgb, var(--tint) 30%, var(--line));
+  border-radius: 50%;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--tint) 9%, transparent), 0 4px 10px rgba(13, 29, 59, .12);
+  display: inline-flex;
+  height: 44px;
+  justify-content: center;
+  overflow: hidden;
+  width: 44px;
+}
+.index-card-mark img { display: block; height: 100%; object-fit: cover; width: 100%; }
+.index-card-mark i {
+  color: color-mix(in srgb, var(--tint) 60%, var(--ink));
+  font: 600 .78rem var(--mono-stack);
+  font-style: normal;
+}
+.index-card-cap strong {
+  color: color-mix(in srgb, var(--tint) 62%, var(--ink));
+  display: block;
+  font-family: var(--mono-stack);
+  font-size: 1.05rem;
+  letter-spacing: -.02em;
+  margin-top: 9px;
+}
+.index-card-kind { color: var(--ink-3); display: block; font-size: .68rem; margin-top: 3px; }
+
+/* WITH ARTWORK THE CAP'S COLOUR IS THE COIN'S, NOT THE BASKET'S — so the type stops borrowing the
+   holdings' tint, which was landing green-on-green on a coin whose picture happens to be green and
+   brown-on-blue on one whose picture is not. A scrim over the blur guarantees the contrast instead
+   of hoping the image is pale. */
+.index-card.has-art .index-card-cap::before {
+  background: linear-gradient(rgba(255, 255, 255, .58), rgba(255, 255, 255, .82));
+  content: "";
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+  z-index: -1;
+}
+.index-card.has-art .index-card-cap strong { color: var(--ink); }
+.index-card.has-art .index-card-ghost { color: rgba(13, 29, 59, .09); }
+.index-card.has-art .index-card-mark { border-color: rgba(13, 29, 59, .12); }
+
+.index-card-body { display: flex; flex: 1; flex-direction: column; gap: 11px; padding: 14px 16px 12px; }
+.index-card-line { color: var(--ink-2); font-size: .78rem; line-height: 1.45; }
+
+/* One element, one gradient. See the note in `index-card.tsx`: a segment per holding would be a
+   child each, on markup that repeats. */
+.index-card-bar { border-radius: var(--r-pill); display: block; height: 5px; width: 100%; }
+/* One name at 100%, and that name is the coin — so the bar is a band of the coin's own artwork,
+   squeezed to the full width so it shows the picture's colours in the picture's order. The same
+   trick as the cap: no pixel is decoded, the browser averages it down for us. */
+/* Blurred, not squeezed. A 128px picture crushed into a 5px band comes out as stripes — it reads
+   as noise beside two flat bars. Blurred inside its own clip it becomes what it is for: a smear of
+   the coin's colours in the coin's order. The url arrives as `--art` rather than as the element's
+   own background, so this rule can own the painting. */
+.index-card-bar.is-art-bar { overflow: hidden; position: relative; }
+.index-card-bar.is-art-bar::before {
+  background-image: var(--art);
+  background-position: center;
+  background-size: cover;
+  content: "";
+  filter: blur(7px) saturate(1.45);
+  inset: -400%;
+  position: absolute;
+}
+/* No artwork, no colour to take: the burn register, which at least is not a lie. */
+.index-card-bar.is-burn-bar { background: linear-gradient(90deg, var(--burn-fg), color-mix(in srgb, var(--burn-fg) 62%, var(--burn-line))); }
+/* The coin's own picture, where a holding's mark sits on the other cards. */
+.index-chip .stock-logo img { height: 100%; object-fit: cover; width: 100%; }
+
+.index-card-holds { display: flex; flex-wrap: wrap; gap: 5px; }
+.index-chip {
+  align-items: center;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  display: inline-flex;
+  gap: 5px;
+  min-width: 0;
+  padding: 3px 8px 3px 4px;
+}
+.index-chip .stock-logo { border: 0; border-radius: 50%; box-shadow: none; height: 16px; width: 16px; }
+.index-chip b { font-family: var(--mono-stack); font-size: .66rem; font-weight: 500; }
+.index-chip i { color: var(--ink-3); font-size: .64rem; font-style: normal; }
+.index-chip.is-more { color: var(--ink-3); font-size: .66rem; padding: 3px 9px; }
+
+.index-card-foot {
+  align-items: baseline;
+  border-top: 1px solid var(--line);
+  display: flex;
+  justify-content: space-between;
+  padding: 11px 16px 13px;
+}
+.index-card-foot > span { color: var(--ink-3); font-size: .62rem; letter-spacing: .09em; text-transform: uppercase; }
+.index-card-foot b { font: 600 1.05rem var(--mono-stack); letter-spacing: -.02em; }
+/* A burn is not a warning — it is the intended outcome on a buyback, and it has its own register. */
+.index-card.is-burn .index-card-foot b { color: var(--burn-fg); }
+
+@media (prefers-reduced-motion: reduce) {
+  .index-card { transition: none; }
+  .index-card:hover { transform: none; }
 }
 
 /* ---------- The universe section, and the four ways in -------------------- */

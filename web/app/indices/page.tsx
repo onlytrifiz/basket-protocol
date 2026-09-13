@@ -14,7 +14,8 @@ import { BrandRender } from "../components/brand-render";
 import { RingMarker } from "../components/segment-ring";
 import { SiteFooter, SiteHeader } from "../components/site-chrome";
 import { IndexStats } from "../components/index-stats";
-import { IndexTable } from "../components/index-table";
+import { coinArt } from "../../lib/coin-art";
+import { IndexCards } from "../components/index-card";
 
 export const metadata: Metadata = {
   title: "Indices — Stockify",
@@ -65,6 +66,11 @@ export default async function IndicesPage() {
   const byAddress = new Map(assets.map((a) => [a.address.toLowerCase(), a]));
   const featured = rows.slice(0, FEATURED);
 
+  /* ONE request, for the three coins on the cards, memoised for six hours — see `lib/coin-art`.
+     Awaited after the reads above rather than inside their `Promise.all`, because it depends on
+     which rows came back, and because a slow third party must not hold up the page's own data. */
+  const coinLogos = await coinArt(featured.map((row) => row.coin));
+
   return (
     <div className="site-shell">
       <SiteHeader active="indices" />
@@ -113,7 +119,7 @@ export default async function IndicesPage() {
 
           {featured.length > 0 ? (
             <>
-              <IndexTable assets={byAddress} rows={featured} />
+              <IndexCards assets={byAddress} logos={coinLogos} rows={featured} />
               {totals.count > FEATURED && (
                 <div className="idx-more-row">
                   <Link className="button button-ghost" href="/indices/all">

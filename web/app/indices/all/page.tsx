@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { readAssets } from "../../../lib/b20";
-import { LAUNCHPAD, indicesLive, readIndexRows } from "../../../lib/indices";
+import { LAUNCHPAD, indicesLive, readIndexRows, returnedUsd, type IndexRow } from "../../../lib/indices";
 import { IndexStats } from "../../components/index-stats";
 import { IndexTable } from "../../components/index-table";
 import { SiteFooter, SiteHeader } from "../../components/site-chrome";
@@ -35,9 +35,61 @@ export const dynamic = "force-dynamic";
  * Same table, same order, no cut — the overview is a window onto this page rather than a different
  * view of the same thing, which is why both render `IndexTable` and neither owns a row's markup.
  */
-export default async function AllIndicesPage() {
+/**
+ * The orders this page offers, and the one thing each is good for.
+ *
+ * `returned` is the order `readIndexRows` already hands back, so it costs nothing; the rest are a
+ * re-sort of the same array. None of them is a new read — see the note on the page body.
+ */
+const SORTS = {
+  returned: { label: "Given back", of: (r: IndexRow) => returnedUsd(r) ?? -1 },
+  fees: { label: "Fees in", of: (r: IndexRow) => r.feesUsd ?? -1 },
+  rounds: { label: "Rounds run", of: (r: IndexRow) => r.rounds },
+} as const;
+
+type SortKey = keyof typeof SORTS;
+const isSort = (value: unknown): value is SortKey => typeof value === "string" && value in SORTS;
+
+/**
+ * Sorting and filtering WITHOUT A REQUEST AND WITHOUT A KILOBYTE OF JAVASCRIPT.
+ *
+ * Every control here is a link. The page is already `force-dynamic` and `readIndexRows()` is cached
+ * for three minutes, so following one costs a render and no upstream call at all — where a client
+ * filter would have to ship all 168 rows to the browser to hide 160 of them. Filtering the other
+ * way round makes the page LIGHTER the moment anyone uses it, which on the heaviest page of the
+ * site is the whole point.
+ */
+export default async function AllIndicesPage({ searchParams }: PageProps<"/indices/all">) {
   const [{ rows, totals }, assets] = await Promise.all([readIndexRows(), readAssets()]);
   const byAddress = new Map(assets.map((a) => [a.address.toLowerCase(), a]));
+
+  const params = await searchParams;
+  const sort: SortKey = isSort(params.sort) ? params.sort : "returned";
+  const holds = typeof params.holds === "string" ? params.holds.toUpperCase() : null;
+
+  /** Which equities actually appear in a basket — the only filters worth offering. */
+  const heldSymbols = [...new Set(rows.flatMap((r) => r.basketSymbols).filter(Boolean) as string[])].sort();
+
+  const matching = holds
+    ? rows.filter((row) => row.basketSymbols.some((s) => s?.toUpperCase() === holds))
+    : rows;
+
+  /* COPIED BEFORE SORTING. `rows` is the array inside the three-minute cache — sorting it in place
+     would reorder what every other request gets back, and the overview reads the same object to
+     pick its top three. */
+  const visible = sort === "returned"
+    ? matching
+    : [...matching].sort((a, b) => SORTS[sort].of(b) - SORTS[sort].of(a));
+
+  const linkTo = (next: { sort?: SortKey; holds?: string | null }) => {
+    const q = new URLSearchParams();
+    const s = next.sort ?? sort;
+    const h = next.holds === undefined ? holds : next.holds;
+    if (s !== "returned") q.set("sort", s);
+    if (h) q.set("holds", h);
+    const query = q.toString();
+    return query ? `/indices/all?${query}` : "/indices/all";
+  };
 
   return (
     <div className="site-shell">
@@ -72,8 +124,58 @@ export default async function AllIndicesPage() {
         <IndexStats totals={totals} />
 
         <section className="section wrap hub-section">
-          {rows.length > 0 ? (
-            <IndexTable assets={byAddress} rows={rows} />
+          {rows.length > 0 && (
+            <div className="idx-controls">
+              <div className="idx-sorts" role="group" aria-label="Order">
+                {(Object.keys(SORTS) as SortKey[]).map((key) => (
+                  <Link
+                    aria-current={key === sort ? "true" : undefined}
+                    className={`idx-chip${key === sort ? " is-on" : ""}`}
+                    href={linkTo({ sort: key })}
+                    key={key}
+                    // The order is a render, not a fetch: nothing below needs to be re-read.
+                    prefetch={false}
+                    scroll={false}
+                  >
+                    {SORTS[key].label}
+                  </Link>
+                ))}
+              </div>
+
+              <div className="idx-filters" role="group" aria-label="Holding">
+                <Link className={`idx-chip${holds ? "" : " is-on"}`} href={linkTo({ holds: null })} prefetch={false} scroll={false}>
+                  All
+                </Link>
+                {heldSymbols.map((symbol) => (
+                  <Link
+                    aria-current={symbol.toUpperCase() === holds ? "true" : undefined}
+                    className={`idx-chip${symbol.toUpperCase() === holds ? " is-on" : ""}`}
+                    href={linkTo({ holds: symbol.toUpperCase() === holds ? null : symbol })}
+                    key={symbol}
+                    prefetch={false}
+                    scroll={false}
+                  >
+                    {symbol}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {visible.length > 0 ? (
+            <>
+              <IndexTable assets={byAddress} rows={visible} />
+              {holds && (
+                <p className="idx-result">
+                  {visible.length} of {rows.length} hold {holds}.{" "}
+                  <Link href={linkTo({ holds: null })} prefetch={false}>Show all</Link>
+                </p>
+              )}
+            </>
+          ) : holds ? (
+            <p className="detail-empty">
+              No index holds {holds}. <Link href={linkTo({ holds: null })} prefetch={false}>Show all {rows.length}</Link>.
+            </p>
           ) : (
             <p className="detail-empty">
               {indicesLive ? (
