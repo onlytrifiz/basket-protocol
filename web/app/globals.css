@@ -867,6 +867,27 @@ code, kbd, samp, pre {
   .stock-stage.is-band .stage-card-emblem .stock-logo { height: 46px; width: 46px; }
 }
 
+/* TEMPORARY: the band with the render instead of the fan. The two figures keep the gutters they
+   had, laid over the artwork rather than beside a carousel. */
+.flow-strip.is-render .stage-flanks { padding-top: 22px; }
+
+@media (max-width: 760px) {
+  /* Side by side there is no gutter left: at 390px the labels land on the coins and the render
+     shows through the type. Figures on top, artwork pushed below them. */
+  .flow-strip.is-render { height: 260px; }
+  .flow-strip.is-render .stage-flanks { padding: 18px 20px 0; position: absolute; }
+  .flow-strip.is-render .stage-flank { max-width: 13ch; }
+  .flow-strip.is-render .stage-flank.is-right { text-align: right; }
+  .flow-strip.is-render .stage-flank strong { font-size: 1.15rem; }
+  .flow-strip.is-render img { object-position: center 88%; }
+}
+
+@media (max-width: 420px) {
+  .flow-strip.is-render { height: 244px; }
+  .flow-strip.is-render .stage-flank strong { font-size: 1.05rem; }
+  .flow-strip.is-render .stage-flank small { font-size: .62rem; }
+}
+
 /* ---------- 8. Stats band ------------------------------------------------ */
 
 .stats-band {

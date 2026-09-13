@@ -4,6 +4,7 @@ import Link from "next/link";
 import { readAssets } from "../lib/b20";
 import { readDecimals, toUnits } from "../lib/decimals";
 import { readLedger } from "../lib/ledger";
+import { shares as fmtShares, usdCompact } from "../lib/format";
 import { marketBoard } from "../lib/market";
 import { stockByAddress, washColor } from "../lib/stocks";
 import { readVault } from "../lib/vault";
@@ -30,6 +31,15 @@ import { SwapPanel } from "./components/swap-panel";
  * so per-request rendering costs no extra RPC traffic.
  */
 export const dynamic = "force-dynamic";
+
+/**
+ * TEMPORARY: the hero band is showing the render again instead of the card fan.
+ *
+ * Nothing is deleted. `StockStage` and everything it needs are still here and still built, and the
+ * band still gets the same two figures either way — flip this back to `true` and the fan returns
+ * exactly as it was.
+ */
+const HERO_STAGE = false;
 
 /* `filled` advances the ring across the loop; only the final step is a payout,
    so it is the only one allowed to light a segment lime. */
@@ -97,6 +107,16 @@ export default async function Home() {
   }
   const paidTickers = distributedAddresses.map((a) => byAddress.get(a)?.ticker).filter(Boolean) as string[];
   const market = paidTickers.length ? await marketBoard(paidTickers) : { quotes: {}, series: {}, degraded: true };
+
+  /* The same two figures the fan shows for whichever card is centred, summed instead — so the band
+     keeps saying something while the carousel is away rather than going quiet. Off the map above,
+     so an asset whose scale went unread is skipped once rather than twice. */
+  const paidShares = [...distributedByAsset.values()].reduce((sum, units) => sum + units, 0);
+  const paidValue = [...distributedByAsset].reduce((sum, [address, units]) => {
+    const ticker = byAddress.get(address)?.ticker;
+    const price = ticker ? market.quotes[ticker]?.price : undefined;
+    return sum + (price ? units * price : 0);
+  }, 0);
 
   /* The fan below the donut, built from the LIVE listing rather than from the seed file: a ticker
      Base lists tomorrow arrives with its own icon and its own supply, and only its colour falls
@@ -166,10 +186,26 @@ export default async function Home() {
 
               The render is kept in the repo rather than deleted: it is still the OG image's
               subject, and this swap is a layout decision that may want undoing. */}
-          <div className={`flow-strip${stageStocks.length > 0 ? " is-stage" : ""}`}>
-            {stageStocks.length > 0
-              ? <StockStage stocks={stageStocks} variant="band" />
-              : <Image alt="" fill priority sizes="100vw" src="/header-transparent.png" />}
+          <div className={`flow-strip${HERO_STAGE && stageStocks.length > 0 ? " is-stage" : " is-render"}`}>
+            {HERO_STAGE && stageStocks.length > 0 ? (
+              <StockStage stocks={stageStocks} variant="band" />
+            ) : (
+              <>
+                <Image alt="" fill priority sizes="100vw" src="/header-transparent.png" />
+                <div className="stage-flanks">
+                  <div className="stage-flank is-paid">
+                    <span>Stocks distributed</span>
+                    <strong>{paidShares > 0 ? fmtShares(paidShares) : "—"}</strong>
+                    <small>{paidShares > 0 ? "to holders, all time" : "no cycle has paid yet"}</small>
+                  </div>
+                  <div className="stage-flank is-right">
+                    <span>Distribution value</span>
+                    <strong>{paidValue > 0 ? usdCompact(paidValue) : "—"}</strong>
+                    <small>{paidValue > 0 ? "at current prices" : "nothing distributed"}</small>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         </header>
 
