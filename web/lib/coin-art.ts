@@ -63,12 +63,23 @@ async function load(addresses: string[]): Promise<Map<string, string>> {
        rejects, `coinArt` catches, the cards fall back to initials. */
     signal: AbortSignal.timeout(2_500),
   });
-  // A throttled answer is an HTML challenge page, not JSON. Reading it as JSON would throw inside
-  // `cached`, which is exactly what the caller must never see.
-  if (!response.ok) return art;
+  /* A REFUSAL MUST THROW, NOT RETURN EMPTY.
+   *
+   * `cached()` memoises whatever the loader RESOLVES with and deletes the key when it rejects. So
+   * returning an empty map here filed "they said no" as a good answer and served it for the next
+   * six hours — one throttled request and the cards wear initials for the rest of the afternoon.
+   * Thrown, the entry is dropped and the next reader tries again; `coinArt`'s own catch still hands
+   * the page an empty map, so nothing above this changes.
+   *
+   * Logged, because the first time this failed in production it left no trace at all: the cards
+   * quietly fell back and the request logged a clean 200. */
+  if (!response.ok) {
+    console.warn(`[coin-art] dexscreener refused: ${response.status}`);
+    throw new Error(`dexscreener ${response.status}`);
+  }
 
   const pairs = await response.json() as Pair[] | null;
-  if (!Array.isArray(pairs)) return art;
+  if (!Array.isArray(pairs)) throw new Error("dexscreener returned a non-array body");
 
   for (const pair of pairs) {
     const address = pair.baseToken?.address?.toLowerCase();
@@ -87,5 +98,8 @@ async function load(addresses: string[]): Promise<Map<string, string>> {
 export function coinArt(addresses: string[]): Promise<Map<string, string>> {
   const wanted = [...new Set(addresses.map((a) => a.toLowerCase()))].sort();
   if (wanted.length === 0) return Promise.resolve(new Map());
-  return cached(`coin-art:${wanted.join(",")}`, TTL_MS, () => load(wanted)).catch(() => new Map());
+  return cached(`coin-art:${wanted.join(",")}`, TTL_MS, () => load(wanted)).catch((error) => {
+    console.warn(`[coin-art] no artwork this render: ${(error as Error).message}`);
+    return new Map<string, string>();
+  });
 }
