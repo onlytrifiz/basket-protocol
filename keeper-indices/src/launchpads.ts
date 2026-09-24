@@ -86,6 +86,34 @@ export async function liquidityHolders(
   pad: Launchpad,
   coin: Address
 ): Promise<Address[] | null> {
+  /**
+   * Asked again before giving up, because giving up is expensive here.
+   *
+   * Null makes the caller wait — exclusions retry, and a payout skips its round rather than pay a
+   * pool. That is the right way to be wrong about a custodian, but it means a single flaky read
+   * costs a whole cycle, and on a busy endpoint a single flaky read is ordinary: measured against
+   * Base's public RPC this call answered three times and then failed twice in a row. A treasury can
+   * sit unable to pay while nothing at all is wrong with it.
+   *
+   * Three attempts, briefly spaced. A registry that genuinely does not know the coin says so on the
+   * first try and is not retried — that answer is `null` from inside, not a throw.
+   */
+  for (let attempt = 1; ; attempt++) {
+    const answer = await attempt_(client, pad, coin);
+    if (answer !== THREW) return answer;
+    if (attempt >= 3) return null;
+    await new Promise((r) => setTimeout(r, 400 * attempt));
+  }
+}
+
+/** Distinguishes "the read blew up" from "the registry answered, and the answer is nothing". */
+const THREW = Symbol("threw");
+
+async function attempt_(
+  client: PublicClient,
+  pad: Launchpad,
+  coin: Address
+): Promise<Address[] | null | typeof THREW> {
   try {
     if (pad.kind === KIND_FEE_OWNER_LOCKER) {
       const tokenId = (await client.readContract({
@@ -130,6 +158,6 @@ export async function liquidityHolders(
 
     return pool && pool !== ZERO ? [pool, POSITION_MANAGER] : [POSITION_MANAGER];
   } catch {
-    return null;
+    return THREW;
   }
 }

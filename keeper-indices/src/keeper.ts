@@ -611,8 +611,20 @@ async function padFor(treasury: Address): Promise<Launchpad | null> {
  * flattened into "there are none" — callers are expected to wait rather than to pay.
  */
 async function custodians(treasury: Address, coin: Address): Promise<Address[] | null> {
-  const pad = await padFor(treasury);
-  return pad ? liquidityHolders(publicClient, pad, coin) : null;
+  /**
+   * Asked again when the LAUNCHPAD would not resolve, not only when the locker would not answer.
+   *
+   * `padFor` returns null for a treasury that does not yet report a coin — which is the honest
+   * answer to a node that has not caught up with the `bind` we just sent, and the reason the first
+   * cycle after a bind reports a failed lookup. The caller already knows the coin is real: it was
+   * handed to us. So a null here is staleness, and staleness is worth half a second.
+   */
+  for (let attempt = 1; ; attempt++) {
+    const pad = await padFor(treasury);
+    if (pad) return liquidityHolders(publicClient, pad, coin);
+    if (attempt >= 3) return null;
+    await new Promise((r) => setTimeout(r, 400 * attempt));
+  }
 }
 
 async function ensureExclusions(treasury: Address, coin: Address) {
