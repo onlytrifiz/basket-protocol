@@ -11,11 +11,11 @@ import { stocks, type IndexStock } from "./stocks";
  *
  * Two facts drive the hub page:
  *
- *   1. SUPPLY IS THE HEADLINE. Issuance has spread — ten of the thirteen report a non-zero
+ *   1. SUPPLY IS THE HEADLINE. Issuance has spread — ten of the twenty-three report a non-zero
  *      `totalSupply()` today, where once it was four — but supply is still not a market: a name can
- *      be issued and have no pool anywhere, and three remain at literally zero. A listing page that
- *      shows thirteen tickers as if they were thirteen markets is lying by omission; this one reads
- *      the number and says so.
+ *      be issued and have no pool anywhere, and thirteen remain at literally zero. A listing page
+ *      that shows every ticker as if it were a market is lying by omission; this one reads the
+ *      number and says so.
  *
  *   2. THE MULTIPLIER IS COSMETIC. Under ERC-8056 it rescales what a holder is SHOWN without
  *      touching any raw balance — it is how Base represents a stock split. Raw units stay canonical

@@ -75,6 +75,18 @@ The active index is **read from the chain**, never from this file: `stocksLength
 | SNDKc | SanDisk | `0xb200000000000000000000397293cb8cda9a10c5` |
 | SPCXc | SpaceX | `0xb2000000000000000000007b9fcbd005511acbd5` |
 | TSLAc | Tesla | `0xb2000000000000000000001e800a7f5189430cd0` |
+| AVGOc | Broadcom | `0xb200000000000000000000fc737aea6196ab5a4c` |
+| BIRDc | Smartbird (formerly Allbirds) | `0xb200000000000000000000535fe96f18204bfd96` |
+| DJTc | Trump Media & Technology Group | `0xb200000000000000000000428e3a3eebbb20692b` |
+| GMEc | GameStop | `0xb2000000000000000000007790ed6e48e06ed935` |
+| HTZc | Hertz Global Holdings | `0xb2000000000000000000002601c5c94f435da168` |
+| LLYc | Eli Lilly | `0xb200000000000000000000f1a0f91e34892e4718` |
+| MUc | Micron Technology | `0xb200000000000000000000fd2f87532b90095211` |
+| NFLXc | Netflix | `0xb20000000000000000000058b8c947e44011dfe6` |
+| PLTRc | Palantir Technologies | `0xb2000000000000000000007d16372840df4dabbe` |
+| RDDTc | Reddit | `0xb20000000000000000000066242d4067724cb7a1` |
+
+Every one of these was created through the B20 factory (`0xB20f…0000`) by the same issuer account, `0xe090ecbee12d4b6aee5e73ff60945f2545ef5c6f`. Anyone can create a B20, and the factory has minted tens of thousands of them, so a symbol match proves nothing. Before adding a listing, check its creator in the factory's creation log.
 
 **This table is the catalogue, not the live index, and not the deploy seed either.** The website reads the vault directly for exactly this reason. Admitting one of the remaining names is `setIndex` plus a `inIndex: true` in `web/lib/stocks.ts` — see `script/SetIndex.s.sol`, which prints the calldata and dry-runs the rotation.
 
