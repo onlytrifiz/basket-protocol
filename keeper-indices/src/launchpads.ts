@@ -94,7 +94,12 @@ export async function liquidityHolders(
         functionName: "positionOf",
         args: [coin],
       })) as bigint;
-      if (tokenId === 0n) return [pad.registry];
+      /**
+       * The registry does not know this coin — so this is the WRONG REGISTRY, not a coin without a
+       * pool, and answering "no custodians" would be answering a question that was never asked.
+       * Null, so the caller waits and asks again.
+       */
+      if (tokenId === 0n) return null;
 
       const info = (await client.readContract({
         address: pad.registry,
@@ -112,7 +117,9 @@ export async function liquidityHolders(
       functionName: "tokenQuote",
       args: [coin],
     })) as Address;
-    if (!quoteAsset || quoteAsset === ZERO) return [POSITION_MANAGER];
+    // Same reasoning as the V2 branch above: a registry that does not recognise the coin is being
+    // asked about somebody else's launch, and its silence is not a fact about this one.
+    if (!quoteAsset || quoteAsset === ZERO) return null;
 
     const pool = (await client.readContract({
       address: V3_FACTORY,

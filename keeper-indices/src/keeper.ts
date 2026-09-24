@@ -72,7 +72,7 @@ import {
   RUN_ONCE,
   SPLIT_CANDIDATES,
   SPLIT_LOOKBACK,
-  SWAP_GAS_BUFFER_BPS,
+  GAS_BUFFER_BPS,
   WETH,
   ZERO,
   chain,
@@ -279,6 +279,26 @@ async function pinnedRead<T>(args: Record<string, unknown>): Promise<T> {
  */
 const recoverableNonce = (msg: string) =>
   msg.includes("nonce") || msg.includes("replacement transaction underpriced");
+
+/**
+ * The node's gas estimate plus a margin — see `GAS_BUFFER_BPS`.
+ *
+ * Every write that does not compute its own limit goes through here. viem takes
+ * `eth_estimateGas` at face value, and that answer describes the call at the block it was asked
+ * about: a Slipstream collect, a router hop, a burn all cost what the state they meet costs, and
+ * state moves between the estimate and inclusion. When it moves the wrong way the inner call runs
+ * out, the outer frame reverts having burned ~97% of its limit, and the round pays gas for nothing.
+ *
+ * NOT applied to the distribution writes, which size their own limit from the holder count — that
+ * number is derived from what the batch will actually do rather than from a probe, so a margin on
+ * top would only loosen a bound that is already deliberate.
+ */
+async function margined(
+  params: { address: Address; abi: readonly unknown[]; functionName: string; args?: readonly unknown[] }
+): Promise<bigint> {
+  const estimate = await publicClient.estimateContractGas({ ...params, account } as never);
+  return (estimate * BigInt(GAS_BUFFER_BPS)) / 10_000n;
+}
 
 async function send(tx: (nonce?: number) => Promise<Hex>): Promise<Hex> {
   try {
@@ -543,8 +563,20 @@ async function resolveCoinFor(treasury: Address): Promise<Address | null> {
 /**
  * The launchpad a bound treasury collects from, and therefore which shape answers for its coin.
  *
- * Read off the treasury rather than inferred: `bind()` decided it, it cannot change afterwards, and
- * a basket is the only thing that knows. Memoised for the same reason — it is immutable once set.
+ * Read off the treasury rather than inferred: `bind()` decided it, and it cannot change afterwards.
+ *
+ * `coin` IS READ IN THE SAME BREATH, and that is the whole point. An unbound treasury answers
+ * `launchpad() == 0`, which is indistinguishable from a treasury genuinely bound to launchpad 0 —
+ * and a load-balanced endpoint can serve a `latest` read from a node that has not applied the block
+ * our own `bind` just landed in. Memoising that answer made one stale read permanent for the life
+ * of the process.
+ *
+ * It cost a real round: on 2026-09-24 the first V2 index bound at block 51727207, this resolved it
+ * as launchpad 0 one block later, the V1 locker did not recognise the coin, and the custodian list
+ * came back holding nothing but the Uniswap position manager — twice, which was the tell. The
+ * Aerodrome pool was therefore not excluded, and the distribution two blocks later paid it
+ * 0.0885 GOOGLc of a 0.0899 round. Reading `coin` closes it: a treasury that does not yet report a
+ * coin is not one to resolve, and nothing is cached until it does.
  */
 const padOf = new Map<string, Launchpad>();
 async function padFor(treasury: Address): Promise<Launchpad | null> {
@@ -553,11 +585,14 @@ async function padFor(treasury: Address): Promise<Launchpad | null> {
   if (hit) return hit;
 
   try {
-    const id = (await publicClient.readContract({
-      address: treasury,
-      abi: treasuryAbi,
-      functionName: "launchpad",
-    })) as number;
+    const [coin, id] = (await Promise.all([
+      publicClient.readContract({ address: treasury, abi: treasuryAbi, functionName: "coin" }),
+      publicClient.readContract({ address: treasury, abi: treasuryAbi, functionName: "launchpad" }),
+    ])) as [Address, number];
+    // Unbound, or a read that has not caught up with our own bind. Either way there is nothing to
+    // resolve and nothing worth remembering.
+    if (!coin || coin === ZERO) return null;
+
     const pad = await launchpadById(publicClient, Number(id));
     if (pad) padOf.set(key, pad);
     return pad;
@@ -612,12 +647,19 @@ async function ensureExclusions(treasury: Address, coin: Address) {
 
   console.log(`    excluding ${missing.map(short).join(", ")}`);
   if (DRY_RUN) return;
+  const gas = await margined({
+    address: treasury,
+    abi: treasuryAbi,
+    functionName: "setExcludedBatch",
+    args: [missing, true],
+  });
   const hash = await send((nonce) =>
     wallet.writeContract({
       address: treasury,
       abi: treasuryAbi,
       functionName: "setExcludedBatch",
       args: [missing, true],
+      gas,
       nonce,
     })
   );
@@ -667,8 +709,9 @@ async function harvest(treasury: Address, quoteToken: Address, quoteDecimals: nu
     // The quote's own scale, not ether's. An 8-decimal quote printed as ether reads 10^10 too small.
     console.log(`    harvest ${fmt(received, quoteDecimals)}${worth === null ? "" : ` ($${worth.toFixed(2)})`}`);
     if (DRY_RUN) return result as bigint;
+    const gas = await margined({ address: treasury, abi: treasuryAbi, functionName: "harvest" });
     const hash = await send((nonce) =>
-      wallet.writeContract({ address: treasury, abi: treasuryAbi, functionName: "harvest", nonce })
+      wallet.writeContract({ address: treasury, abi: treasuryAbi, functionName: "harvest", gas, nonce })
     );
     await confirm(hash);
     return result as bigint;
@@ -754,8 +797,9 @@ async function allocate(treasury: Address, index: number, size: bigint, decimals
   }
 
   try {
+    const gas = await margined({ address: treasury, abi: treasuryAbi, functionName: "allocate", args });
     const hash = await send((nonce) =>
-      wallet.writeContract({ address: treasury, abi: treasuryAbi, functionName: "allocate", args, nonce })
+      wallet.writeContract({ address: treasury, abi: treasuryAbi, functionName: "allocate", args, gas, nonce })
     );
     await confirm(hash);
     return size;
@@ -907,13 +951,7 @@ async function buy(
        * and simulate fine at every state anyone can reach afterwards, against estimates with 1.5%
        * of headroom. The margin costs nothing when it is not needed — unused gas is refunded.
        */
-      const estimate = await publicClient.estimateContractGas({
-        address: treasury,
-        abi: treasuryAbi,
-        functionName: "swap",
-        args: swapArgs,
-        account,
-      });
+      const gas = await margined({ address: treasury, abi: treasuryAbi, functionName: "swap", args: swapArgs });
       const hash = await send((nonce) =>
         wallet.writeContract({
           address: treasury,
@@ -922,7 +960,7 @@ async function buy(
           // A native-quoted basket sells WETH: the treasury wraps just-in-time and approves exactly
           // what it declares, which is what an allowance-based venue expects.
           args: swapArgs,
-          gas: (estimate * BigInt(SWAP_GAS_BUFFER_BPS)) / 10_000n,
+          gas,
           nonce,
         })
       );
@@ -1329,8 +1367,9 @@ async function runIndex(treasury: Address) {
       unbindable.set(treasury, note);
       return console.error(`    ${note}`);
     }
+    const gas = await margined({ address: treasury, abi: treasuryAbi, functionName: "bind", args: [found] });
     const hash = await send((nonce) =>
-      wallet.writeContract({ address: treasury, abi: treasuryAbi, functionName: "bind", args: [found], nonce })
+      wallet.writeContract({ address: treasury, abi: treasuryAbi, functionName: "bind", args: [found], gas, nonce })
     );
     await confirm(hash);
     coin = found;
@@ -1405,8 +1444,9 @@ async function runIndex(treasury: Address) {
     }
     if (DRY_RUN) return console.log("    dry run: would burn whatever the buy back bought");
     try {
+      const gas = await margined({ address: treasury, abi: treasuryAbi, functionName: "burn" });
       const hash = await send((nonce) =>
-        wallet.writeContract({ address: treasury, abi: treasuryAbi, functionName: "burn", nonce })
+        wallet.writeContract({ address: treasury, abi: treasuryAbi, functionName: "burn", gas, nonce })
       );
       const receipt = await confirm(hash);
       // The amount comes from the transaction that moved it, so it cannot disagree with it.

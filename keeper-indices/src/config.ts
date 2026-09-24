@@ -52,14 +52,23 @@ export const EXPLORER_API_KEY = must("ETHERSCAN_API_KEY");
 export const SLIPPAGE_BPS = Number(process.env.SLIPPAGE_BPS ?? "300");
 
 /**
- * How much more gas a swap is sent with than the node estimated, in bps of the estimate.
+ * How much more gas a write is sent with than the node estimated, in bps of the estimate.
  *
- * The estimate describes the route at the block it was asked about, and a concentrated-liquidity
- * route's gas depends on how many ticks it crosses — so a price that moves before inclusion can
- * make the same trade cost more than the number viem was handed, which it uses verbatim. Unused
- * gas is refunded, so the margin is only ever paid for when it is actually needed.
+ * The estimate describes the call at the block it was asked about, and what these calls cost is a
+ * function of the state they meet: how many ticks a route crosses, what a Slipstream collect finds
+ * owed. State moves between the estimate and inclusion, and viem uses the estimate verbatim — so
+ * when it moves the wrong way the inner call runs out and the outer frame reverts having burned
+ * nearly all of its limit.
+ *
+ * Applied to every write that does not size its own limit. Shipped first for swaps alone, which was
+ * too narrow: a `harvest` on the first B20-quoted index failed the same way within the hour,
+ * 319,318 of 323,977. Unused gas is refunded, so the margin is only paid for when it is needed.
+ *
+ * The old `SWAP_GAS_BUFFER_BPS` is still read, so an override set under that name keeps working.
  */
-export const SWAP_GAS_BUFFER_BPS = Number(process.env.SWAP_GAS_BUFFER_BPS ?? "13000");
+export const GAS_BUFFER_BPS = Number(
+  process.env.GAS_BUFFER_BPS ?? process.env.SWAP_GAS_BUFFER_BPS ?? "13000"
+);
 
 /**
  * A stock is only bought once its own slice of the pending fees is worth this much.
