@@ -52,6 +52,16 @@ export const EXPLORER_API_KEY = must("ETHERSCAN_API_KEY");
 export const SLIPPAGE_BPS = Number(process.env.SLIPPAGE_BPS ?? "300");
 
 /**
+ * How much more gas a swap is sent with than the node estimated, in bps of the estimate.
+ *
+ * The estimate describes the route at the block it was asked about, and a concentrated-liquidity
+ * route's gas depends on how many ticks it crosses — so a price that moves before inclusion can
+ * make the same trade cost more than the number viem was handed, which it uses verbatim. Unused
+ * gas is refunded, so the margin is only ever paid for when it is actually needed.
+ */
+export const SWAP_GAS_BUFFER_BPS = Number(process.env.SWAP_GAS_BUFFER_BPS ?? "13000");
+
+/**
  * A stock is only bought once its own slice of the pending fees is worth this much.
  *
  * The gate is PER STOCK, not per round, because a payout costs gas per stock per holder. A basket of

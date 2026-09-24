@@ -72,6 +72,7 @@ import {
   RUN_ONCE,
   SPLIT_CANDIDATES,
   SPLIT_LOOKBACK,
+  SWAP_GAS_BUFFER_BPS,
   WETH,
   ZERO,
   chain,
@@ -892,6 +893,27 @@ async function buy(
       continue;
     }
     try {
+      const swapArgs = [q.venue, q.sellToken, q.sellAmount, basket[i], q.minBuyAmount, q.data] as const;
+      /**
+       * Estimated with a margin rather than taken at face value.
+       *
+       * viem uses `eth_estimateGas`'s answer verbatim, and that answer describes the route at the
+       * block it was asked about. Gas on a concentrated-liquidity route is a function of how many
+       * ticks the swap crosses, so a price that moves between the estimate and inclusion can make
+       * the same trade cost more than the number it was given — the inner venue call runs out, the
+       * treasury reverts with RouterCallFailed, and the fee is spent on nothing.
+       *
+       * Seen live on the first B20-quoted index: two reverts that each consumed ~97% of their limit
+       * and simulate fine at every state anyone can reach afterwards, against estimates with 1.5%
+       * of headroom. The margin costs nothing when it is not needed — unused gas is refunded.
+       */
+      const estimate = await publicClient.estimateContractGas({
+        address: treasury,
+        abi: treasuryAbi,
+        functionName: "swap",
+        args: swapArgs,
+        account,
+      });
       const hash = await send((nonce) =>
         wallet.writeContract({
           address: treasury,
@@ -899,7 +921,8 @@ async function buy(
           functionName: "swap",
           // A native-quoted basket sells WETH: the treasury wraps just-in-time and approves exactly
           // what it declares, which is what an allowance-based venue expects.
-          args: [q.venue, q.sellToken, q.sellAmount, basket[i], q.minBuyAmount, q.data],
+          args: swapArgs,
+          gas: (estimate * BigInt(SWAP_GAS_BUFFER_BPS)) / 10_000n,
           nonce,
         })
       );
