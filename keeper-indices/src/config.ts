@@ -34,16 +34,6 @@ export const DEAD = "0x000000000000000000000000000000000000dEaD" as Address;
 export const WETH = "0x4200000000000000000000000000000000000006" as Address;
 
 /**
- * The launchpad's fee locker — the same address the factory has registered as launchpad 0.
- *
- * The keeper reads it for two things a treasury cannot tell it: which coin's split points at a
- * given treasury (so an unbound one can be repaired), and whether a split it is already collecting
- * for has since been pointed away.
- */
-export const FEE_LOCKER = (process.env.FEE_LOCKER
-  ?? "0x71D1D363176723f85d98B8B430DF33cde89f0A7f") as Address;
-
-/**
  * Etherscan V2 — the holder list, and nothing else.
  *
  * `tokenholderlist` is a **Pro** endpoint. Base's Blockscout is not a fallback: it serves token

@@ -168,7 +168,20 @@ cd keeper-indices && npm install && cp .env.example .env && npm run once
 cd web && npm install && cp .env.example .env.local && npm run dev
 ```
 
-`forge test` runs 139 tests. `test/BuyImpact.t.sol` is a fork test and additionally requires `BASE_RPC`.
+`forge test` runs 158 tests. `test/BuyImpact.t.sol` is a fork test and additionally requires `BASE_RPC`.
+
+One of them needs a different runner. `test/IndicesB20Quote.fork.t.sol` covers an index quoted
+against a B20 — Coinbase's tokenized equities, whose on-chain code is the single byte `0xef` and
+whose balances the node answers natively. Standard Foundry fetches that byte and tries to execute
+it, so the first `decimals()` dies with `OpcodeNotFound`; the test detects that and skips rather
+than failing. To actually run it, use the [base-anvil](https://github.com/base/base-anvil) build,
+which hosts the precompiles in-process:
+
+```bash
+base-forge test --match-path test/IndicesB20Quote.fork.t.sol
+```
+
+`base-forge` runs the whole suite as well, so it can simply replace `forge` here.
 
 The Foundry deployment script uses Base defaults and embeds the B20 list:
 

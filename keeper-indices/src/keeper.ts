@@ -28,7 +28,23 @@ import {
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
-import { creatorSplitSetAbi, erc20Abi, factoryAbi, lockerAbi, treasuryAbi, v3FactoryAbi } from "./abi.js";
+import {
+  creatorSplitSetAbi,
+  erc20Abi,
+  factoryAbi,
+  lockerAbi,
+  lockerV2Abi,
+  positionRegisteredAbi,
+  splitSetAbi,
+  treasuryAbi,
+} from "./abi.js";
+import {
+  KIND_FEE_OWNER_LOCKER,
+  launchpadById,
+  launchpads,
+  liquidityHolders,
+  type Launchpad,
+} from "./launchpads.js";
 import {
   BALANCE_CHUNK,
   DEAD,
@@ -36,11 +52,11 @@ import {
   ETH_CUSHION,
   EXTRA_EXCLUDES,
   FACTORY,
-  FEE_LOCKER,
   GAS_BASE,
   GAS_PER_HOLDER,
   INTERVAL_SEC,
   KEEPER_PRIVATE_KEY,
+  LAUNCH_FEE_TIER,
   LOG_CHUNK,
   MAX_HOLDERS_PER_TX,
   MIN_PAYOUT_UNITS,
@@ -56,8 +72,6 @@ import {
   RUN_ONCE,
   SPLIT_CANDIDATES,
   SPLIT_LOOKBACK,
-  V3_FACTORY,
-  LAUNCH_FEE_TIER,
   WETH,
   ZERO,
   chain,
@@ -374,42 +388,6 @@ const noteReady = (at: number) => {
 // ─────────────────────────────────────────────────────────────────────── exclusions
 
 /**
- * The pons bonding curve for a coin, from the launch event. Not every coin has one (a treasury can
- * be bound to any ERC20), so a miss is normal and not an error.
- */
-/**
- * The pool that holds a coin's launch liquidity — never a holder in any meaningful sense.
- *
- * The whole supply is minted into one Uniswap V3 position at launch, so the pool is the largest
- * balance on nearly every coin and paying it would hand the round straight back to the pool. It is
- * derived rather than looked up: the coin, the quote it was launched against and the fee tier fix
- * the address, and `tokenQuote` on the locker is the authority on the second.
- */
-async function liquidityHolders(coin: Address): Promise<Address[]> {
-  try {
-    const quoteAsset = (await publicClient.readContract({
-      address: FEE_LOCKER,
-      abi: lockerAbi,
-      functionName: "tokenQuote",
-      args: [coin],
-    })) as Address;
-    if (!quoteAsset || quoteAsset === ZERO) return [POSITION_MANAGER];
-
-    const pool = (await publicClient.readContract({
-      address: V3_FACTORY,
-      abi: v3FactoryAbi,
-      functionName: "getPool",
-      args: [coin, quoteAsset, LAUNCH_FEE_TIER],
-    })) as Address;
-
-    return pool && pool !== ZERO ? [pool, POSITION_MANAGER] : [POSITION_MANAGER];
-  } catch {
-    // The position manager alone is still worth excluding; a missed pool costs accuracy, not safety.
-    return [POSITION_MANAGER];
-  }
-}
-
-/**
  * Which coin each unbound treasury collects for, read off the locker rather than assumed.
  *
  * The sibling protocol needed two hops — an escrow credit naming a curve, then a launch record
@@ -436,73 +414,108 @@ async function buildSplitIndex(): Promise<Map<string, Address> | null> {
   }
 }
 
-async function splitIndexOnce(): Promise<Map<string, Address> | null> {
-  try {
-    const tip = await publicClient.getBlockNumber();
-    const floor = tip > SPLIT_LOOKBACK ? tip - SPLIT_LOOKBACK : 0n;
-    const candidates: Address[] = [];
+/**
+ * One launchpad's answer to "which coin pays which treasury", or null when it could not be read.
+ *
+ * Every shape works the same way in two steps, and the split between them is the safety property:
+ * the LOGS only narrow the search to a coin, and the VIEWS settle who that coin actually pays.
+ * Nobody can forge the pair without really pointing a launch's fees somewhere.
+ */
+async function scanLaunchpad(pad: Launchpad, tip: bigint, floor: bigint): Promise<Map<string, Address> | null> {
+  const events =
+    pad.kind === KIND_FEE_OWNER_LOCKER
+      // A V2 launch NAMES its fee owner, so a coin is usually claimable the moment it exists —
+      // the V1 stack had no equivalent and had to wait for a split to be set afterwards.
+      ? [positionRegisteredAbi[0], splitSetAbi[0]]
+      : [creatorSplitSetAbi[0]];
 
-    for (let to = tip; to >= floor && candidates.length < SPLIT_CANDIDATES; to -= LOG_CHUNK) {
-      const from = to - LOG_CHUNK + 1n > floor ? to - LOG_CHUNK + 1n : floor;
-      const logs = await publicClient.getLogs({
-        address: FEE_LOCKER,
-        event: creatorSplitSetAbi[0],
-        fromBlock: from,
-        toBlock: to,
-      });
-      // Newest first: a coin whose split was repointed twice should be judged on the latest state,
-      // and `splitsOf` below reads exactly that.
-      for (const l of logs.reverse()) {
-        const token = (l.args as Record<string, unknown>)?.token as Address | undefined;
-        if (token && !candidates.includes(token)) candidates.push(token);
-      }
-      if (from === floor) break;
+  const candidates: Address[] = [];
+  for (let to = tip; to >= floor && candidates.length < SPLIT_CANDIDATES; to -= LOG_CHUNK) {
+    const from = to - LOG_CHUNK + 1n > floor ? to - LOG_CHUNK + 1n : floor;
+    const logs = await publicClient.getLogs({ address: pad.registry, events, fromBlock: from, toBlock: to });
+    // Newest first: a coin repointed twice is judged on its latest state, which is what the views
+    // below read anyway.
+    for (const l of logs.reverse()) {
+      const token = (l.args as Record<string, unknown>)?.token as Address | undefined;
+      if (token && !candidates.includes(token)) candidates.push(token);
     }
+    if (from === floor) break;
+  }
 
-    if (candidates.length === 0) return new Map();
+  if (candidates.length === 0) return new Map();
 
+  /**
+   * ONE unread answer voids this launchpad's whole map, and that is not caution for its own sake.
+   *
+   * `allowFailure` turns a failed read into a skipped candidate, silently. If the skipped one is the
+   * NEWEST coin pointing at a treasury and an older coin points at the same treasury too, the map
+   * hands `bind()` the older one — and the treasury's own re-derivation would ACCEPT it, since that
+   * coin really does point there. `bind` cannot be undone, and `coin` is what every future round's
+   * payout is read over.
+   */
+  const read = async (abi: typeof lockerAbi | typeof lockerV2Abi, functionName: string) => {
     const answers = await publicClient.multicall({
-      contracts: candidates.map((coin) => ({
-        address: FEE_LOCKER,
-        abi: lockerAbi,
-        functionName: "splitsOf",
-        args: [coin],
-      })),
+      contracts: candidates.map((coin) => ({ address: pad.registry, abi, functionName, args: [coin] })),
       allowFailure: true,
       // viem packs to 1024 bytes of calldata by default, which splits ~115 of these across five
       // requests. They are 36 bytes each; one window holds the lot.
       batchSize: 16_384,
     });
-
-    /**
-     * ONE unread split voids the whole index, and that is not caution for its own sake.
-     *
-     * `allowFailure` turns a failed read into a skipped candidate, silently. If the skipped one is
-     * the NEWEST coin pointing at a treasury and an older coin points at the same treasury too, the
-     * map hands `bind()` the older one — and the treasury's own re-derivation would ACCEPT it, since
-     * that coin really does point there. `bind` cannot be undone, and `coin` is what every future
-     * round's payout is read over. The old per-treasury scan threw on a failed read and bound
-     * nothing; that is the behaviour worth keeping.
-     */
     const unread = answers.filter((a) => a.status !== "success").length;
     if (unread > 0) {
-      console.error(`  split scan: ${unread}/${answers.length} splits unread — not binding this pass`);
+      console.error(`  scan ${short(pad.registry)}: ${unread}/${answers.length} ${functionName} unread — not binding this pass`);
       return null;
     }
+    return answers;
+  };
 
-    /**
-     * A treasury binds on a WHOLE stream only, so anything else is not its coin — and the first
-     * candidate to claim a recipient keeps it, which preserves the old behaviour of judging a
-     * repointed coin on its newest split, since the candidates are already newest-first.
-     */
+  const splits = await read(pad.kind === KIND_FEE_OWNER_LOCKER ? lockerV2Abi : lockerAbi, "splitsOf");
+  if (!splits) return null;
+  // The fee owner is only asked for where it means anything. On a V1 locker the equivalent view is
+  // `tokenCreator`, which a launch never points at a treasury on its own — the creator ROLE moves
+  // only through the launchpad owner's timelocked ceremony, so there is nothing here to discover.
+  const owners = pad.kind === KIND_FEE_OWNER_LOCKER ? await read(lockerV2Abi, "feeOwnerOf") : null;
+  if (pad.kind === KIND_FEE_OWNER_LOCKER && !owners) return null;
+
+  /**
+   * Who the locker would pay, resolved exactly as the locker resolves it: a whole split wins, and
+   * the underlying role answers only when no split is set. Anything spread across wallets is not a
+   * bind — a treasury paid a fraction while reporting a whole is an accounting hole.
+   *
+   * The first candidate to claim a recipient keeps it, and the candidates are newest-first.
+   */
+  const map = new Map<string, Address>();
+  candidates.forEach((coin, i) => {
+    const sp = splits[i].result as unknown as readonly { to: Address; bps: bigint | number }[];
+    let recipient: Address | undefined;
+    if (sp.length === 1 && BigInt(sp[0].bps) === 10_000n) recipient = sp[0].to;
+    else if (sp.length === 0 && owners) recipient = owners[i].result as unknown as Address;
+    if (!recipient || recipient === ZERO) return;
+
+    const key = recipient.toLowerCase();
+    if (!map.has(key)) map.set(key, coin);
+  });
+  return map;
+}
+
+async function splitIndexOnce(): Promise<Map<string, Address> | null> {
+  try {
+    const pads = (await launchpads(publicClient)).filter((p) => p.enabled && p.registry !== ZERO);
+    if (pads.length === 0) return new Map();
+
+    const tip = await publicClient.getBlockNumber();
+    const floor = tip > SPLIT_LOOKBACK ? tip - SPLIT_LOOKBACK : 0n;
+
     const map = new Map<string, Address>();
-    answers.forEach((answer, i) => {
-      if (answer.status !== "success") return;
-      const splits = answer.result as readonly { to: Address; bps: bigint }[];
-      if (splits.length !== 1 || splits[0].bps !== 10_000n) return;
-      const key = splits[0].to.toLowerCase();
-      if (!map.has(key)) map.set(key, candidates[i]);
-    });
+    for (const pad of pads) {
+      const one = await scanLaunchpad(pad, tip, floor);
+      // One unreadable registry voids the pass rather than binding off the rest: a treasury the
+      // unread one would have claimed could otherwise be bound to a coin from another.
+      if (one === null) return null;
+      // Asked in the factory's own insertion order, which is the order `bind()` asks in — so the
+      // keeper proposes the coin the treasury would have settled on anyway.
+      for (const [treasury, coin] of one) if (!map.has(treasury)) map.set(treasury, coin);
+    }
     return map;
   } catch (e) {
     console.error(`  split scan failed: ${(e as Error).message.split("\n")[0]}`);
@@ -526,11 +539,65 @@ async function resolveCoinFor(treasury: Address): Promise<Address | null> {
   return splitIndex?.get(treasury.toLowerCase()) ?? null;
 }
 
+/**
+ * The launchpad a bound treasury collects from, and therefore which shape answers for its coin.
+ *
+ * Read off the treasury rather than inferred: `bind()` decided it, it cannot change afterwards, and
+ * a basket is the only thing that knows. Memoised for the same reason — it is immutable once set.
+ */
+const padOf = new Map<string, Launchpad>();
+async function padFor(treasury: Address): Promise<Launchpad | null> {
+  const key = treasury.toLowerCase();
+  const hit = padOf.get(key);
+  if (hit) return hit;
+
+  try {
+    const id = (await publicClient.readContract({
+      address: treasury,
+      abi: treasuryAbi,
+      functionName: "launchpad",
+    })) as number;
+    const pad = await launchpadById(publicClient, Number(id));
+    if (pad) padOf.set(key, pad);
+    return pad;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Addresses holding this basket's coin that are custodians rather than holders, or null when that
+ * could not be established.
+ *
+ * The distinction is the whole point. A pool or a locker that slips into a holder list is PAID: a
+ * round's equity goes to a contract custodying the supply instead of to the people the programme
+ * exists for, and nothing about it reads as an error afterwards. So a failed lookup is never
+ * flattened into "there are none" — callers are expected to wait rather than to pay.
+ */
+async function custodians(treasury: Address, coin: Address): Promise<Address[] | null> {
+  const pad = await padFor(treasury);
+  return pad ? liquidityHolders(publicClient, pad, coin) : null;
+}
+
 async function ensureExclusions(treasury: Address, coin: Address) {
   if (exclusionsDone.has(treasury)) return;
   exclusionsDone.add(treasury);
 
-  const candidates: Address[] = [POSITION_MANAGER, ...EXTRA_EXCLUDES, ...(await liquidityHolders(coin))];
+  const found = await custodians(treasury, coin);
+  if (found === null) {
+    /**
+     * Un-marked so the next cycle tries again.
+     *
+     * This runs once per treasury per process, so a single rate-limited read used to leave a pool
+     * un-excluded until somebody restarted the keeper — and every round in between paid it. The
+     * cheap read is worth repeating; the silent gap is not.
+     */
+    exclusionsDone.delete(treasury);
+    console.log(`    ${short(treasury)} custodian lookup failed — retrying next cycle`);
+    return;
+  }
+
+  const candidates: Address[] = [POSITION_MANAGER, ...EXTRA_EXCLUDES, ...found];
 
   const missing: Address[] = [];
   for (const a of candidates) {
@@ -887,7 +954,14 @@ async function eligibleHolders(coin: Address, treasury: Address, floor: bigint):
   const skip = new Set<string>(
     [ZERO, DEAD, POSITION_MANAGER, treasury, coin, ...EXTRA_EXCLUDES].map((a) => a.toLowerCase())
   );
-  for (const a of await liquidityHolders(coin)) skip.add(a.toLowerCase());
+  const custody = await custodians(treasury, coin);
+  // A round is skipped rather than paid out over a list that may still contain the pool. It costs a
+  // cycle; the other way costs the round.
+  if (custody === null) {
+    console.error("    custodian lookup failed — skipping this round rather than risking the pool");
+    return null;
+  }
+  for (const a of custody) skip.add(a.toLowerCase());
 
   const candidates = raw.filter((a) => !skip.has(a.toLowerCase()));
   if (candidates.length === 0) return [];

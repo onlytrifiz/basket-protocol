@@ -65,6 +65,39 @@ interface IStonkFeeLocker {
     function claim(address token) external;
 }
 
+/**
+ * StonksExchangeFeeLockerV2 — the same job for the V2 launchpad, whose pools live on Aerodrome
+ * Slipstream. Three things differ from kind 0, and all three are load-bearing here:
+ *
+ *   - ONE position per coin (`positionOf`), not a list; the NFT is minted straight to the locker.
+ *   - The role that is PAID is the fee OWNER. `tokenCreator` still exists and still answers with the
+ *     launching wallet, but it is informational and receives nothing — so a treasury that bound off
+ *     it would prove the wrong thing about a coin it is not paid for. That is the trap this
+ *     interface exists to avoid: the wrong view does not revert, it answers.
+ *   - The paired asset lives in the position record; there is no `tokenQuote`.
+ *
+ * `splitsOf` is deliberately NOT redeclared. V2 stores `bps` as a `uint16` where V1 uses a
+ * `uint256`, and both encode into the same word, so the V1 declaration decodes a V2 answer exactly.
+ * One decode serves both shapes, and the bind predicate stays a single path.
+ */
+interface IStonksFeeLockerV2 {
+    /// Who receives AND controls a coin's fee-owner share. Zero for a coin this locker never held.
+    function feeOwnerOf(address token) external view returns (address);
+
+    /// A coin's single position NFT. Zero means this locker does not know the coin.
+    function positionOf(address token) external view returns (uint256);
+
+    /// The position record. `quote` is the asset the paired leg arrives in; `active` answers what
+    /// `positionsOf` answered in V1 — is there a live position to collect FROM.
+    function positionsInfo(uint256 tokenId)
+        external
+        view
+        returns (address feeOwner, address quote, address pool, uint16 platformBps, bool quoteOnly, bool active);
+
+    /// Collect and split one coin's accrued fees. `collectAll`'s counterpart, renamed and singular.
+    function collect(address token) external;
+}
+
 /// Config the clones read from the factory on every use, so a locker move is one write for all.
 interface IIndexFactory {
     function weth() external view returns (address);
@@ -146,6 +179,14 @@ contract IndexTreasury {
     /// StonkFeeLocker2 on Base.
     uint8 internal constant KIND_CREATOR_LOCKER = 0;
 
+    /// A locker keyed on a FEE-OWNER role, with ONE position per coin, paying both legs as ERC20s
+    /// behind the same per-asset `claim`. Speaks: splitsOf · feeOwnerOf · positionOf ·
+    /// positionsInfo · collect · claim. It is a separate shape rather than a second registry of the
+    /// first because it differs in WHO it pays and WHERE the paired asset is recorded — the two
+    /// questions bind() is built on.
+    /// StonksExchangeFeeLockerV2 on Base.
+    uint8 internal constant KIND_FEE_OWNER_LOCKER = 1;
+
     /**
      * Which generation of the service this is.
      *
@@ -153,7 +194,7 @@ contract IndexTreasury {
      * created under this one keeps the logic it was created with — clones are never upgraded — so
      * the only honest way to tell them apart is to ask them.
      */
-    string public constant VERSION = "stockify-indices-1";
+    string public constant VERSION = "stockify-indices-2";
 
 
     /**
@@ -550,7 +591,25 @@ contract IndexTreasury {
         view
         returns (address recipient, bool permanent, uint256 splitCount)
     {
-        if (kind != KIND_CREATOR_LOCKER) return (address(0), false, 0);
+        /**
+         * The view naming the underlying ROLE is the only thing the two shapes disagree on, and
+         * they disagree completely: on a V2 locker `tokenCreator` answers with a wallet that holds
+         * no rights and is paid nothing. Resolved up front so an unknown kind leaves `bind` free to
+         * ask the next launchpad rather than reading the wrong slot off this one.
+         *
+         * `permanent` means the same thing for both: the role is beyond the reach of whoever
+         * launched the coin. On V2 `transferFeeOwner` is fee-owner-only — a treasury holding the
+         * role has no code that calls it — and the platform's own reassignment is announced 24
+         * hours ahead, which is the V1 promise exactly.
+         */
+        bytes4 roleSelector;
+        if (kind == KIND_CREATOR_LOCKER) {
+            roleSelector = IStonkFeeLocker.tokenCreator.selector;
+        } else if (kind == KIND_FEE_OWNER_LOCKER) {
+            roleSelector = IStonksFeeLockerV2.feeOwnerOf.selector;
+        } else {
+            return (address(0), false, 0);
+        }
 
         (bool ok, bytes memory ret) =
             registry.staticcall(abi.encodeWithSelector(IStonkFeeLocker.splitsOf.selector, coin_));
@@ -564,13 +623,37 @@ contract IndexTreasury {
             if (sp.length != 0) return (address(0), false, sp.length);
         }
 
-        (ok, ret) = registry.staticcall(abi.encodeWithSelector(IStonkFeeLocker.tokenCreator.selector, coin_));
+        (ok, ret) = registry.staticcall(abi.encodeWithSelector(roleSelector, coin_));
         if (!ok || ret.length < 32) return (address(0), false, 0);
         return (abi.decode(ret, (address)), true, 0);
     }
 
+    /**
+     * A coin's position record on a V2 locker: the asset its paired leg arrives in, and whether the
+     * position is live.
+     *
+     * Two staticcalls because the locker keys the record on the NFT and not on the coin. Both are
+     * paid at bind time only — the live path reads neither — so the extra hop costs a round nothing.
+     */
+    function _positionV2(address registry, address coin_) private view returns (address quoteAsset, bool active) {
+        (bool ok, bytes memory ret) =
+            registry.staticcall(abi.encodeWithSelector(IStonksFeeLockerV2.positionOf.selector, coin_));
+        if (!ok || ret.length < 32) return (address(0), false);
+        uint256 tokenId = abi.decode(ret, (uint256));
+        // Zero is the locker's "unknown coin", and a position id is never zero.
+        if (tokenId == 0) return (address(0), false);
+
+        (ok, ret) = registry.staticcall(abi.encodeWithSelector(IStonksFeeLockerV2.positionsInfo.selector, tokenId));
+        if (!ok || ret.length < 192) return (address(0), false);
+        (, quoteAsset,,,, active) = abi.decode(ret, (address, address, address, uint16, bool, bool));
+    }
+
     /// The asset the paired leg of a coin's fees arrives in.
     function _quoteOf(uint8 kind, address registry, address coin_) private view returns (address) {
+        if (kind == KIND_FEE_OWNER_LOCKER) {
+            (address quoteAsset,) = _positionV2(registry, coin_);
+            return quoteAsset;
+        }
         if (kind == KIND_CREATOR_LOCKER) {
             (bool ok, bytes memory ret) =
                 registry.staticcall(abi.encodeWithSelector(IStonkFeeLocker.tokenQuote.selector, coin_));
@@ -582,6 +665,10 @@ contract IndexTreasury {
 
     /// Is there anything for this coin to collect FROM — a live fee position, not a live balance?
     function _collectable(uint8 kind, address registry, address coin_) private view returns (bool) {
+        if (kind == KIND_FEE_OWNER_LOCKER) {
+            (, bool active) = _positionV2(registry, coin_);
+            return active;
+        }
         if (kind == KIND_CREATOR_LOCKER) {
             (bool ok, bytes memory ret) =
                 registry.staticcall(abi.encodeWithSelector(IStonkFeeLocker.positionsOf.selector, coin_));
@@ -743,6 +830,24 @@ contract IndexTreasury {
             (ok,) = registry.call(abi.encodeWithSelector(IStonkFeeLocker.claim.selector, quoteToken));
             (ok,) = registry.call(abi.encodeWithSelector(IStonkFeeLocker.claim.selector, coin));
             ok; // silence: nothing to decide on, the delta is what counts
+        }
+        if (kind == KIND_FEE_OWNER_LOCKER) {
+            /**
+             * The same two steps as kind 0 — collect, then sweep whatever could not be delivered —
+             * with the collect renamed and singular.
+             *
+             * The COIN-leg claim is kept even though every V2 launch that names an index runs with
+             * `quoteOnly` on and therefore pays no coin leg at all: the locker holds that leg and a
+             * platform keeper converts it to quote, which arrives here as ordinary quote between
+             * harvests and is picked up by the watermark rather than by this call. Switching the
+             * flag off releases what was held, and that release settles down this same path — so
+             * the claim costs one failed call per harvest and covers the case where it does not.
+             */
+            bool ok;
+            (ok,) = registry.call(abi.encodeWithSelector(IStonksFeeLockerV2.collect.selector, coin));
+            (ok,) = registry.call(abi.encodeWithSelector(IStonkFeeLocker.claim.selector, quoteToken));
+            (ok,) = registry.call(abi.encodeWithSelector(IStonkFeeLocker.claim.selector, coin));
+            ok;
         }
     }
 

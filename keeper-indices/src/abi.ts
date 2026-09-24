@@ -12,6 +12,18 @@ export const factoryAbi = [
   { type: "function", name: "venue", stateMutability: "view", inputs: [{ type: "address" }], outputs: [{ type: "bool" }] },
   { type: "function", name: "weth", stateMutability: "view", inputs: [], outputs: [{ type: "address" }] },
   { type: "function", name: "keeper", stateMutability: "view", inputs: [{ type: "address" }], outputs: [{ type: "bool" }] },
+  { type: "function", name: "launchpadList", stateMutability: "view", inputs: [], outputs: [{ type: "uint8[]" }] },
+  {
+    type: "function",
+    name: "launchpads",
+    stateMutability: "view",
+    inputs: [{ type: "uint8" }],
+    outputs: [
+      { name: "registry", type: "address" },
+      { name: "kind", type: "uint8" },
+      { name: "enabled", type: "bool" },
+    ],
+  },
 ] as const;
 
 /**
@@ -51,6 +63,7 @@ export const treasuryAbi = [
   { type: "function", name: "paused", stateMutability: "view", inputs: [], outputs: [{ type: "bool" }] },
   /** 0 = buy the basket and pay it to holders · 1 = buy the coin back and destroy it. */
   { type: "function", name: "mode", stateMutability: "view", inputs: [], outputs: [{ type: "uint8" }] },
+  { type: "function", name: "launchpad", stateMutability: "view", inputs: [], outputs: [{ type: "uint8" }] },
   /**
    * Destroys the coin the treasury holds. Permissionless — it has one destination and cannot be
    * pointed anywhere — so the keeper calls it, but so can anybody if the keeper is down.
@@ -243,5 +256,95 @@ export const v3FactoryAbi = [
     stateMutability: "view",
     inputs: [{ type: "address" }, { type: "address" }, { type: "uint24" }],
     outputs: [{ type: "address" }],
+  },
+] as const;
+
+/**
+ * StonksExchangeFeeLockerV2 — only what the keeper reads.
+ *
+ * `feeOwnerOf` is the view that matters and `tokenCreator` is the one to leave alone: it still
+ * exists on this locker and still answers with the launching wallet, which holds no rights and is
+ * paid nothing. Reading it would not fail, it would mislead.
+ */
+export const lockerV2Abi = [
+  {
+    type: "function",
+    name: "feeOwnerOf",
+    stateMutability: "view",
+    inputs: [{ type: "address" }],
+    outputs: [{ type: "address" }],
+  },
+  {
+    type: "function",
+    name: "positionOf",
+    stateMutability: "view",
+    inputs: [{ type: "address" }],
+    outputs: [{ type: "uint256" }],
+  },
+  {
+    type: "function",
+    name: "positionsInfo",
+    stateMutability: "view",
+    inputs: [{ type: "uint256" }],
+    outputs: [
+      { name: "feeOwner", type: "address" },
+      { name: "quote", type: "address" },
+      { name: "pool", type: "address" },
+      { name: "platformBps", type: "uint16" },
+      { name: "quoteOnly", type: "bool" },
+      { name: "active", type: "bool" },
+    ],
+  },
+  {
+    type: "function",
+    name: "splitsOf",
+    stateMutability: "view",
+    inputs: [{ type: "address" }],
+    outputs: [
+      {
+        type: "tuple[]",
+        components: [
+          { name: "to", type: "address" },
+          { name: "bps", type: "uint16" },
+        ],
+      },
+    ],
+  },
+] as const;
+
+/**
+ * The two V2 events that can put a coin in front of a treasury.
+ *
+ * A launch names its fee owner outright, so `PositionRegistered` is usually the whole story — the
+ * V1 stack had no equivalent and had to wait for a split. `SplitSet` covers the rest: a stream
+ * pointed here after the fact, or pointed away again. Neither is trusted on its own; both only
+ * narrow the search to a coin, and the views settle it.
+ */
+export const positionRegisteredAbi = [
+  {
+    type: "event",
+    name: "PositionRegistered",
+    inputs: [
+      { name: "tokenId", type: "uint256", indexed: true },
+      { name: "token", type: "address", indexed: true },
+      { name: "creator", type: "address", indexed: true },
+      { name: "feeOwner", type: "address", indexed: false },
+      { name: "quote", type: "address", indexed: false },
+      { name: "pool", type: "address", indexed: false },
+      { name: "platformBps", type: "uint16", indexed: false },
+      { name: "quoteOnly", type: "bool", indexed: false },
+    ],
+  },
+] as const;
+
+export const splitSetAbi = [
+  {
+    type: "event",
+    name: "SplitSet",
+    inputs: [
+      { name: "token", type: "address", indexed: true },
+      { name: "recipients", type: "address[]", indexed: false },
+      { name: "bps", type: "uint16[]", indexed: false },
+    ],
   },
 ] as const;

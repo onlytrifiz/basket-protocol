@@ -27,10 +27,16 @@ contract DeployIndices is Script {
 
     /// StonkFeeLocker2 — the launch registry and paymaster these treasuries collect from.
     address internal constant STONK_FEE_LOCKER = 0x71D1D363176723f85d98B8B430DF33cde89f0A7f;
+    /// StonksExchangeFeeLockerV2 (proxy) — the V2 launchpad, whose pools live on Aerodrome
+    /// Slipstream. A separate SHAPE, not a second registry of the first: it pays a fee-owner role,
+    /// holds one position per coin, and records the paired asset on the position.
+    address internal constant STONKS_FEE_LOCKER_V2 = 0x43555104f569D17026037E5637691b95c79fD03A;
 
-    /// Launchpad id 0 = Stonks Exchange. Ids are ours to assign; the shape is the contract's.
+    /// Launchpad ids are ours to assign; the shape is the contract's.
     uint8 internal constant LAUNCHPAD_STONKS = 0;
+    uint8 internal constant LAUNCHPAD_STONKS_V2 = 1;
     uint8 internal constant KIND_CREATOR_LOCKER = 0;
+    uint8 internal constant KIND_FEE_OWNER_LOCKER = 1;
 
     uint16 internal constant PLATFORM_FEE_BPS = 1_000; // 10%, hard cap on the factory is 20%
 
@@ -52,6 +58,9 @@ contract DeployIndices is Script {
         factory.setKeeper(keeper, true);
         factory.setPlatformFee(PLATFORM_FEE_BPS, feeRecipient);
         factory.setLaunchpad(LAUNCHPAD_STONKS, STONK_FEE_LOCKER, KIND_CREATOR_LOCKER, true);
+        // Asked in insertion order by `bind()`, so the older launchpad answers first — which is also
+        // the order in which a coin is most likely to be found.
+        factory.setLaunchpad(LAUNCHPAD_STONKS_V2, STONKS_FEE_LOCKER_V2, KIND_FEE_OWNER_LOCKER, true);
 
         /**
          * The venues a keeper may route a buy through. Velora leads because it is what the sibling
