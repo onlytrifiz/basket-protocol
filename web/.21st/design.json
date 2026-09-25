@@ -39,7 +39,8 @@
     "preferredPrimitives": [],
     "patterns": [
       "21st Sectors Donut (catalog component 20086) adapted as a dependency-free interactive B20-universe count, with linked SVG arcs and legend rows.",
-      "21st Currency Exchange Card (catalog component 8204) adapted as a native Base v4 buy panel backed by server-side Uniswap quote and swap routes."
+      "21st Currency Exchange Card (catalog component 8204) adapted as a native Base v4 buy panel backed by server-side Uniswap quote and swap routes.",
+      "21st Data Table (catalog component 27049) interaction pattern, search plus quick-filter pills with counts plus sortable headers, adapted as a dependency-free toolbar over the /stocks hub's server-rendered rows."
     ]
   },
   "constraints": {
@@ -68,6 +69,10 @@
     {
       "choice": "Source-led protocol reference",
       "reason": "Documentation is a compact public protocol reference built from the actual Solidity and keeper implementation, with a static contents rail informed by the 21st Table of Content exploration (catalog component 22596). It favors contract functions, state transitions, market mechanics, controls and limitations over marketing copy or frontend configuration."
+    },
+    {
+      "choice": "Hub table as a lookup tool",
+      "reason": "At 43 listings the /stocks table gains search (ticker, name or contract address), All / Minted / Trading views that open on Minted, and sortable header cells with a native sort select below 860px. The resting order stays the server's (deepest market first); the premium sorts discount-first; nulls never win a sort."
     }
   ],
   "evidence": [

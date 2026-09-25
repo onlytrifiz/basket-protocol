@@ -7,7 +7,7 @@ import { marketPulse } from "../../lib/blockworks";
 import { poolsForAll } from "../../lib/pools";
 import { percent, premium, shares, usd, usdCompact } from "../../lib/format";
 import { BrandRender } from "../components/brand-render";
-import { HubExpander } from "../components/hub-expander";
+import { HubTable, type HubItem } from "../components/hub-table";
 import { MarketPulseSection, MarketPulseTeaser } from "../components/market-pulse";
 import { Sparkline } from "../components/sparkline";
 import { UpdatesPill } from "../components/updates-pill";
@@ -54,19 +54,13 @@ export default async function StocksPage() {
     return (b.asset.shares ?? 0) - (a.asset.shares ?? 0);
   });
 
-  // The fold line for the table. A zero supply is a stock that exists only as an address; `null`
-  // (the chain did not answer) stays ABOVE the fold — hiding a row because we failed to read it
-  // would let an RPC hiccup quietly disappear a live asset.
-  const minted = ordered.filter((r) => r.asset.shares !== 0);
-  const unminted = ordered.filter((r) => r.asset.shares === 0);
-
   const withMarket = rows.filter((r) => r.pool?.best).length;
   const issued = rows.filter((r) => (r.asset.shares ?? 0) > 0).length;
   const liquidity = rows.reduce((sum, r) => sum + (r.pool?.liquidityUsd ?? 0), 0);
   const volume = rows.reduce((sum, r) => sum + (r.pool?.volume24Usd ?? 0), 0);
   const poolCount = rows.reduce((sum, r) => sum + (r.pool?.poolCount ?? 0), 0);
 
-  // One renderer for both sides of the fold, so collapsing can never change what a row is.
+  // One renderer for every row, whatever view or order the table puts it in.
   const hubRow = ({ asset, pool, quote, onChain, spread, series }: (typeof rows)[number]) => (
     <Link
       className="hub-row"
@@ -126,6 +120,28 @@ export default async function StocksPage() {
     </Link>
   );
 
+  // What the table needs to find, filter and order a row, beside the row itself. Computed here so
+  // the client never re-derives a figure the server already rendered.
+  const items: HubItem[] = ordered.map((row) => {
+    const closes = row.series?.c ?? [];
+    return {
+      key: row.asset.symbol,
+      node: hubRow(row),
+      text: [row.asset.symbol, row.asset.name, row.asset.ticker ?? "", row.asset.address].join(" ").toLowerCase(),
+      minted: row.asset.shares !== 0,
+      trading: Boolean(row.pool?.best),
+      values: {
+        asset: row.asset.symbol,
+        onChain: row.onChain,
+        nasdaq: row.quote?.price ?? null,
+        month: closes.length > 1 && closes[0] ? closes[closes.length - 1] / closes[0] - 1 : null,
+        supply: row.asset.shares,
+        liquidity: row.pool?.liquidityUsd || null,
+        premium: row.spread,
+      },
+    };
+  });
+
   return (
     <div className="site-shell">
       <SiteHeader active="stocks" />
@@ -167,25 +183,7 @@ export default async function StocksPage() {
         {pulse && <MarketPulseTeaser kpis={pulse.kpis} />}
 
         <section className="section wrap hub-section" id="b20">
-          <div className="hub-table" role="table" aria-label="Tokenized equities on Base">
-            <div className="hub-row hub-row-head" role="row">
-              <span role="columnheader">Asset</span>
-              <span role="columnheader">On-chain</span>
-              <span role="columnheader">Nasdaq</span>
-              <span role="columnheader">30d</span>
-              <span role="columnheader">Supply</span>
-              <span role="columnheader">Liquidity</span>
-              <span role="columnheader">Premium</span>
-              <span aria-hidden="true" />
-            </div>
-
-            {minted.map(hubRow)}
-            {unminted.length > 0 && (
-              /* Rows pass through the expander exactly as the server rendered them — it is only
-                 the hinge — and collapsed rows are still in the payload for crawlers. */
-              <HubExpander count={unminted.length}>{unminted.map(hubRow)}</HubExpander>
-            )}
-          </div>
+          <HubTable items={items} label="Tokenized equities on Base" />
 
           {market.degraded && (
             <p className="hub-note-degraded">

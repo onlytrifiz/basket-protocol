@@ -3251,6 +3251,105 @@ a.hub-row:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; 
 
 .hub-section .section-head + .hub-table { margin-top: 30px; }
 
+/* The table's tools, one row above it: the search takes the free width, the views hug their labels,
+   and the order lives in the header cells until the header goes away below 860px. Search and views
+   share one 40px height so the row reads as a single strip rather than two controls. */
+.hub-tools { align-items: center; display: flex; flex-wrap: wrap; gap: 10px 12px; margin-bottom: 14px; }
+.hub-search { flex: 1 1 240px; max-width: 360px; position: relative; }
+.hub-search svg {
+  color: var(--ink-3);
+  height: 15px;
+  left: 13px;
+  pointer-events: none;
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 15px;
+}
+.hub-search input {
+  appearance: none;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  box-shadow: var(--shadow-1);
+  color: var(--ink);
+  font-family: var(--ui-stack);
+  font-size: .88rem;
+  height: 40px;
+  padding: 0 13px 0 36px;
+  transition: border-color .16s var(--ease), box-shadow .16s var(--ease);
+  width: 100%;
+}
+.hub-search input::placeholder { color: var(--ink-3); }
+.hub-search input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px var(--chip); outline: none; }
+
+.hub-views {
+  background: var(--surface-sunken);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  display: inline-flex;
+  gap: 2px;
+  padding: 3px;
+}
+.hub-views button {
+  align-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 7px;
+  color: var(--ink-2);
+  cursor: pointer;
+  display: inline-flex;
+  font-family: var(--ui-stack);
+  font-size: .8rem;
+  font-weight: 600;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  transition: background .16s var(--ease), border-color .16s var(--ease), color .16s var(--ease);
+  white-space: nowrap;
+}
+.hub-views button b {
+  color: var(--ink-3);
+  font-family: var(--mono-stack);
+  font-size: .7rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+}
+.hub-views button:hover { color: var(--ink); }
+.hub-views button[aria-pressed="true"] { background: var(--surface); border-color: var(--line); box-shadow: var(--shadow-1); color: var(--ink); }
+.hub-views button[aria-pressed="true"] b { color: var(--link); }
+.hub-views button:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+
+/* Only below 860px, where the header row that sorts on a wide screen is gone. */
+.hub-sort { display: none; }
+
+/* Header cells are the sort controls, as in the market table — its dark-desk colours swapped for
+   the hub's light ones. The arrow has a reserved slot so toggling never shifts a column, and the
+   hit area is padded past the 10px label so it is not a pixel hunt. */
+.hub-row-head button {
+  align-items: center;
+  background: none;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  gap: 4px;
+  letter-spacing: inherit;
+  margin: -5px 0;
+  padding: 5px 0;
+  text-transform: inherit;
+  transition: color .16s var(--ease);
+}
+.hub-row-head button:hover { color: var(--ink); }
+.hub-row-head button:focus-visible { border-radius: 3px; outline: 2px solid var(--blue); outline-offset: 2px; }
+.hub-row-head button i { color: var(--link); font-style: normal; min-width: 8px; }
+.hub-row-head [aria-sort] button { color: var(--ink); }
+
+/* `anywhere` because the query is echoed back, and a pasted address is 42 characters with no break. */
+.hub-empty { color: var(--ink-2); font-size: .88rem; margin: 0; overflow-wrap: anywhere; padding: 30px 20px; text-align: center; }
+.hub-empty b { color: var(--ink); font-weight: 600; }
+
 /* The dividend ledger shares the hub's row, minus the sparkline and premium columns. */
 .dist-row { grid-template-columns: minmax(190px, 2fr) 1fr 1fr 1.1fr 1.1fr 14px; }
 
@@ -3774,6 +3873,50 @@ a.pool-row:hover { background: var(--surface-2); }
     text-transform: uppercase;
   }
   .hub-premium { grid-column: 1 / -1; }
+  /* The tools restack: search across the full width, then the views and the order share a row
+     when they fit and wrap to one each when they do not. 16px in both fields, because iOS zooms
+     the page into any field set smaller the moment it takes focus. */
+  .hub-search { flex-basis: 100%; max-width: none; }
+  .hub-search input, .hub-sort select { font-size: 1rem; }
+  .hub-views { flex: none; }
+  .hub-sort { align-items: center; display: flex; flex: 1 1 210px; gap: 9px; position: relative; }
+  .hub-sort span {
+    color: var(--ink-3);
+    flex: none;
+    font-family: var(--mono-stack);
+    font-size: .6rem;
+    letter-spacing: .11em;
+    text-transform: uppercase;
+  }
+  .hub-sort select {
+    appearance: none;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: var(--r-sm);
+    box-shadow: var(--shadow-1);
+    color: var(--ink);
+    flex: 1;
+    font-family: var(--ui-stack);
+    height: 40px;
+    min-width: 0;
+    padding: 0 32px 0 12px;
+  }
+  .hub-sort select:focus { border-color: var(--blue); box-shadow: 0 0 0 3px var(--chip); outline: none; }
+  /* Drawn in the ink token rather than as an SVG background, so it follows the theme. */
+  .hub-sort::after {
+    border-bottom: 1.5px solid var(--ink-3);
+    border-right: 1.5px solid var(--ink-3);
+    content: "";
+    height: 6px;
+    margin-top: -5px;
+    pointer-events: none;
+    position: absolute;
+    right: 14px;
+    top: 50%;
+    transform: rotate(45deg);
+    width: 6px;
+  }
+  .hub-empty { background: var(--surface); border: 1px solid var(--line); border-radius: var(--r-md); }
   /* Stacked, not dropped. Hiding the render on a phone removed the one thing on the page that says
      at a glance what a "tokenized stock" is; below the copy it costs a scroll and keeps saying it.
      Centred and capped so it never becomes a full-width banner on a wide phone. */
@@ -3796,6 +3939,15 @@ a.pool-row:hover { background: var(--surface-2); }
   .pool-row { font-size: .72rem; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr); }
   .pool-row > span:nth-child(2), .pool-row > span:nth-child(5), .pool-row > span:nth-child(6) { display: none; }
   .detail-id h1 { font-size: 1.7rem; }
+}
+
+@media (max-width: 640px) {
+  /* One row each for the views and the order below 640px. Side by side they need 545px of the
+     toolbar, which they get at exactly a 600px viewport: a fit by zero pixels, which the next
+     longer sort label would break. Stacked, the views span the row and line up with the search
+     above and the order below instead of stopping short of both. */
+  .hub-views, .hub-sort { flex: 1 1 100%; }
+  .hub-views button { flex: 1; justify-content: center; padding: 0 8px; }
 }
 
 @media (max-width: 560px) {
