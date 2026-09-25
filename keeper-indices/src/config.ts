@@ -139,6 +139,30 @@ export const GAS_BASE = BigInt(process.env.GAS_BASE ?? "400000");
 export const INTERVAL_SEC = Number(process.env.INTERVAL_SEC ?? "300");
 export const RUN_ONCE = process.env.RUN_ONCE === "1";
 export const DRY_RUN = process.env.DRY_RUN === "1";
+/** Stop after this many passes (0 = never). For watching a few passes of `SKIP_IDLE` in a dry run. */
+export const RUN_PASSES = Number(process.env.RUN_PASSES ?? "0");
+
+/**
+ * Whether a pass skips treasuries with nothing to do — see `quiet.ts`.
+ *
+ *   off     every treasury runs every pass, exactly as before this existed, and nothing extra is read
+ *   shadow  every treasury still runs; the skip is only PREDICTED, and a prediction the run then
+ *           contradicts is logged as a mismatch. The default, so deploying this changes nothing
+ *   on      predicted-quiet treasuries are skipped
+ */
+export const SKIP_IDLE = (() => {
+  const v = (process.env.SKIP_IDLE ?? "shadow").trim().toLowerCase();
+  if (v !== "off" && v !== "shadow" && v !== "on") throw new Error(`SKIP_IDLE must be off, shadow or on (got "${v}")`);
+  return v as "off" | "shadow" | "on";
+})();
+/**
+ * A skipped treasury is still run at least this often, whatever its fingerprint says. The fingerprint
+ * cannot see prices, so a balance sitting just under a dollar floor that a price move lifts over it
+ * is noticed within this long rather than on the next change.
+ */
+export const IDLE_RECHECK_SEC = Number(process.env.IDLE_RECHECK_SEC ?? "21600");
+/** How many of those overdue re-checks one pass takes on, oldest first, so they never arrive in a flood. */
+export const IDLE_RECHECKS_PER_PASS = Number(process.env.IDLE_RECHECKS_PER_PASS ?? "50");
 
 /** Native ETH left in a treasury so a later claim has room to move. */
 export const ETH_CUSHION = parseEther(process.env.ETH_CUSHION ?? "0.00002");
