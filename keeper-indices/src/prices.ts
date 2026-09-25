@@ -36,7 +36,33 @@ const DEX = "https://api.dexscreener.com/token-pairs/v1/base";
 /** Prices move; a few minutes is plenty for sizing a threshold, and it keeps the API quiet. */
 const TTL_MS = Number(process.env.PRICE_TTL_MS ?? "300000");
 
+/**
+ * How old a last-known price may be and still stand in for one that did not arrive.
+ *
+ * Every caller uses a price for one thing — sizing a gate — and a gate is coarse: a $10 floor, a 5%
+ * gas ratio. A price from a few hours ago answers those as well as a fresh one. What it must not
+ * become is a price from a different market, so past this age a miss is a miss again and the gates
+ * fall back to permissive, as they always did.
+ */
+const STALE_MAX_MS = Number(process.env.PRICE_STALE_MAX_MS ?? "86400000");
+
 const cache = new Map<string, { usd: number | null; at: number }>();
+/**
+ * The last price that actually arrived, per token, however long ago — kept apart from `cache`,
+ * which also remembers misses.
+ *
+ * Without it, one refused request to the price API was a five-minute hole in which every treasury
+ * quoted in that token acted without a dollar gate: seen on 2026-09-25, when NVDAc, GOOGLc and AAPLc
+ * went unpriced for a pass and treasuries whose fees had been priced at $0.03 minutes earlier were
+ * harvested anyway — a transaction's gas to move three cents.
+ */
+const lastGood = new Map<string, { usd: number; at: number }>();
+
+/** The last real price, if it is recent enough to gate on; null otherwise. */
+function lastKnown(key: string): number | null {
+  const good = lastGood.get(key);
+  return good && Date.now() - good.at < STALE_MAX_MS ? good.usd : null;
+}
 
 async function fetchUsd(token: Address): Promise<number | null> {
   try {
@@ -62,16 +88,31 @@ async function fetchUsd(token: Address): Promise<number | null> {
   }
 }
 
-/** Dollars for one whole unit of `token`. Native and WETH are the same asset. `null` when unknown. */
+/**
+ * Dollars for one whole unit of `token`. Native and WETH are the same asset.
+ *
+ * A lookup that fails answers with the last price that arrived, up to STALE_MAX_MS old; `null` only
+ * when there has never been one, or none recently enough.
+ */
 export async function usdPrice(token: Address): Promise<number | null> {
   const key = (token === ZERO ? WETH : token).toLowerCase();
   const hit = cache.get(key);
-  if (hit && Date.now() - hit.at < TTL_MS) return hit.usd;
+  if (hit && Date.now() - hit.at < TTL_MS) return hit.usd ?? lastKnown(key);
 
   const usd = await fetchUsd(key as Address);
   // A miss is cached too, briefly, so a token nothing prices does not mean a request every cycle.
   cache.set(key, { usd, at: Date.now() });
-  return usd;
+  if (usd !== null) {
+    lastGood.set(key, { usd, at: Date.now() });
+    return usd;
+  }
+  const fallback = lastKnown(key);
+  if (fallback !== null) {
+    const ageMin = Math.round((Date.now() - lastGood.get(key)!.at) / 60_000);
+    // Once per miss window, not per caller: the miss itself is cached for TTL_MS.
+    console.log(`    price for ${key.slice(0, 8)}…${key.slice(-4)} unavailable — using the last one, ${ageMin} min old`);
+  }
+  return fallback;
 }
 
 /**
