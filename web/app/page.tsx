@@ -218,9 +218,9 @@ export default async function Home() {
 
         <section className="section wrap" id="how"><div className="section-head"><p className="eyebrow">THE DIVIDEND LOOP</p><h2>A stock dividend that starts with volume.</h2><p>Stockify does not reflect another token into your wallet. The vault acquires the B20 assets themselves and pushes the resulting entitlement to holders.</p></div><div className="steps-grid">{mechanics.map((step) => <article className="step-card" key={step.number}><RingMarker filled={step.filled} label={step.number} lit={step.lit} /><h3>{step.title}</h3><p>{step.copy}</p></article>)}</div></section>
 
-        <section className="section wrap" id="index"><div className="index-showcase"><div className="section-head index-head"><div><p className="eyebrow">THE B20 STOCKS UNIVERSE</p><h2>Twenty-three listed. Five in the index.</h2></div><p>Every B20 equity Coinbase has issued on Base. The dividend vault buys a configurable subset of them, and the index can change between cycles.</p></div><IndexUniverse slices={slices} /></div>
+        <section className="section wrap" id="index"><div className="index-showcase"><div className="section-head index-head"><div><p className="eyebrow">THE B20 STOCKS UNIVERSE</p><h2>Forty-three listed. Five in the index.</h2></div><p>Every B20 equity Coinbase has issued on Base. The dividend vault buys a configurable subset of them, and the index can change between cycles.</p></div><IndexUniverse slices={slices} /></div>
           <StockGrid compact>
-            {/* The two ways out sit IN the grid rather than under it: twenty-three assets across five
+            {/* The two ways out sit IN the grid rather than under it: forty-three assets across five
                 columns leave exactly two empty cells, and an action shaped like the things it acts
                 on reads as part of the set instead of as a banner below it. */}
             <Link className="equity-card is-action" href="/stocks">

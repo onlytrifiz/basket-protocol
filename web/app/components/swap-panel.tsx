@@ -113,7 +113,7 @@ export function SwapPanel() {
      * do not: a name can have an Aerodrome pool without being in the index, and the index can drop a
      * name that still trades. Filtering on it hid eight assets the panel could have priced.
      *
-     * What it does NOT do is promise a route. Thirteen of the twenty-three report zero supply, and the
+     * What it does NOT do is promise a route. Twenty-four of the forty-three report zero supply, and the
      * aggregator answers "no routes with enough liquidity" for a pair it cannot fill — which reaches
      * the reader as a notice on the card rather than as a broken quote. Letting the market answer is
      * honest; guessing on its behalf from a flag about something else was not.

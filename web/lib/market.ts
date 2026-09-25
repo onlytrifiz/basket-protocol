@@ -13,7 +13,9 @@ import { stocks } from "./stocks";
  *
  *   Finnhub is the SPINE — quotes, fundamentals and news. It is a documented API with a key and a
  *   60-call/minute free tier; thirteen quotes in parallel measured 390ms with no throttling. The
- *   headline price of every row comes from here.
+ *   headline price of every row comes from here. At forty-three listings one rebuild of the hub
+ *   spends 43 of those 60 calls, so the budget is close to full: past it, a row falls back to the
+ *   last price this instance had, or to a dash if it never had one.
  *
  *   Yahoo supplies only the historical SERIES behind the charts. It is an undocumented endpoint
  *   that throttles hard and erratically — measured from this codebase, the same request answers 429
@@ -83,8 +85,29 @@ const str = (value: unknown) => (typeof value === "string" && value ? value : un
 
 const KEY = process.env.FINNHUB_API_KEY;
 
+/**
+ * Finnhub's second ceiling, kept under with room to spare.
+ *
+ * On top of the 60 a minute, Finnhub documents a hard 30 calls per second, and the hub now asks for
+ * more quotes than that in one render. Sent at once, the tail of the board would come back 429 and
+ * render as dashes. Calls past the ceiling wait for the oldest one in the window to age out, so a
+ * cold board takes a second or two longer and a warm one, which never gets here, costs nothing.
+ */
+const PER_SECOND = 25;
+const sent: number[] = [];
+
+async function finnhubSlot() {
+  for (;;) {
+    const now = Date.now();
+    while (sent.length && now - sent[0] >= 1_000) sent.shift();
+    if (sent.length < PER_SECOND) { sent.push(now); return; }
+    await sleep(1_000 - (now - sent[0]));
+  }
+}
+
 async function finnhub<T>(path: string): Promise<T | null> {
   if (!KEY) return null;
+  await finnhubSlot();
   try {
     const response = await fetch(`${FINNHUB}${path}${path.includes("?") ? "&" : "?"}token=${KEY}`, {
       cache: "no-store",
@@ -101,22 +124,26 @@ type FinnhubQuote = { c?: number; d?: number; dp?: number; h?: number; l?: numbe
 
 async function finnhubQuote(ticker: string): Promise<Quote | null> {
   const raw = await finnhub<FinnhubQuote>(`/quote?symbol=${encodeURIComponent(ticker)}`);
-  const price = num(raw?.c);
+  // A request that did not land — a 429 past the minute budget, a timeout — is THROWN, as Yahoo's
+  // are, so `cached()` keeps showing the last price it had. Returned as null it was stored as a
+  // fresh answer, and the row read "—" for the whole TTL.
+  if (!raw) throw new Error(`finnhub quote unavailable: ${ticker}`);
+  const price = num(raw.c);
   // Finnhub answers an unknown symbol with a zero-filled object rather than an error, and a price of
   // zero rendered next to a live DEX price would read as a 100% discount.
   if (!price) return null;
-  const previousClose = num(raw?.pc) ?? price;
+  const previousClose = num(raw.pc) ?? price;
   return {
     ticker,
     price,
     previousClose,
-    change: num(raw?.d) ?? price - previousClose,
-    changePercent: num(raw?.dp) ?? (previousClose ? ((price - previousClose) / previousClose) * 100 : 0),
+    change: num(raw.d) ?? price - previousClose,
+    changePercent: num(raw.dp) ?? (previousClose ? ((price - previousClose) / previousClose) * 100 : 0),
     currency: "USD",
-    dayHigh: num(raw?.h),
-    dayLow: num(raw?.l),
-    open: num(raw?.o),
-    marketTime: num(raw?.t),
+    dayHigh: num(raw.h),
+    dayLow: num(raw.l),
+    open: num(raw.o),
+    marketTime: num(raw.t),
   };
 }
 
@@ -167,7 +194,7 @@ function toSeries(stamps: (number | undefined)[], closes: (number | null | undef
   return series;
 }
 
-/** A month of closes for every listed ticker, in ONE request — the hub's inline sparklines. */
+/** A month of closes for up to twenty tickers in ONE request — the hub's inline sparklines. */
 async function yahooSparks(tickers: string[]): Promise<Record<string, Series>> {
   const payload = await yahooJson<Record<string, { timestamp?: number[]; close?: (number | null)[] }>>(
     `/v8/finance/spark?symbols=${encodeURIComponent(tickers.join(","))}&range=1mo&interval=1d`,
@@ -277,16 +304,29 @@ export const LISTED = new Set(stocks.map((s) => s.ticker).filter(Boolean) as str
 
 export type MarketBoard = { quotes: Record<string, Quote>; series: Record<string, Series>; degraded: boolean };
 
+/** The most symbols Yahoo's spark endpoint takes in one request. */
+const SPARK_SLICE = 20;
+
 /** Quotes plus month-long sparkline series for a set of tickers. Used by the hub, list-wide. */
 export async function marketBoard(tickers: string[]): Promise<MarketBoard> {
-  const unique = [...new Set(tickers.filter((t) => LISTED.has(t)))].sort().slice(0, 25);
+  // No count cap: `LISTED` already bounds the fan-out. The cap that used to sit here was 25, and a
+  // listing past it lost its quote in alphabetical order, NVDA and TSLA among the first to go.
+  const unique = [...new Set(tickers.filter((t) => LISTED.has(t)))].sort();
   if (unique.length === 0) return { quotes: {}, series: {}, degraded: true };
 
-  const [quoteList, series] = await Promise.all([
+  // Yahoo's spark endpoint answers 400 to more than 20 symbols, so the board is asked in slices,
+  // each cached on its own: a throttled slice costs its own rows their mini-charts, not the page's.
+  const slices: string[][] = [];
+  for (let i = 0; i < unique.length; i += SPARK_SLICE) slices.push(unique.slice(i, i + SPARK_SLICE));
+
+  const [quoteList, sparkParts] = await Promise.all([
     Promise.all(unique.map(quoteFor)),
     // Sparklines are an enhancement: when Yahoo throttles, rows simply lose their mini-charts.
-    cached(`sparks:${unique.join(",")}`, 300_000, () => yahooSparks(unique)).catch(() => ({} as Record<string, Series>)),
+    Promise.all(slices.map((slice) =>
+      cached(`sparks:${slice.join(",")}`, 300_000, () => yahooSparks(slice)).catch(() => ({} as Record<string, Series>)),
+    )),
   ]);
+  const series: Record<string, Series> = Object.assign({}, ...sparkParts);
 
   const quotes: Record<string, Quote> = {};
   quoteList.forEach((quote, i) => { if (quote) quotes[unique[i]] = quote; });

@@ -85,6 +85,26 @@ The active index is **read from the chain**, never from this file: `stocksLength
 | NFLXc | Netflix | `0xb20000000000000000000058b8c947e44011dfe6` |
 | PLTRc | Palantir Technologies | `0xb2000000000000000000007d16372840df4dabbe` |
 | RDDTc | Reddit | `0xb20000000000000000000066242d4067724cb7a1` |
+| AMDc | Advanced Micro Devices | `0xb2000000000000000000000d8ce462e99ee7a47b` |
+| ASTSc | AST SpaceMobile | `0xb200000000000000000000b1a29cf17a1819288a` |
+| BEc | Bloom Energy | `0xb20000000000000000000016f9dfe862feba122b` |
+| CAKEc | The Cheesecake Factory | `0xb200000000000000000000f215e4c890cfb7176b` |
+| DKNGc | DraftKings | `0xb2000000000000000000009b870441031d4d8a41` |
+| DUOLc | Duolingo | `0xb200000000000000000000a613d12deafbbb1db7` |
+| HIMSc | Hims & Hers Health | `0xb20000000000000000000043a599976181bcf336` |
+| MRNAc | Moderna | `0xb200000000000000000000e215e9b76ecba02468` |
+| MRVLc | Marvell Technology | `0xb200000000000000000000ec3c4c7395cc609813` |
+| NVAXc | Novavax | `0xb200000000000000000000c597c476fcf9aed3a8` |
+| ORCLc | Oracle | `0xb200000000000000000000347afba223d7b6b63c` |
+| PFEc | Pfizer | `0xb20000000000000000000018fe7ec7d6dfeeb528` |
+| PMc | Philip Morris International | `0xb2000000000000000000008fc2a8c23cf5937b66` |
+| PTONc | Peloton Interactive | `0xb2000000000000000000009272a491812842aa84` |
+| PYPLc | PayPal | `0xb200000000000000000000450ad3abe5d4846c6e` |
+| QUBTc | Quantum Computing Inc. | `0xb200000000000000000000ca425ab42e07c35bc3` |
+| RBLXc | Roblox | `0xb2000000000000000000005bd7ae89b9e6189bb5` |
+| SOUNc | SoundHound AI | `0xb2000000000000000000002137743d4a01fe4e88` |
+| TTWOc | Take-Two Interactive | `0xb200000000000000000000f720c26062bc3067da` |
+| WENc | Wendy's | `0xb20000000000000000000044e3cd7a0e1028e57a` |
 
 Every one of these was created through the B20 factory (`0xB20f…0000`) by the same issuer account, `0xe090ecbee12d4b6aee5e73ff60945f2545ef5c6f`. Anyone can create a B20, and the factory has minted tens of thousands of them, so a symbol match proves nothing. Before adding a listing, check its creator in the factory's creation log.
 

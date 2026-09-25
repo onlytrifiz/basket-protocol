@@ -3863,6 +3863,12 @@ a.pool-row:hover { background: var(--surface-2); }
   .section-head h2 { font-size: 2.1rem; }
   .section-head > p:last-child { font-size: .92rem; }
   .steps-grid, .roles-grid, .equity-grid { grid-template-columns: minmax(0, 1fr); }
+  /* A PREVIEW on a phone, not the catalogue. At forty-three listings the full grid measured 2,040px
+     in two columns and 3,500px in one: several screens of tiles in a section the page only passes
+     through. The index members lead the list, so the ten that stay are the five the vault buys and
+     the first five after them; "All stocks" is still in the grid and carries the rest. */
+  .equity-grid.equity-grid-compact { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .equity-grid-compact > .equity-card:not(.is-action):nth-child(n + 11) { display: none; }
   .step-card { min-height: 0; }
   .step-card h3 { padding-top: 30px; }
   .roles-grid article { min-height: 0; }
