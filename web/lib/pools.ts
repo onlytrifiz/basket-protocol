@@ -24,7 +24,12 @@ const DEX_API = "https://api.dexscreener.com/token-pairs/v1/base";
  * venue breakdown the detail page is built on.
  */
 const DEX_TOKENS_API = "https://api.dexscreener.com/tokens/v1/base";
-const MAX_ADDRS = 20;
+/**
+ * The most addresses `tokens/v1` takes in one request. It answers with one row per token, the
+ * deepest pair it is the base of, so the whole listing's headline pools cost two requests at
+ * forty-three listings rather than one per token.
+ */
+const TOKENS_BATCH = 30;
 /** How long a pair list may be reused, including after the upstream starts refusing. */
 const PAIRS_TTL_MS = 60_000;
 
@@ -119,11 +124,11 @@ function toPool(pair: DexPair, minLiq: number): Pool {
  * last good one. A token that has genuinely never had a pool still falls through to an empty
  * result, which is what the dashes are actually for. Pools do not vanish; upstreams blink.
  */
-async function pairsFor(address: string): Promise<DexPair[]> {
+async function pairsFor(address: string, batched?: Promise<DexPair[]>): Promise<DexPair[]> {
   try {
     return await cached(`pools:pairs:${address}`, PAIRS_TTL_MS, async () => {
       const [deepest, listed] = await Promise.all([
-        fetchPairs(`${DEX_TOKENS_API}/${address}`),
+        batched ?? fetchPairs(`${DEX_TOKENS_API}/${address}`),
         fetchPairs(`${DEX_API}/${address}`),
       ]);
       // Either source alone is an answer; only both failing is a failure worth keeping the old
@@ -143,18 +148,24 @@ async function pairsFor(address: string): Promise<DexPair[]> {
 
 /** One upstream, returning an empty list rather than throwing — the caller decides what empty means. */
 async function fetchPairs(url: string): Promise<DexPair[]> {
+  return (await readPairs(url)) ?? [];
+}
+
+/** The same read, but a request that did not land is `null`, not an empty list. */
+async function readPairs(url: string): Promise<DexPair[] | null> {
   try {
     const response = await fetch(url, { next: { revalidate: 60 } });
-    if (!response.ok) return [];
+    if (!response.ok) return null;
     const payload = await response.json() as unknown;
-    return Array.isArray(payload) ? payload as DexPair[] : [];
+    return Array.isArray(payload) ? payload as DexPair[] : null;
   } catch {
-    return [];
+    return null;
   }
 }
 
-export async function poolsFor(address: string, minLiq: number, full: boolean): Promise<TokenPools> {
-  const pairs = await pairsFor(address);
+/** `batched`: this token's row from a `tokens/v1` request already made for a whole list. */
+export async function poolsFor(address: string, minLiq: number, full: boolean, batched?: Promise<DexPair[]>): Promise<TokenPools> {
+  const pairs = await pairsFor(address, batched);
 
   const own = pairs.filter((p) => p.baseToken?.address?.toLowerCase() === address);
   const pools = own.map((p) => toPool(p, minLiq)).sort((a, b) => b.liquidityUsd - a.liquidityUsd);
@@ -199,17 +210,48 @@ export async function ethUsd(): Promise<number | null> {
   }
 }
 
-/** Pool data for a set of tokens, keyed by lowercase address. */
+/**
+ * Pool data for a set of tokens, keyed by lowercase address. EVERY address asked for.
+ *
+ * It used to stop at twenty, silently. That cap belongs to the public route, where the addresses
+ * come from a stranger; here they come from the listing, and at forty-three listings everything
+ * past the twentieth rendered as "no pools" — TSLAc, MSTRc, MSFTc and SNDKc among them, each
+ * holding over $1M on Aerodrome.
+ *
+ * Each token still makes its own `token-pairs/v1` request, which is an answer on its own. What is
+ * batched is the other leg: `tokens/v1` takes thirty addresses a request, so the deepest pair of the
+ * whole list costs one or two requests instead of one per token. A batch is a shortcut and never a
+ * gate — one that fails, or answers nothing at all, is not evidence about any token in it, and those
+ * tokens fall back to asking on their own. Measured while building this: the batch timed out on its
+ * first attempt and landed on the next two. A version that trusted it blanked the whole table.
+ */
 export async function poolsForAll(
   addresses: string[],
   opts?: { minLiq?: number; full?: boolean },
 ): Promise<Record<string, TokenPools>> {
-  const addrs = addresses
-    .map((a) => a.trim().toLowerCase())
-    .filter((a) => /^0x[0-9a-f]{40}$/.test(a))
-    .slice(0, MAX_ADDRS);
-  const entries = await Promise.all(
-    addrs.map(async (a) => [a, await poolsFor(a, opts?.minLiq ?? MIN_LIQUIDITY_USD, opts?.full ?? false)] as const),
-  );
+  const addrs = [...new Set(
+    addresses.map((a) => a.trim().toLowerCase()).filter((a) => /^0x[0-9a-f]{40}$/.test(a)),
+  )];
+
+  const batches: string[][] = [];
+  for (let i = 0; i < addrs.length; i += TOKENS_BATCH) batches.push(addrs.slice(i, i + TOKENS_BATCH));
+  const answers = await Promise.all(batches.map((b) => readPairs(`${DEX_TOKENS_API}/${b.join(",")}`)));
+
+  const deepest = new Map<string, DexPair[]>();
+  batches.forEach((batch, i) => {
+    const pairs = answers[i];
+    if (!pairs || pairs.length === 0) return;
+    for (const address of batch) deepest.set(address, []);
+    for (const pair of pairs) {
+      const base = pair.baseToken?.address?.toLowerCase();
+      if (base && deepest.has(base)) deepest.get(base)!.push(pair);
+    }
+  });
+
+  const entries = await Promise.all(addrs.map(async (a) => {
+    const batched = deepest.get(a);
+    const pools = await poolsFor(a, opts?.minLiq ?? MIN_LIQUIDITY_USD, opts?.full ?? false, batched && Promise.resolve(batched));
+    return [a, pools] as const;
+  }));
   return Object.fromEntries(entries);
 }

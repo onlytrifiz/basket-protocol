@@ -25,7 +25,10 @@ export const revalidate = 60;
 export default async function StocksPage() {
   const assets = await readAssets();
   const [pools, market, pulse] = await Promise.all([
-    poolsForAll(assets.map((a) => a.address)),
+    // Pools only for tokens that exist: at zero supply there is nothing to deposit, so the answer is
+    // known without asking — 24 of 43 listings on 26 September. An UNREAD supply is still asked
+    // about, since a read we could not make is not a zero.
+    poolsForAll(assets.filter((a) => a.shares !== 0).map((a) => a.address)),
     marketBoard(assets.map((a) => a.ticker).filter(Boolean) as string[]),
     // The wider-market band is context, never load-bearing: when Blockworks is unreachable the
     // section simply is not there, and the hub above it renders exactly as before.
