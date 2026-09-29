@@ -13,9 +13,11 @@ import { stocks } from "./stocks";
  *
  *   Finnhub is the SPINE — quotes, fundamentals and news. It is a documented API with a key and a
  *   60-call/minute free tier; thirteen quotes in parallel measured 390ms with no throttling. The
- *   headline price of every row comes from here. At forty-three listings one rebuild of the hub
- *   spends 43 of those 60 calls, so the budget is close to full: past it, a row falls back to the
- *   last price this instance had, or to a dash if it never had one.
+ *   headline price of every row comes from here. The listing outgrew that budget: at fifty-three
+ *   one rebuild of the hub would spend 53 of the 60, so a caller may name QUIET tickers — ones
+ *   whose price feeds no premium, because there is no on-chain price to compare it with — which
+ *   are re-asked every ten minutes rather than every minute. Past the budget a row falls back to the last price this
+ *   instance had, or to a dash if it never had one.
  *
  *   Yahoo supplies only the historical SERIES behind the charts. It is an undocumented endpoint
  *   that throttles hard and erratically — measured from this codebase, the same request answers 429
@@ -247,8 +249,13 @@ async function yahooQuote(ticker: string): Promise<Quote | null> {
   };
 }
 
-const quoteFor = (ticker: string) =>
-  cached(`quote:${ticker}`, 60_000, () => (KEY ? finnhubQuote(ticker) : yahooQuote(ticker))).catch(() => null);
+/** How old a quote may be, and for a quiet ticker — see `marketBoard`. */
+const QUOTE_TTL_MS = 60_000;
+const QUIET_TTL_MS = 600_000;
+
+/** One key per ticker whatever the TTL, so a detail page asking fresh refreshes the hub's copy too. */
+const quoteFor = (ticker: string, ttlMs = QUOTE_TTL_MS) =>
+  cached(`quote:${ticker}`, ttlMs, () => (KEY ? finnhubQuote(ticker) : yahooQuote(ticker))).catch(() => null);
 
 async function profileFor(ticker: string): Promise<Profile | null> {
   const [profile, metrics] = await Promise.all([
@@ -307,12 +314,20 @@ export type MarketBoard = { quotes: Record<string, Quote>; series: Record<string
 /** The most symbols Yahoo's spark endpoint takes in one request. */
 const SPARK_SLICE = 20;
 
-/** Quotes plus month-long sparkline series for a set of tickers. Used by the hub, list-wide. */
-export async function marketBoard(tickers: string[]): Promise<MarketBoard> {
+/**
+ * Quotes plus month-long sparkline series for a set of tickers. Used by the hub, list-wide.
+ *
+ * `quiet` tickers accept a quote up to ten minutes old. The hub passes the listings with no on-chain
+ * price to hold the share price against: their Nasdaq price is shown but sets no premium. Only the
+ * callers that ask get the slower cadence — the vault, the dividends page and every detail page
+ * still ask for a minute-fresh price.
+ */
+export async function marketBoard(tickers: string[], opts?: { quiet?: string[] }): Promise<MarketBoard> {
   // No count cap: `LISTED` already bounds the fan-out. The cap that used to sit here was 25, and a
   // listing past it lost its quote in alphabetical order, NVDA and TSLA among the first to go.
   const unique = [...new Set(tickers.filter((t) => LISTED.has(t)))].sort();
   if (unique.length === 0) return { quotes: {}, series: {}, degraded: true };
+  const quiet = new Set(opts?.quiet ?? []);
 
   // Yahoo's spark endpoint answers 400 to more than 20 symbols, so the board is asked in slices,
   // each cached on its own: a throttled slice costs its own rows their mini-charts, not the page's.
@@ -320,7 +335,7 @@ export async function marketBoard(tickers: string[]): Promise<MarketBoard> {
   for (let i = 0; i < unique.length; i += SPARK_SLICE) slices.push(unique.slice(i, i + SPARK_SLICE));
 
   const [quoteList, sparkParts] = await Promise.all([
-    Promise.all(unique.map(quoteFor)),
+    Promise.all(unique.map((t) => quoteFor(t, quiet.has(t) ? QUIET_TTL_MS : QUOTE_TTL_MS))),
     // Sparklines are an enhancement: when Yahoo throttles, rows simply lose their mini-charts.
     Promise.all(slices.map((slice) =>
       cached(`sparks:${slice.join(",")}`, 300_000, () => yahooSparks(slice)).catch(() => ({} as Record<string, Series>)),

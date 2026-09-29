@@ -105,6 +105,16 @@ The active index is **read from the chain**, never from this file: `stocksLength
 | SOUNc | SoundHound AI | `0xb2000000000000000000002137743d4a01fe4e88` |
 | TTWOc | Take-Two Interactive | `0xb200000000000000000000f720c26062bc3067da` |
 | WENc | Wendy's | `0xb20000000000000000000044e3cd7a0e1028e57a` |
+| AEOc | American Eagle Outfitters | `0xb2000000000000000000006064f8ec027f042294` |
+| AMCc | AMC Entertainment | `0xb200000000000000000000cd7e6b8042cb7c2bb5` |
+| CIFRc | Cipher Digital (formerly Cipher Mining) | `0xb200000000000000000000690275843b6e246286` |
+| CLSKc | CleanSpark | `0xb200000000000000000000fa63cfff5c794dbb95` |
+| HUTc | Hut 8 | `0xb2000000000000000000006ee1c139a723872e09` |
+| KSSc | Kohl's | `0xb200000000000000000000105a1f43ff3605c5de` |
+| RIOTc | Riot Platforms | `0xb200000000000000000000bd0c7627b663c581a6` |
+| VVVc | Valvoline | `0xb200000000000000000000fec679b39992f67627` |
+| WULFc | TeraWulf | `0xb200000000000000000000432a1d2bd864acec82` |
+| WWc | WW International | `0xb20000000000000000000089221e238277d52515` |
 
 Every one of these was created through the B20 factory (`0xB20f…0000`) by the same issuer account, `0xe090ecbee12d4b6aee5e73ff60945f2545ef5c6f`. Anyone can create a B20, and the factory has minted tens of thousands of them, so a symbol match proves nothing. Before adding a listing, check its creator in the factory's creation log.
 

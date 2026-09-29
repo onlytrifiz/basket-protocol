@@ -4,9 +4,9 @@ import Link from "next/link";
 import { readAssets } from "../lib/b20";
 import { readDecimals, toUnits } from "../lib/decimals";
 import { readLedger } from "../lib/ledger";
-import { shares as fmtShares, usdCompact } from "../lib/format";
+import { countWord, shares as fmtShares, usdCompact } from "../lib/format";
 import { marketBoard } from "../lib/market";
-import { stockByAddress, washColor } from "../lib/stocks";
+import { stockByAddress, stocks, washColor } from "../lib/stocks";
 import { readVault } from "../lib/vault";
 import { IndexUniverse } from "./components/index-universe";
 import { RingMarker } from "./components/segment-ring";
@@ -218,11 +218,12 @@ export default async function Home() {
 
         <section className="section wrap" id="how"><div className="section-head"><p className="eyebrow">THE DIVIDEND LOOP</p><h2>A stock dividend that starts with volume.</h2><p>Stockify does not reflect another token into your wallet. The vault acquires the B20 assets themselves and pushes the resulting entitlement to holders.</p></div><div className="steps-grid">{mechanics.map((step) => <article className="step-card" key={step.number}><RingMarker filled={step.filled} label={step.number} lit={step.lit} /><h3>{step.title}</h3><p>{step.copy}</p></article>)}</div></section>
 
-        <section className="section wrap" id="index"><div className="index-showcase"><div className="section-head index-head"><div><p className="eyebrow">THE B20 STOCKS UNIVERSE</p><h2>Forty-three listed. Five in the index.</h2></div><p>Every B20 equity Coinbase has issued on Base. The dividend vault buys a configurable subset of them, and the index can change between cycles.</p></div><IndexUniverse slices={slices} /></div>
+        <section className="section wrap" id="index"><div className="index-showcase"><div className="section-head index-head"><div><p className="eyebrow">THE B20 STOCKS UNIVERSE</p><h2>{countWord(stocks.length)} listed. Five in the index.</h2></div><p>Every B20 equity Coinbase has issued on Base. The dividend vault buys a configurable subset of them, and the index can change between cycles.</p></div><IndexUniverse slices={slices} /></div>
           <StockGrid compact>
-            {/* The two ways out sit IN the grid rather than under it: forty-three assets across five
-                columns leave exactly two empty cells, and an action shaped like the things it acts
-                on reads as part of the set instead of as a banner below it. */}
+            {/* The two ways out sit IN the grid rather than under it: an action shaped like the
+                things it acts on reads as part of the set instead of as a banner below it. Every
+                listing size so far — 13, 23, 43, 53 — has left exactly two empty cells in five
+                columns for them. */}
             <Link className="equity-card is-action" href="/stocks">
               <span className="equity-name"><strong>All stocks</strong><span>Every B20 on Base</span></span>
             </Link>

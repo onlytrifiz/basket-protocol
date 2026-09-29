@@ -11,9 +11,9 @@ import { stocks, type IndexStock } from "./stocks";
  *
  * Two facts drive the hub page:
  *
- *   1. SUPPLY IS THE HEADLINE. Issuance has spread — nineteen of the forty-three report a non-zero
- *      `totalSupply()` today, where once it was four — but supply is still not a market: a name can
- *      be issued and have no pool anywhere, and twenty-four remain at literally zero. A listing page
+ *   1. SUPPLY IS THE HEADLINE. Issuance has spread — thirty-nine of fifty-three reported a non-zero
+ *      `totalSupply()` on 29 September 2026, where once it was four — but supply is still not a
+ *      market: a name can be issued and have no pool anywhere, and a new batch lists at zero. A listing page
  *      that shows every ticker as if it were a market is lying by omission; this one reads the
  *      number and says so.
  *

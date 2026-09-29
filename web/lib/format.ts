@@ -108,3 +108,20 @@ export function stamp(seconds: number | null | undefined): string {
   const time = date.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: "UTC" });
   return `${day}, ${time}`;
 }
+
+const ONES = ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven",
+  "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen"];
+const TENS = ["", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety"];
+
+/**
+ * A count as a capitalised word, for headlines: 53 is "Fifty-three".
+ *
+ * The home headline spelled its count out by hand and went stale with every listing batch —
+ * thirteen, twenty-three, forty-three, each edited in after the fact. Below a hundred it is a
+ * word; from a hundred on, the figure, which reads fine at that size and cannot be misspelled.
+ */
+export function countWord(n: number): string {
+  if (!Number.isInteger(n) || n < 0 || n >= 100) return n.toLocaleString("en-US");
+  const word = n < 20 ? ONES[n] : TENS[Math.floor(n / 10)] + (n % 10 ? `-${ONES[n % 10]}` : "");
+  return word[0].toUpperCase() + word.slice(1);
+}

@@ -1,7 +1,7 @@
 export type IndexStock = {
   /** In the index the deployed vault actually buys, and therefore quotable today. Membership is
-   *  NOT the same question as issuance, and the gap has widened: nineteen of these forty-three report a
-   *  non-zero `totalSupply()` on Base, but supply alone does not make a name routable. What the
+   *  NOT the same question as issuance, and the gap has widened: thirty-nine of fifty-three reported
+   *  a non-zero `totalSupply()` on 29 September 2026, but supply alone does not make a name routable. What the
    *  trade panel needs is an Aerodrome Slipstream USDC pool with depth, which is also what the
    *  keeper needs — it skips the entire purchase when any active asset has no complete route, so an
    *  unroutable member stalls every buy rather than just its own leg. Read the live index from
@@ -75,6 +75,8 @@ export const stocks: IndexStock[] = [
   // checked against the others in the donut; do that before any of them joins the index.
   // Smartbird's domain is its investor site because smartbird.ai's favicon is white on transparent,
   // which vanishes on the white tiles that draw from `domain`; the IR host serves it in black.
+  { symbol: "AEOc", name: "American Eagle", domain: "ae.com", ticker: "AEO", brand: "#E6E6E6", wash: "#111111", address: "0xb2000000000000000000006064f8ec027f042294" },
+  { symbol: "AMCc", name: "AMC Entertainment", domain: "amctheatres.com", ticker: "AMC", brand: "#E0202E", address: "0xb200000000000000000000cd7e6b8042cb7c2bb5" },
   { symbol: "AMDc", name: "AMD", domain: "amd.com", ticker: "AMD", brand: "#ED1C24", address: "0xb2000000000000000000000d8ce462e99ee7a47b" },
   { symbol: "AMZNc", name: "Amazon", domain: "amazon.com", ticker: "AMZN", brand: "#FF9900", address: "0xb200000000000000000000d9192b6b456483c2e8" },
   { symbol: "ASTSc", name: "AST SpaceMobile", domain: "ast-science.com", ticker: "ASTS", brand: "#F58220", address: "0xb200000000000000000000b1a29cf17a1819288a" },
@@ -82,6 +84,8 @@ export const stocks: IndexStock[] = [
   { symbol: "BEc", name: "Bloom Energy", domain: "bloomenergy.com", ticker: "BE", brand: "#8DC63F", address: "0xb20000000000000000000016f9dfe862feba122b" },
   { symbol: "BIRDc", name: "Smartbird", domain: "ir.smartbird.ai", ticker: "BIRD", brand: "#E6E6E6", wash: "#111111", address: "0xb200000000000000000000535fe96f18204bfd96" },
   { symbol: "CAKEc", name: "Cheesecake Factory", domain: "thecheesecakefactory.com", ticker: "CAKE", brand: "#C79A4B", address: "0xb200000000000000000000f215e4c890cfb7176b" },
+  { symbol: "CIFRc", name: "Cipher Digital", domain: "cipherdigital.com", ticker: "CIFR", brand: "#9ED615", address: "0xb200000000000000000000690275843b6e246286" },
+  { symbol: "CLSKc", name: "CleanSpark", domain: "cleanspark.com", ticker: "CLSK", brand: "#5B84D6", wash: "#10306E", address: "0xb200000000000000000000fa63cfff5c794dbb95" },
   { symbol: "COINc", name: "Coinbase", domain: "coinbase.com", ticker: "COIN", brand: "#0052FF", address: "0xb200000000000000000000c85a31389d71f3ecfb" },
   { symbol: "CRCLc", name: "Circle", domain: "circle.com", ticker: "CRCL", brand: "#3ECFAF", address: "0xb20000000000000000000019f6e7c675b73c2e4d" },
   { symbol: "DJTc", name: "Trump Media", domain: "tmtgcorp.com", ticker: "DJT", brand: "#5B5BD6", address: "0xb200000000000000000000428e3a3eebbb20692b" },
@@ -90,7 +94,9 @@ export const stocks: IndexStock[] = [
   { symbol: "GMEc", name: "GameStop", domain: "gamestop.com", ticker: "GME", brand: "#E4002B", address: "0xb2000000000000000000007790ed6e48e06ed935" },
   { symbol: "HIMSc", name: "Hims & Hers", domain: "forhims.com", ticker: "HIMS", brand: "#E6E6E6", wash: "#111111", address: "0xb20000000000000000000043a599976181bcf336" },
   { symbol: "HTZc", name: "Hertz", domain: "hertz.com", ticker: "HTZ", brand: "#FFD100", address: "0xb2000000000000000000002601c5c94f435da168" },
+  { symbol: "HUTc", name: "Hut 8", domain: "hut8.com", ticker: "HUT", brand: "#E6E6E6", wash: "#111111", address: "0xb2000000000000000000006ee1c139a723872e09" },
   { symbol: "INTCc", name: "Intel", domain: "intel.com", ticker: "INTC", brand: "#0F8FE0", address: "0xb2000000000000000000004aff16039ba04bdfbc" },
+  { symbol: "KSSc", name: "Kohl's", domain: "kohls.com", ticker: "KSS", brand: "#D6497D", wash: "#860036", address: "0xb200000000000000000000105a1f43ff3605c5de" },
   { symbol: "LLYc", name: "Eli Lilly", domain: "lilly.com", ticker: "LLY", brand: "#D52B1E", address: "0xb200000000000000000000f1a0f91e34892e4718" },
   { symbol: "MRNAc", name: "Moderna", domain: "modernatx.com", ticker: "MRNA", brand: "#E4173E", address: "0xb200000000000000000000e215e9b76ecba02468" },
   { symbol: "MRVLc", name: "Marvell", domain: "marvell.com", ticker: "MRVL", brand: "#E6E6E6", wash: "#111111", address: "0xb200000000000000000000ec3c4c7395cc609813" },
@@ -108,11 +114,15 @@ export const stocks: IndexStock[] = [
   { symbol: "QUBTc", name: "Quantum Computing", domain: "quantumcomputinginc.com", ticker: "QUBT", brand: "#6F7FE0", wash: "#1B2366", address: "0xb200000000000000000000ca425ab42e07c35bc3" },
   { symbol: "RBLXc", name: "Roblox", domain: "roblox.com", ticker: "RBLX", brand: "#E2231A", address: "0xb2000000000000000000005bd7ae89b9e6189bb5" },
   { symbol: "RDDTc", name: "Reddit", domain: "reddit.com", ticker: "RDDT", brand: "#FF4500", address: "0xb20000000000000000000066242d4067724cb7a1" },
+  { symbol: "RIOTc", name: "Riot Platforms", domain: "riotplatforms.com", ticker: "RIOT", brand: "#F68B1F", address: "0xb200000000000000000000bd0c7627b663c581a6" },
   { symbol: "SNDKc", name: "SanDisk", domain: "sandisk.com", ticker: "SNDK", brand: "#E5202E", address: "0xb200000000000000000000397293cb8cda9a10c5" },
   { symbol: "SOUNc", name: "SoundHound", domain: "soundhound.com", ticker: "SOUN", brand: "#E6E6E6", wash: "#111111", address: "0xb2000000000000000000002137743d4a01fe4e88" },
   { symbol: "TSLAc", name: "Tesla", domain: "tesla.com", ticker: "TSLA", brand: "#E82127", address: "0xb2000000000000000000001e800a7f5189430cd0" },
   { symbol: "TTWOc", name: "Take-Two", domain: "take2games.com", ticker: "TTWO", brand: "#E6E6E6", wash: "#111111", address: "0xb200000000000000000000f720c26062bc3067da" },
+  { symbol: "VVVc", name: "Valvoline", domain: "valvoline.com", ticker: "VVV", brand: "#E31937", address: "0xb200000000000000000000fec679b39992f67627" },
   { symbol: "WENc", name: "Wendy's", domain: "wendys.com", ticker: "WEN", brand: "#E2203D", address: "0xb20000000000000000000044e3cd7a0e1028e57a" },
+  { symbol: "WULFc", name: "TeraWulf", domain: "terawulf.com", ticker: "WULF", brand: "#2E7BE0", address: "0xb200000000000000000000432a1d2bd864acec82" },
+  { symbol: "WWc", name: "WW International", domain: "weightwatchers.com", ticker: "WW", brand: "#3348E0", address: "0xb20000000000000000000089221e238277d52515" },
 ];
 
 export const shortAddress = (address: string) => `${address.slice(0, 8)}…${address.slice(-4)}`;

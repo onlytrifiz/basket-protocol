@@ -24,16 +24,25 @@ export const revalidate = 60;
 
 export default async function StocksPage() {
   const assets = await readAssets();
-  const [pools, market, pulse] = await Promise.all([
-    // Pools only for tokens that exist: at zero supply there is nothing to deposit, so the answer is
-    // known without asking — 24 of 43 listings on 26 September. An UNREAD supply is still asked
-    // about, since a read we could not make is not a zero.
-    poolsForAll(assets.filter((a) => a.shares !== 0).map((a) => a.address)),
-    marketBoard(assets.map((a) => a.ticker).filter(Boolean) as string[]),
-    // The wider-market band is context, never load-bearing: when Blockworks is unreachable the
-    // section simply is not there, and the hub above it renders exactly as before.
-    marketPulse().catch(() => null),
-  ]);
+  // The wider-market band is context, never load-bearing: when Blockworks is unreachable the
+  // section simply is not there, and the hub above it renders exactly as before.
+  const pulseLoad = marketPulse().catch(() => null);
+
+  // Pools only for tokens that exist: at zero supply there is nothing to deposit, so the answer is
+  // known without asking — 14 of 53 listings on 29 September. An UNREAD supply is still asked
+  // about, since a read we could not make is not a zero.
+  const pools = await poolsForAll(assets.filter((a) => a.shares !== 0).map((a) => a.address));
+
+  // Share prices AFTER pools, on purpose: a Nasdaq price only needs to be a minute fresh where there
+  // is an on-chain price to hold it against. Every other row's may be ten minutes old, which keeps
+  // a rebuild inside Finnhub's 60 calls a minute at this listing size. See `marketBoard`.
+  const market = await marketBoard(assets.map((a) => a.ticker).filter(Boolean) as string[], {
+    quiet: assets
+      .filter((a) => !pools[a.address.toLowerCase()]?.best)
+      .map((a) => a.ticker)
+      .filter(Boolean) as string[],
+  });
+  const pulse = await pulseLoad;
 
   const rows = assets.map((asset) => {
     const pool = pools[asset.address.toLowerCase()];
