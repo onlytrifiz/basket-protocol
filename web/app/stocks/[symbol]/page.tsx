@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 
 import { readAssets } from "../../../lib/b20";
-import { marketDetail } from "../../../lib/market";
+import { marketDetail, venueLabel } from "../../../lib/market";
 import { poolsFor, MIN_LIQUIDITY_USD } from "../../../lib/pools";
 import { stocks } from "../../../lib/stocks";
 import { compactNumber, percent, premium, shares, since, usd, usdCompact } from "../../../lib/format";
@@ -94,7 +94,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
               <small>{pools.best ? `${pools.best.venue}${pools.best.label ? ` ${pools.best.label}` : ""} · ${pools.best.quoteSymbol} pair` : "no quotable pool"}</small>
             </div>
             <div className="price-block">
-              <span>{profile?.exchange ? profile.exchange.split(" ")[0] : "Share price"}</span>
+              <span>{venueLabel(profile?.exchange)}</span>
               <strong>{usd(quote?.price)}</strong>
               <small className={quote && quote.changePercent < 0 ? "is-down" : quote ? "is-up" : undefined}>
                 {quote ? `${percent(quote.changePercent)} today` : asset.ticker ? "unavailable" : "private company"}

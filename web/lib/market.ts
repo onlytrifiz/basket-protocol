@@ -81,6 +81,21 @@ export type Profile = {
 
 export type NewsItem = { headline: string; source: string; url: string; datetime: number; summary?: string };
 
+/**
+ * The label over a share price: the venue a reader knows the listing by.
+ *
+ * Finnhub names exchanges in full, and the detail page used to print the first word of that name —
+ * which is "NEW" for every NYSE stock ("NEW YORK STOCK EXCHANGE, INC."), and "TORONTO" for Hut 8,
+ * whose profile names its Canadian listing while the quote is the Nasdaq one in dollars. The quote
+ * always comes from the US symbol, so anything that is not Nasdaq or NYSE says only what it is.
+ */
+export function venueLabel(exchange?: string): string {
+  if (!exchange) return "Share price";
+  if (/^nasdaq/i.test(exchange)) return "Nasdaq";
+  if (/^(new york stock exchange|nyse)/i.test(exchange)) return "NYSE";
+  return "Share price";
+}
+
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const num = (value: unknown) => (typeof value === "number" && Number.isFinite(value) ? value : undefined);
 const str = (value: unknown) => (typeof value === "string" && value ? value : undefined);
