@@ -122,8 +122,25 @@ async function finnhubSlot() {
   }
 }
 
-async function finnhub<T>(path: string): Promise<T | null> {
+/**
+ * Finnhub's minute ceiling, and who gets to spend it.
+ *
+ * A cold instance has nothing cached, so its first hub render asks for every quote at once — 71 at
+ * seventy-two listings, past the 60 a minute, and the calls that came back 429 were as likely to be
+ * TSLA's as an unminted ticker's. So calls are counted per rolling minute, and an OPTIONAL call is
+ * not made once fifty have been: the ten left are for the calls that are not optional, here and on
+ * the detail pages. Checked and counted in one synchronous step, so a burst of optional calls
+ * cannot all pass the check before any of them is counted.
+ */
+const PER_MINUTE = 50;
+const spent: number[] = [];
+
+async function finnhub<T>(path: string, optional = false): Promise<T | null> {
   if (!KEY) return null;
+  const now = Date.now();
+  while (spent.length && now - spent[0] >= 60_000) spent.shift();
+  if (optional && spent.length >= PER_MINUTE) return null;
+  spent.push(now);
   await finnhubSlot();
   try {
     const response = await fetch(`${FINNHUB}${path}${path.includes("?") ? "&" : "?"}token=${KEY}`, {
@@ -139,8 +156,8 @@ async function finnhub<T>(path: string): Promise<T | null> {
 /** Finnhub's `/quote`: c current, d change, dp change %, h/l/o day range, pc previous close. */
 type FinnhubQuote = { c?: number; d?: number; dp?: number; h?: number; l?: number; o?: number; pc?: number; t?: number };
 
-async function finnhubQuote(ticker: string): Promise<Quote | null> {
-  const raw = await finnhub<FinnhubQuote>(`/quote?symbol=${encodeURIComponent(ticker)}`);
+async function finnhubQuote(ticker: string, optional = false): Promise<Quote | null> {
+  const raw = await finnhub<FinnhubQuote>(`/quote?symbol=${encodeURIComponent(ticker)}`, optional);
   // A request that did not land — a 429 past the minute budget, a timeout — is THROWN, as Yahoo's
   // are, so `cached()` keeps showing the last price it had. Returned as null it was stored as a
   // fresh answer, and the row read "—" for the whole TTL.
@@ -269,8 +286,8 @@ const QUOTE_TTL_MS = 60_000;
 const QUIET_TTL_MS = 600_000;
 
 /** One key per ticker whatever the TTL, so a detail page asking fresh refreshes the hub's copy too. */
-const quoteFor = (ticker: string, ttlMs = QUOTE_TTL_MS) =>
-  cached(`quote:${ticker}`, ttlMs, () => (KEY ? finnhubQuote(ticker) : yahooQuote(ticker))).catch(() => null);
+const quoteFor = (ticker: string, ttlMs = QUOTE_TTL_MS, optional = false) =>
+  cached(`quote:${ticker}`, ttlMs, () => (KEY ? finnhubQuote(ticker, optional) : yahooQuote(ticker))).catch(() => null);
 
 async function profileFor(ticker: string): Promise<Profile | null> {
   const [profile, metrics] = await Promise.all([
@@ -349,8 +366,20 @@ export async function marketBoard(tickers: string[], opts?: { quiet?: string[] }
   const slices: string[][] = [];
   for (let i = 0; i < unique.length; i += SPARK_SLICE) slices.push(unique.slice(i, i + SPARK_SLICE));
 
+  // Quiet tickers ask only after the others have been answered, and only as optional calls: on a
+  // cold instance the minute's budget goes to the rows that make a premium, and the rest fill in
+  // over the next rebuilds. See `PER_MINUTE`.
+  const quoteAll = async () => {
+    const loud = unique.filter((t) => !quiet.has(t));
+    const soft = unique.filter((t) => quiet.has(t));
+    const first = await Promise.all(loud.map((t) => quoteFor(t, QUOTE_TTL_MS)));
+    const then = await Promise.all(soft.map((t) => quoteFor(t, QUIET_TTL_MS, true)));
+    const byTicker = new Map([...loud.map((t, i) => [t, first[i]] as const), ...soft.map((t, i) => [t, then[i]] as const)]);
+    return unique.map((t) => byTicker.get(t) ?? null);
+  };
+
   const [quoteList, sparkParts] = await Promise.all([
-    Promise.all(unique.map((t) => quoteFor(t, quiet.has(t) ? QUIET_TTL_MS : QUOTE_TTL_MS))),
+    quoteAll(),
     // Sparklines are an enhancement: when Yahoo throttles, rows simply lose their mini-charts.
     Promise.all(slices.map((slice) =>
       cached(`sparks:${slice.join(",")}`, 300_000, () => yahooSparks(slice)).catch(() => ({} as Record<string, Series>)),
