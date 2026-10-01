@@ -59,6 +59,7 @@ export type B20Asset = {
 };
 
 const FACTORY = "0xB20f000000000000000000000000000000000000";
+const ICON = /^https:\/\/metadata\.coinbase\.com\/equity_icons\/[0-9a-f]{64}\.png$/;
 const WAD = 10n ** 18n;
 
 /** 4-byte selectors. Kept literal so this module stays dependency-free, as `check-b20.mjs` does. */
@@ -87,8 +88,10 @@ function decodeContractURI(result: CallResult): { name?: string; symbol?: string
     const pick = (key: string) => (typeof json[key] === "string" ? json[key] as string : undefined);
     const image = pick("image");
     // Only Coinbase's own metadata host is trusted as an <img> src: the token controls this string,
-    // and a hostile issuer should not get to point our pages at an arbitrary URL.
-    return { name: pick("name"), symbol: pick("symbol"), image: image?.startsWith("https://metadata.coinbase.com/") ? image : undefined };
+    // and a hostile issuer should not get to point our pages at an arbitrary URL. And only in the
+    // shape every working icon has, a 64-hex content hash: LYVc listed pointing at a 63-character
+    // one, which Coinbase answers 403, and a broken image is worse than the favicon it displaced.
+    return { name: pick("name"), symbol: pick("symbol"), image: image && ICON.test(image) ? image : undefined };
   } catch {
     return undefined;
   }

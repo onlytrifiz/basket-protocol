@@ -115,6 +115,25 @@ The active index is **read from the chain**, never from this file: `stocksLength
 | VVVc | Valvoline | `0xb200000000000000000000fec679b39992f67627` |
 | WULFc | TeraWulf | `0xb200000000000000000000432a1d2bd864acec82` |
 | WWc | WW International | `0xb20000000000000000000089221e238277d52515` |
+| BJc | BJ's Wholesale Club | `0xb200000000000000000000082f7fea8f2ee8f438` |
+| BMNRc | BitMine Immersion Technologies | `0xb200000000000000000000ea2df44a307cab279c` |
+| BYNDc | Beyond Meat | `0xb200000000000000000000801830b13b8e493423` |
+| CRWVc | CoreWeave | `0xb200000000000000000000f111184a74720787e6` |
+| EATc | Brinker International | `0xb200000000000000000000808e9cca9ed8e4da61` |
+| GPROc | GoPro | `0xb200000000000000000000f0e13d9c1cdfd211c8` |
+| IONQc | IonQ | `0xb20000000000000000000058f143099d5f79b0ec` |
+| LCIDc | Lucid Group | `0xb20000000000000000000081050ac3d4395df527` |
+| LYVc | Live Nation Entertainment | `0xb2000000000000000000001347ccd9e83d5bf3e0` |
+| MARAc | MARA Holdings | `0xb200000000000000000000a310e034e09186fb2d` |
+| OKLOc | Oklo | `0xb2000000000000000000009188edfd2fcc8cc81e` |
+| OPENc | Opendoor Technologies | `0xb200000000000000000000259694b27bf052e7d7` |
+| OURAc | Oura (pre-IPO; Nasdaq listing postponed) | `0xb2000000000000000000008536298e05fdfb65f4` |
+| RGTIc | Rigetti Computing | `0xb200000000000000000000c22fff2785bb27b39a` |
+| RIVNc | Rivian Automotive | `0xb2000000000000000000003e4249c65bd6c037d9` |
+| SMRc | NuScale Power | `0xb200000000000000000000978546fe604b8dcbc6` |
+| TKOc | TKO Group Holdings | `0xb200000000000000000000b8f841940325db6b2c` |
+| USDEc | StablecoinX | `0xb2000000000000000000009426b660396ebcf343` |
+| XYZc | Block | `0xb20000000000000000000067c8c151f24e1c9924` |
 
 Every one of these was created through the B20 factory (`0xB20f…0000`) by the same issuer account, `0xe090ecbee12d4b6aee5e73ff60945f2545ef5c6f`. Anyone can create a B20, and the factory has minted tens of thousands of them, so a symbol match proves nothing. Before adding a listing, check its creator in the factory's creation log.
 

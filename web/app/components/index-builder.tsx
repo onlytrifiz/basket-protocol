@@ -528,7 +528,8 @@ export function IndexBuilder({ stocks, platformBps }: { stocks: IndexStock[]; pl
                     type="button"
                   >
                     <StockLogo logo={undefined} stock={{ symbol: s.symbol, domain: s.domain }} />
-                    <span>{s.ticker}</span>
+                    {/* The symbol for a pre-IPO listing, which has no ticker to print. */}
+                    <span>{s.ticker ?? s.symbol}</span>
                   </button>
                 ))}
               </div>
@@ -769,7 +770,7 @@ export function IndexBuilder({ stocks, platformBps }: { stocks: IndexStock[]; pl
                         type="button"
                       >
                         <StockLogo logo={undefined} stock={{ symbol: s.symbol, domain: s.domain }} />
-                        <span>{s.ticker}</span>
+                        <span>{s.ticker ?? s.symbol}</span>
                       </button>
                     ))}
                   </div>

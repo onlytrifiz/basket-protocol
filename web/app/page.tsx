@@ -221,9 +221,7 @@ export default async function Home() {
         <section className="section wrap" id="index"><div className="index-showcase"><div className="section-head index-head"><div><p className="eyebrow">THE B20 STOCKS UNIVERSE</p><h2>{countWord(stocks.length)} listed. Five in the index.</h2></div><p>Every B20 equity Coinbase has issued on Base. The dividend vault buys a configurable subset of them, and the index can change between cycles.</p></div><IndexUniverse slices={slices} /></div>
           <StockGrid compact>
             {/* The two ways out sit IN the grid rather than under it: an action shaped like the
-                things it acts on reads as part of the set instead of as a banner below it. Every
-                listing size so far — 13, 23, 43, 53 — has left exactly two empty cells in five
-                columns for them. */}
+                things it acts on reads as part of the set instead of as a banner below it. */}
             <Link className="equity-card is-action" href="/stocks">
               <span className="equity-name"><strong>All stocks</strong><span>Every B20 on Base</span></span>
             </Link>
