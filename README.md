@@ -134,6 +134,16 @@ The active index is **read from the chain**, never from this file: `stocksLength
 | TKOc | TKO Group Holdings | `0xb200000000000000000000b8f841940325db6b2c` |
 | USDEc | StablecoinX | `0xb2000000000000000000009426b660396ebcf343` |
 | XYZc | Block | `0xb20000000000000000000067c8c151f24e1c9924` |
+| AXONc | Axon Enterprise | `0xb2000000000000000000004cc3e96ceb78541d33` |
+| CELHc | Celsius Holdings | `0xb2000000000000000000004161b4168d03841511` |
+| CROXc | Crocs | `0xb200000000000000000000431a5c1e48e3b1d130` |
+| ELFc | e.l.f. Beauty | `0xb2000000000000000000006b7f6966ee0453e251` |
+| HPQc | HP Inc. | `0xb2000000000000000000009a3602cf5d020afa98` |
+| LUVc | Southwest Airlines | `0xb200000000000000000000d5c0393796e92fcab0` |
+| MTCHc | Match Group | `0xb200000000000000000000441ec9266133f611ef` |
+| RKTc | Rocket Companies | `0xb200000000000000000000000d3176ee4af1102d` |
+| VKTXc | Viking Therapeutics | `0xb200000000000000000000979ef4dd6a001b58b1` |
+| WINGc | Wingstop | `0xb200000000000000000000281c973bf2555dd94b` |
 
 Every one of these was created through the B20 factory (`0xB20f…0000`) by the same issuer account, `0xe090ecbee12d4b6aee5e73ff60945f2545ef5c6f`. Anyone can create a B20, and the factory has minted tens of thousands of them, so a symbol match proves nothing. Before adding a listing, check its creator in the factory's creation log.
 
