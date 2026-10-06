@@ -144,6 +144,20 @@ The active index is **read from the chain**, never from this file: `stocksLength
 | RKTc | Rocket Companies | `0xb200000000000000000000000d3176ee4af1102d` |
 | VKTXc | Viking Therapeutics | `0xb200000000000000000000979ef4dd6a001b58b1` |
 | WINGc | Wingstop | `0xb200000000000000000000281c973bf2555dd94b` |
+| AAOIc | Applied Optoelectronics | `0xb200000000000000000000cf36d05963a3e2205c` |
+| AXTIc | AXT | `0xb200000000000000000000a640ec8c1de0efb484` |
+| BRK.Bc | Berkshire Hathaway (Class B) | `0xb20000000000000000000024170488e788cbbcb4` |
+| CLOVc | Clover Health | `0xb20000000000000000000055e63c4c1cdc6b7a36` |
+| CORZc | Core Scientific | `0xb2000000000000000000001aaa9010cd65f82c5e` |
+| FIGRc | Figure Technology Solutions | `0xb2000000000000000000005a41bef59807119850` |
+| GLXYc | Galaxy Digital | `0xb2000000000000000000006de7888c3fffd803ac` |
+| KODKc | Eastman Kodak | `0xb200000000000000000000a63e35e673e3776b88` |
+| LITEc | Lumentum | `0xb200000000000000000000eda6c2c6f11e0f838f` |
+| PLNTc | Planet Fitness | `0xb20000000000000000000011b20aebe0bd567f1c` |
+| ROOTc | Root | `0xb2000000000000000000004aa2b559ca0a0bbf5d` |
+| SEZLc | Sezzle | `0xb2000000000000000000000c1f8acd3c4496a762` |
+| WDCc | Western Digital | `0xb2000000000000000000008fde21a1f5c69fec0b` |
+| XXIc | Twenty One Capital | `0xb200000000000000000000115bf2283265fb04db` |
 
 Every one of these was created through the B20 factory (`0xB20f…0000`) by the same issuer account, `0xe090ecbee12d4b6aee5e73ff60945f2545ef5c6f`. Anyone can create a B20, and the factory has minted tens of thousands of them, so a symbol match proves nothing. Before adding a listing, check its creator in the factory's creation log.
 

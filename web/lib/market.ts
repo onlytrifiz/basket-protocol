@@ -196,6 +196,13 @@ async function finnhubQuote(ticker: string, optional = false): Promise<Quote | n
  * inside 2.4 seconds simply throttled itself. One request per attempt, alternating hosts, with a
  * pause between each — and the result is cached for minutes, so the extra second costs nothing.
  */
+/**
+ * Yahoo spells a share class with a hyphen where Finnhub uses a dot: BRK.B is Finnhub's and
+ * 404 on Yahoo, which wants BRK-B. Tickers stay in Finnhub's form everywhere and are translated
+ * only on the way to Yahoo, so a result is still keyed by the ticker the caller asked for.
+ */
+const yahooSymbol = (ticker: string) => ticker.replace(/\./g, "-");
+
 async function yahooJson<T>(path: string): Promise<T> {
   for (let attempt = 0; attempt < 4; attempt++) {
     if (attempt > 0) await sleep(700 * attempt);
@@ -231,11 +238,11 @@ function toSeries(stamps: (number | undefined)[], closes: (number | null | undef
 /** A month of closes for up to twenty tickers in ONE request — the hub's inline sparklines. */
 async function yahooSparks(tickers: string[]): Promise<Record<string, Series>> {
   const payload = await yahooJson<Record<string, { timestamp?: number[]; close?: (number | null)[] }>>(
-    `/v8/finance/spark?symbols=${encodeURIComponent(tickers.join(","))}&range=1mo&interval=1d`,
+    `/v8/finance/spark?symbols=${encodeURIComponent(tickers.map(yahooSymbol).join(","))}&range=1mo&interval=1d`,
   );
   const out: Record<string, Series> = {};
   for (const ticker of tickers) {
-    const entry = payload?.[ticker];
+    const entry = payload?.[yahooSymbol(ticker)];
     if (!entry?.close) continue;
     const series = toSeries(entry.timestamp ?? [], entry.close);
     if (series.c.length > 1) out[ticker] = series;
@@ -247,7 +254,7 @@ async function yahooSparks(tickers: string[]): Promise<Record<string, Series>> {
 async function yahooChart(ticker: string, range: string, interval: string): Promise<Series> {
   const payload = await yahooJson<{
     chart?: { result?: Array<{ timestamp?: number[]; indicators?: { quote?: Array<{ close?: (number | null)[] }> } }> };
-  }>(`/v8/finance/chart/${encodeURIComponent(ticker)}?range=${range}&interval=${interval}`);
+  }>(`/v8/finance/chart/${encodeURIComponent(yahooSymbol(ticker))}?range=${range}&interval=${interval}`);
 
   const result = payload.chart?.result?.[0];
   const series = toSeries(result?.timestamp ?? [], result?.indicators?.quote?.[0]?.close ?? []);
@@ -258,7 +265,7 @@ async function yahooChart(ticker: string, range: string, interval: string): Prom
 /** Yahoo's chart meta, used only when there is no Finnhub key to ask for a quote. */
 async function yahooQuote(ticker: string): Promise<Quote | null> {
   const payload = await yahooJson<{ chart?: { result?: Array<{ meta?: Record<string, unknown> }> } }>(
-    `/v8/finance/chart/${encodeURIComponent(ticker)}?range=5d&interval=1d`,
+    `/v8/finance/chart/${encodeURIComponent(yahooSymbol(ticker))}?range=5d&interval=1d`,
   );
   const meta = payload.chart?.result?.[0]?.meta;
   const price = num(meta?.regularMarketPrice);
