@@ -1,19 +1,26 @@
 import type { Metadata, Viewport } from "next";
-import { IBM_Plex_Mono, Schibsted_Grotesk } from "next/font/google";
+import { Bricolage_Grotesque, Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import "./v2.css";
 import { WalletProvider } from "./components/wallet";
 
-/* Schibsted Grotesk is variable (400–900): next/font resolves the axis itself,
-   so no weight list is passed. IBM Plex Mono ships static cuts and needs one. */
-const ui = Schibsted_Grotesk({
+/* Three families, each with one job. Bricolage Grotesque sets the headlines (its optical-size axis
+   tightens it at display sizes); Geist carries every running line of UI; Geist Mono carries every
+   figure. All three are variable, so next/font resolves the weight axis itself. */
+const display = Bricolage_Grotesque({
+  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-display",
+});
+
+const ui = Geist({
   subsets: ["latin"],
   display: "swap",
   variable: "--font-ui",
 });
 
-const mono = IBM_Plex_Mono({
+const mono = Geist_Mono({
   subsets: ["latin"],
-  weight: ["400", "500", "600"],
   display: "swap",
   variable: "--font-mono",
 });
@@ -56,17 +63,18 @@ export const metadata: Metadata = {
 
 export const viewport: Viewport = {
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#f5f7fb" },
-    { media: "(prefers-color-scheme: dark)", color: "#071229" },
+    { media: "(prefers-color-scheme: light)", color: "#050a16" },
+    { media: "(prefers-color-scheme: dark)", color: "#050a16" },
   ],
 };
 
-/* Applied before first paint so a stored theme never flashes the other palette. */
+/* Applied before first paint so a stored theme never flashes the other palette. The server renders
+   dark, which is the site's default since 2.0; this only ever switches a reader who chose light. */
 const themeBoot = `(function(){try{var t=localStorage.getItem("stfy-theme");if(t==="dark"||t==="light"){document.documentElement.setAttribute("data-theme",t)}}catch(e){}})()`;
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${ui.variable} ${mono.variable}`} suppressHydrationWarning>
+    <html lang="en" className={`${display.variable} ${ui.variable} ${mono.variable}`} data-theme="dark" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeBoot }} />
       </head>

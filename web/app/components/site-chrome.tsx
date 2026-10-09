@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { ThemeToggle } from "./theme-toggle";
 import { ConnectWalletButton } from "./wallet";
 
 
@@ -66,9 +67,9 @@ export function StockifyMark({ small = false }: { small?: boolean }) {
   );
 }
 
-/* `ThemeToggle` is deliberately still in the tree and deliberately not rendered: the site ships
-   light for now, and the component plus its whole dark palette are kept for when it comes back. */
-export function SiteHeader({ active }: { active: ActivePage }) {
+/* The site ships dark since 2.0, and the toggle is back so a reader who prefers the light palette
+   can have it. It sits beside the wallet rather than with the icons, which disappear on phones. */
+export function SiteHeader({ active }: { active?: ActivePage }) {
   return (
     <nav aria-label="Primary navigation" className="site-nav">
       <div className="site-nav-inner">
@@ -93,6 +94,7 @@ export function SiteHeader({ active }: { active: ActivePage }) {
             <DocsIcon />
           </Link>
         </div>
+        <ThemeToggle />
         <ConnectWalletButton />
       </div>
     </nav>
@@ -123,9 +125,12 @@ export function SiteFooter() {
         {/* Documentation is deliberately absent from this list: it is one line
             away, in the row above, and naming the same destination twice in a
             footer this small reads as an oversight rather than as emphasis. */}
-        <div className="footer-links"><span>Explore</span><Link href="/stocks">Tokenized stocks</Link><Link href="/dividends">Dividends</Link><Link href="/shop">Shop</Link><a href="https://base.org" target="_blank" rel="noreferrer">Built on Base ↗</a></div>
+        <div className="footer-links"><span>Explore</span><Link href="/stocks">Tokenized stocks</Link><Link href="/dividends">Dividends</Link><Link href="/indices">Indices</Link><Link href="/shop">Shop</Link><a href="https://base.org" target="_blank" rel="noreferrer">Built on Base ↗</a></div>
       </div>
       <div className="footer-meta"><span>© 2026 Stockify</span><span>Pre-launch. No STFY market is live.</span></div>
+      {/* The name once more, at the size of the page rather than of a logo: the last thing a reader
+          scrolls past is what the site is called. Decorative, since the brandmark above says it. */}
+      <p aria-hidden="true" className="footer-wordmark">Stockify</p>
     </footer>
   );
 }

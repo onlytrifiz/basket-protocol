@@ -1,0 +1,623 @@
+/* ============================================================================
+   Stockify 2.0
+   A layer over globals.css, loaded after it, so the whole restyle reads as one
+   diff and can be reasoned about (or reverted) on its own. globals.css stays the
+   source of every component's structure; this file changes how the site looks.
+
+   The rules of the system:
+   - One accent: Base blue. Lime is still reserved for value that reached a holder.
+   - Three families: Bricolage Grotesque for headlines, Geist for UI, Geist Mono
+     for every figure.
+   - Shapes: interactive controls are pills, surfaces are 22px, large canvases 32px.
+   - Shadows are tinted with the ink colour, never neutral black.
+   ========================================================================= */
+
+/* ---------- 1. Tokens ----------------------------------------------------- */
+
+:root {
+  --paper: #f4f5f8;
+  --paper-2: #eceef3;
+  --surface: #ffffff;
+  --surface-2: #fafbfd;
+  --surface-sunken: #eff1f6;
+  --ink: #0b1020;
+  --ink-2: #464e64;
+  --ink-3: #636b82;
+  --link: #0043e0;
+  --chip: #e7eeff;
+  --chip-fg: #0040d6;
+  --chip-line: #c9d8ff;
+  --line: #e2e5ec;
+  --line-2: #cfd4de;
+  --navy: #0b1020;
+
+  --shadow-1: 0 1px 2px rgba(11, 16, 32, .05);
+  --shadow-2: 0 1px 2px rgba(11, 16, 32, .05), 0 14px 34px -8px rgba(11, 16, 32, .14);
+  --shadow-3: 0 2px 4px rgba(11, 16, 32, .06), 0 30px 60px -16px rgba(11, 16, 32, .22);
+  --shadow-nav: 0 1px 2px rgba(11, 16, 32, .04), 0 12px 32px -10px rgba(11, 16, 32, .16);
+
+  --desk: #0b1226;
+  --desk-2: #121c36;
+
+  --r-sm: 10px;
+  --r-md: 16px;
+  --r-lg: 22px;
+  --r-xl: 32px;
+
+  --display-stack: var(--font-display), var(--ui-stack);
+
+  /* The canvas every page opens on: the home hero and each inner page's heading. */
+  --canvas-bg:
+    radial-gradient(70% 46% at 50% 100%, rgba(0, 82, 255, .16) 0%, transparent 72%),
+    radial-gradient(42% 48% at 88% 6%, rgba(0, 82, 255, .09) 0%, transparent 70%),
+    radial-gradient(36% 40% at 4% 40%, rgba(145, 212, 255, .16) 0%, transparent 70%),
+    linear-gradient(180deg, #fbfcff 0%, #eef2fc 100%);
+  --canvas-edge: inset 0 1px 0 #fff;
+  --ease-out: cubic-bezier(.16, 1, .3, 1);
+}
+
+/* THE 2.0 DEFAULT IS DARK. The night palette below is what `layout.tsx` renders; the light tokens
+   above are what the toggle switches to. Deeper and more neutral than the navy the parked palette
+   used, so the coin renders and the lime payout figures carry the colour instead of the page. */
+:root[data-theme="dark"] {
+  --paper: #050a16;
+  --paper-2: #03070f;
+  --surface: #0b1324;
+  --surface-2: #0f1930;
+  --surface-sunken: #08101f;
+  --ink: #eef2fa;
+  --ink-2: #a8b3ca;
+  --ink-3: #7f8aa4;
+  --link: #86a9ff;
+  --chip: #12224a;
+  --chip-fg: #b0c6ff;
+  --chip-line: #213a72;
+  --line: #172239;
+  --line-2: #26344f;
+  --desk: #0a1530;
+  --desk-2: #10204a;
+  --shadow-1: 0 1px 2px rgba(0, 0, 0, .4);
+  --shadow-2: 0 1px 2px rgba(0, 0, 0, .4), 0 18px 40px -12px rgba(0, 0, 0, .6);
+  --shadow-3: 0 2px 4px rgba(0, 0, 0, .45), 0 34px 70px -18px rgba(0, 0, 0, .75);
+  --shadow-nav: 0 1px 2px rgba(0, 0, 0, .5), 0 14px 36px -10px rgba(0, 0, 0, .6);
+
+  /* At night the canvas is a deep well, lit from below. */
+  --canvas-bg:
+    radial-gradient(72% 56% at 50% 100%, rgba(0, 82, 255, .42) 0%, transparent 70%),
+    radial-gradient(44% 50% at 92% 0%, rgba(0, 82, 255, .2) 0%, transparent 70%),
+    radial-gradient(34% 44% at 0% 34%, rgba(145, 212, 255, .08) 0%, transparent 70%),
+    linear-gradient(180deg, #0b1530 0%, #070f24 100%);
+  --canvas-edge: inset 0 1px 0 rgba(255, 255, 255, .06);
+}
+
+/* ---------- 2. Type -------------------------------------------------------- */
+
+body { font-feature-settings: "ss01" on; }
+
+h1, h2,
+.desk-head h2,
+.brandmark,
+.product-name {
+  font-family: var(--display-stack);
+  font-optical-sizing: auto;
+}
+h1 { font-weight: 700; letter-spacing: -.045em; }
+h2 { font-weight: 650; letter-spacing: -.04em; }
+h3 { font-weight: 600; letter-spacing: -.025em; }
+
+.eyebrow {
+  color: var(--link);
+  font-size: .7rem;
+  font-weight: 500;
+  letter-spacing: .14em;
+}
+
+.section-head { max-width: 640px; }
+.section-head h2 { font-size: clamp(2.1rem, 4vw, 3.3rem); line-height: 1.02; }
+.section-head > p:last-child { font-size: 1.04rem; max-width: 56ch; }
+
+.section { padding-bottom: 112px; padding-top: 112px; }
+
+/* ---------- 3. Controls --------------------------------------------------- */
+
+.button {
+  border-radius: var(--r-pill);
+  font-size: .92rem;
+  font-weight: 550;
+  letter-spacing: -.01em;
+  padding: 13px 22px;
+}
+.button-ink {
+  background: var(--blue);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .22),
+    0 1px 2px rgba(0, 40, 140, .3),
+    0 10px 24px -6px rgba(0, 72, 230, .45);
+}
+.button-ink:hover {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, .22),
+    0 2px 4px rgba(0, 40, 140, .3),
+    0 16px 30px -8px rgba(0, 72, 230, .5);
+}
+.button-ghost {
+  background: var(--surface);
+  border-color: var(--line-2);
+  box-shadow: var(--shadow-1);
+}
+.button-ghost:hover { border-color: var(--ink); box-shadow: var(--shadow-2); transform: translateY(-1px); }
+.button:active { transform: translateY(1px) scale(.99); }
+
+.wallet-pill { font-weight: 550; letter-spacing: 0; padding: .5rem .95rem; }
+
+/* ---------- 4. Navigation ------------------------------------------------- */
+
+.site-nav { margin: 12px 0 14px; }
+.site-nav-inner {
+  background: color-mix(in srgb, var(--surface) 76%, transparent);
+  border-color: color-mix(in srgb, var(--line) 80%, transparent);
+  box-shadow: var(--shadow-nav);
+  min-height: 60px;
+}
+.brandmark { font-size: 1.28rem; font-weight: 700; letter-spacing: -.04em; }
+.site-links a { color: var(--ink-2); font-weight: 500; }
+.site-links a:hover { background: var(--surface-sunken); }
+.site-links a.active { background: var(--blue); color: #fff; font-weight: 550; }
+.theme-toggle { box-shadow: none; }
+
+/* ---------- 5. Hero ------------------------------------------------------- */
+
+/* THE HERO IS A CANVAS NOW, not a full-bleed band: inset from the viewport, rounded, and lit from
+   below where the fan stands. The 54px lattice is gone; the light does the job of giving the cards
+   a floor, without a grid competing with every edge in the swap card.
+
+   Still no `overflow: clip` (see globals): the asset picker in the swap card opens downward past
+   the hero's edge. The background follows the radius without it. */
+.hero-card {
+  background: var(--canvas-bg);
+  border: 1px solid var(--line);
+  border-radius: var(--r-xl);
+  box-shadow: var(--canvas-edge);
+  margin: 0 14px;
+}
+
+.hero-inner { gap: 64px; padding: 72px 24px 40px; }
+.hero-copy .eyebrow { margin-bottom: 20px; }
+.hero-copy h1 {
+  font-size: clamp(3rem, 5.6vw, 5rem);
+  line-height: .95;
+  margin-bottom: 24px;
+  max-width: 10.5ch;
+}
+.hero-lede { font-size: 1.12rem; line-height: 1.55; max-width: 38ch; }
+.hero-actions { margin-top: 34px; }
+
+/* The fan's own chrome, re-tuned for the lighter floor. */
+.stock-stage.is-band .stage-wordmark { font-family: var(--display-stack); font-weight: 800; }
+.stage-flank > span { font-weight: 500; letter-spacing: .12em; }
+.stage-flank strong { font-weight: 500; }
+.stage-jump { border-radius: var(--r-pill); }
+
+/* The swap card at night. globals.css remaps the card's `--desk-*` tokens to literal light values
+   (see "The swap card, in the stock cards' register"), so the dark theme restates them: a raised
+   glass face, fields sunk below it, and a bezel that catches the hero's blue light along its top. */
+:root[data-theme="dark"] .swap-panel {
+  --desk: #0d1730;
+  --desk-2: #0d1730;
+  --desk-glass: rgba(3, 7, 15, .55);
+  --desk-glass-2: var(--chip);
+  --desk-sheen: rgba(0, 82, 255, .22);
+  background:
+    radial-gradient(90% 60% at 50% -14%, var(--desk-sheen) 0%, transparent 64%) padding-box,
+    linear-gradient(rgba(13, 23, 48, .88), rgba(10, 18, 38, .92)) padding-box,
+    linear-gradient(160deg, rgba(134, 169, 255, .55), rgba(134, 169, 255, .08) 38%, rgba(255, 255, 255, .04) 70%, rgba(134, 169, 255, .22)) border-box;
+  backdrop-filter: blur(16px);
+  border: 1px solid transparent;
+  box-shadow: 0 30px 70px -20px rgba(0, 0, 0, .8), 0 0 0 1px rgba(0, 0, 0, .3), inset 0 1px 0 rgba(255, 255, 255, .06);
+}
+
+/* ---------- 6. The facts panel -------------------------------------------- */
+
+.facts-panel { margin-top: 20px; }
+.facts-grid {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-1);
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 0;
+}
+.facts-grid > div { min-width: 0; padding: 26px 28px 24px; }
+.facts-grid > div + div { border-left: 1px solid var(--line); }
+.facts-grid dt {
+  color: var(--ink-3);
+  font-family: var(--mono-stack);
+  font-size: .68rem;
+  font-weight: 500;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+}
+.facts-grid dd {
+  font-family: var(--mono-stack);
+  font-size: clamp(2rem, 3.4vw, 2.75rem);
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  letter-spacing: -.05em;
+  line-height: 1;
+  margin: 14px 0 8px;
+}
+.facts-grid small { color: var(--ink-3); display: block; font-size: .8rem; }
+
+/* ---------- 7. The dividend loop ------------------------------------------ */
+
+.loop-section {
+  align-items: start;
+  display: grid;
+  gap: 64px;
+  grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr);
+}
+.loop-head { position: sticky; top: 120px; }
+.loop-head h2 { font-size: clamp(2.1rem, 4vw, 3.3rem); line-height: 1.02; margin-bottom: 18px; }
+.loop-head p { color: var(--ink-2); font-size: 1.04rem; line-height: 1.6; margin: 0; max-width: 44ch; }
+
+.loop-steps { list-style: none; margin: 0; padding: 0; position: relative; }
+/* The rail the three markers sit on. */
+.loop-steps::before {
+  background: linear-gradient(var(--line-2), var(--line-2)) center / 1px 100% no-repeat;
+  bottom: 52px;
+  content: "";
+  left: 0;
+  position: absolute;
+  top: 52px;
+  width: 34px;
+}
+.loop-step {
+  align-items: start;
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 24px;
+  grid-template-columns: 82px minmax(0, 1fr);
+  padding: 34px 0;
+  position: relative;
+}
+.loop-step:last-child { border-bottom: 1px solid var(--line); }
+.loop-step .ring-marker { background: var(--paper); padding: 4px 0; position: relative; }
+.loop-step h3 { font-family: var(--display-stack); font-size: clamp(1.5rem, 2.4vw, 1.9rem); font-weight: 650; margin: 2px 0 8px; }
+.loop-step p { color: var(--ink-2); font-size: .98rem; line-height: 1.6; margin: 0; max-width: 46ch; }
+.loop-step.is-lit h3 { color: var(--ink); }
+
+/* ---------- 8. The universe ----------------------------------------------- */
+
+.universe-section {
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  border-top: 1px solid var(--line);
+  overflow: hidden;
+}
+.universe-split {
+  align-items: center;
+  display: grid;
+  gap: 56px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 448px);
+}
+.universe-copy h2 { font-size: clamp(2.1rem, 4vw, 3.3rem); line-height: 1.02; margin-bottom: 18px; max-width: 13ch; }
+.universe-copy > p:not(.eyebrow) { color: var(--ink-2); font-size: 1.04rem; line-height: 1.6; margin: 0 0 30px; max-width: 46ch; }
+
+.stock-marquee {
+  display: grid;
+  gap: 12px;
+  margin-top: 72px;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 7%, #000 93%, transparent);
+}
+.marquee-row { overflow: hidden; }
+.marquee-track { display: flex; width: max-content; }
+.marquee-set { display: flex; gap: 10px; list-style: none; margin: 0; padding: 0 10px 0 0; }
+.marquee-chip {
+  align-items: center;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r-pill);
+  display: inline-flex;
+  gap: 9px;
+  padding: 7px 16px 7px 7px;
+  transition: border-color .2s var(--ease), background .2s var(--ease), transform .2s var(--ease);
+  white-space: nowrap;
+}
+.marquee-chip .stock-logo {
+  background: #fff;
+  border-color: transparent !important;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  box-shadow: none;
+  height: 28px;
+  width: 28px;
+}
+.marquee-chip .stock-logo img { height: 60%; width: 60%; }
+.marquee-chip strong { font-family: var(--mono-stack); font-size: .78rem; font-weight: 600; }
+.marquee-chip span:last-child { color: var(--ink-3); font-size: .8rem; max-width: 18ch; overflow: hidden; text-overflow: ellipsis; }
+.marquee-chip:hover {
+  background: color-mix(in srgb, var(--brand, var(--blue)) 9%, var(--surface));
+  border-color: color-mix(in srgb, var(--brand, var(--blue)) 45%, var(--line));
+}
+
+@keyframes marquee-drift { to { transform: translate3d(-50%, 0, 0); } }
+
+@media (prefers-reduced-motion: no-preference) {
+  .marquee-track { animation: marquee-drift 220s linear infinite; }
+  .marquee-row.is-reverse .marquee-track { animation-direction: reverse; }
+  .stock-marquee:hover .marquee-track,
+  .stock-marquee:focus-within .marquee-track { animation-play-state: paused; }
+}
+/* Still, a row is just a row: scroll it by hand, and drop the copy that only existed for the loop. */
+@media (prefers-reduced-motion: reduce) {
+  .marquee-row { overflow-x: auto; scrollbar-width: none; }
+  .marquee-set[aria-hidden] { display: none; }
+}
+
+/* ---------- 9. The bento -------------------------------------------------- */
+
+.bento {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: repeat(2, minmax(290px, auto));
+  margin-top: 52px;
+}
+.bento-cell {
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  color: var(--ink);
+  display: flex;
+  flex-direction: column;
+  isolation: isolate;
+  min-width: 0;
+  overflow: hidden;
+  padding: 30px;
+  position: relative;
+  transition: box-shadow .3s var(--ease-out), transform .3s var(--ease-out), border-color .3s var(--ease-out);
+}
+.bento-cell:nth-child(1) { grid-row: span 2; }
+.bento-cell:nth-child(2) { grid-column: span 2; }
+.bento-cell:hover { box-shadow: var(--shadow-3); transform: translateY(-4px); }
+
+.bento-text { display: flex; flex-direction: column; max-width: 30ch; position: relative; z-index: 1; }
+.bento-cell .product-name { font-size: clamp(1.7rem, 2.6vw, 2.2rem); font-weight: 700; letter-spacing: -.04em; line-height: 1; }
+.bento-cell .product-line { color: var(--ink); font-size: .98rem; font-weight: 550; margin-top: 12px; }
+.bento-copy { color: var(--ink-2); font-size: .9rem; line-height: 1.55; margin-top: 8px; }
+
+.bento-art { pointer-events: none; position: absolute; z-index: 0; }
+.bento-art img { object-fit: contain; transition: transform .5s var(--ease-out); }
+.bento-cell:hover .bento-art img { transform: scale(1.04) rotate(-1deg); }
+
+.bento-go {
+  align-items: center;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  bottom: 24px;
+  display: inline-flex;
+  font-size: .95rem;
+  height: 42px;
+  justify-content: center;
+  backdrop-filter: blur(6px);
+  background: color-mix(in srgb, var(--surface) 70%, transparent);
+  opacity: .75;
+  position: absolute;
+  right: 24px;
+  transition: opacity .2s var(--ease), transform .3s var(--ease-out), background .2s var(--ease);
+  width: 42px;
+  z-index: 1;
+}
+.bento-cell:hover .bento-go { opacity: 1; transform: translateX(3px); }
+
+/* $STFY: the tall cell, in the brand blue, with the fee-to-stock render rising out of its base. */
+.bento-cell.is-blue {
+  background:
+    radial-gradient(90% 60% at 50% 105%, rgba(145, 212, 255, .45), transparent 70%),
+    linear-gradient(165deg, #2a6bff 0%, #0052ff 42%, #0039c2 100%);
+  border-color: transparent;
+  color: #fff;
+}
+.bento-cell.is-blue .product-line { color: #fff; }
+.bento-cell.is-blue .bento-copy { color: rgba(255, 255, 255, .78); }
+.bento-cell.is-blue .bento-art { bottom: 4%; height: 52%; left: -6%; right: -6%; }
+.bento-cell.is-blue .bento-go, .bento-cell.is-ink .bento-go { background: rgba(255, 255, 255, .1); }
+
+/* Indices: the wide cell, the basket on its right half. */
+.bento-cell.is-light { background: var(--surface); }
+.bento-cell.is-light .bento-art { bottom: 6%; right: 2%; top: 6%; width: 50%; }
+
+/* Stocks terminal: the coin scatter, cropped by the corner. */
+.bento-cell.is-sunken {
+  background: linear-gradient(180deg, #e9efff 0%, #f6f8fd 100%);
+  border-color: var(--chip-line);
+}
+.bento-cell.is-sunken .bento-art { bottom: -24%; height: 64%; right: -16%; width: 84%; }
+.bento-cell.is-sunken .bento-copy { max-width: 26ch; }
+
+/* At night the light cells keep their roles: Indices sits on the raised surface, the Terminal
+   cell on a blue-tinted one. */
+:root[data-theme="dark"] .bento-cell.is-sunken {
+  background: linear-gradient(180deg, #102252 0%, #0b1530 100%);
+  border-color: var(--chip-line);
+}
+
+/* Shop: no render, the darkest surface in the set. */
+.bento-cell.is-ink {
+  background:
+    radial-gradient(80% 70% at 100% 0%, rgba(0, 82, 255, .5), transparent 62%),
+    radial-gradient(60% 50% at 0% 100%, rgba(145, 212, 255, .14), transparent 70%),
+    #070d1c;
+  border-color: var(--line);
+  color: #fff;
+}
+.bento-cell.is-ink .product-line { color: #fff; }
+.bento-cell.is-ink .bento-copy { color: rgba(255, 255, 255, .7); }
+
+/* ---------- 10. Shared surfaces on the other pages ------------------------ */
+
+/* The stats band becomes the same lifted panel as the homepage's facts, so every page that has
+   one carries the same object. The ring dividers go: a hairline is enough between four figures. */
+.stats-band { background: transparent; border: 0; padding: 0 24px; }
+.stats-inner {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow-1);
+  overflow: hidden;
+}
+.stats-inner > div { padding: 26px 28px; }
+.stats-inner > div + div::before, .stats-inner > div::after { display: none; }
+.stats-inner span { font-weight: 500; letter-spacing: .12em; }
+.stats-inner strong { font-size: clamp(1.7rem, 2.6vw, 2.15rem); font-weight: 500; letter-spacing: -.05em; }
+
+.page-intro h1 { font-size: clamp(3rem, 5.4vw, 4.6rem); line-height: .98; }
+.desk-panel { border-radius: var(--r-xl); margin: 0 14px; }
+.desk-head h2 { font-size: clamp(2rem, 3.4vw, 2.6rem); }
+
+/* EVERY PAGE OPENS ON THE SAME CANVAS. The inner pages' headings were plain copy on the page
+   background, so leaving the homepage felt like leaving the product. They take the hero's object:
+   inset from the viewport, rounded, lit from below, with the content still on the shared rail. */
+.hub-head, .page-intro {
+  background: var(--canvas-bg);
+  border: 1px solid var(--line);
+  border-radius: var(--r-xl);
+  box-shadow: var(--canvas-edge);
+  margin: 0 14px;
+  max-width: none;
+  padding: 64px max(32px, calc((100vw - 28px - var(--maxw)) / 2 + 24px)) 60px;
+}
+.hub-head + .stats-band, .page-intro + .stats-band { margin-top: 20px; }
+.docs-intro { margin-bottom: 48px; }
+.docs-intro > p { max-width: 68ch; }
+.hub-head h1 { font-size: clamp(2.5rem, 4.8vw, 4.1rem); line-height: .98; }
+.hub-render { filter: drop-shadow(0 30px 40px rgba(0, 0, 0, .35)); }
+.page-intro-render { right: max(32px, calc((100vw - 28px - var(--maxw)) / 2 + 24px)); top: 50%; translate: 0 -50%; }
+
+/* ---------- 11. Footer ---------------------------------------------------- */
+
+.site-footer { background: var(--surface); margin-top: 24px; overflow: hidden; }
+.footer-inner { padding-top: 64px; }
+.footer-links a { color: var(--ink-2); font-size: .86rem; }
+.footer-wordmark {
+  -webkit-background-clip: text;
+  background-clip: text;
+  background-image: linear-gradient(180deg, color-mix(in srgb, var(--blue) 24%, var(--paper)) 15%, color-mix(in srgb, var(--blue) 4%, var(--surface)) 96%);
+  color: transparent;
+  font-family: var(--display-stack);
+  font-size: clamp(4.5rem, 20vw, 17rem);
+  font-weight: 800;
+  letter-spacing: -.06em;
+  line-height: 1;
+  margin: 8px 0 0;
+  padding: 0 12px;
+  text-align: center;
+  user-select: none;
+  white-space: nowrap;
+}
+
+/* ---------- 12. 404 ------------------------------------------------------- */
+
+.not-found {
+  align-items: center;
+  display: grid;
+  gap: 48px;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, .9fr);
+  min-height: 62dvh;
+  padding-bottom: 96px;
+  padding-top: 64px;
+}
+.not-found h1 { font-size: clamp(2.6rem, 5vw, 4.2rem); line-height: .98; margin-bottom: 20px; max-width: 12ch; }
+.not-found-copy > p:not(.eyebrow) { color: var(--ink-2); font-size: 1.04rem; line-height: 1.6; max-width: 46ch; }
+.not-found-copy code { background: var(--surface-sunken); border-radius: 6px; font-size: .9em; padding: 2px 6px; }
+.not-found-art { aspect-ratio: 874 / 551; filter: grayscale(.7) opacity(.75); position: relative; }
+.not-found-art img { object-fit: contain; }
+
+/* ---------- 13. Motion ---------------------------------------------------- */
+
+/* Sections arrive as they scroll in. Driven by the scroll position itself rather than by script, so
+   there is nothing to clean up and nothing runs on the main thread. `translate`, not `transform`, so
+   the hover lifts that use `transform` still work once a cell has arrived. Browsers without
+   scroll-driven animations simply show everything. */
+@keyframes reveal-up {
+  from { opacity: 0; translate: 0 32px; }
+  to { opacity: 1; translate: 0 0; }
+}
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    .reveal {
+      animation: reveal-up linear both;
+      animation-range: entry 0% entry 55%;
+      animation-timeline: view();
+    }
+    .bento-cell.reveal:nth-child(2), .loop-step.reveal:nth-child(2) { animation-range: entry 8% entry 63%; }
+    .bento-cell.reveal:nth-child(3), .loop-step.reveal:nth-child(3) { animation-range: entry 16% entry 71%; }
+    .bento-cell.reveal:nth-child(4) { animation-range: entry 24% entry 79%; }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bento-cell, .bento-art img, .bento-go, .marquee-chip { transition: none; }
+  .bento-cell:hover { transform: none; }
+  .bento-cell:hover .bento-art img { transform: none; }
+}
+
+/* ---------- 14. Responsive ------------------------------------------------ */
+
+@media (max-width: 980px) {
+  .hero-inner { gap: 40px; padding-top: 56px; }
+  .loop-section { gap: 40px; grid-template-columns: minmax(0, 1fr); }
+  .loop-head { position: static; }
+  .universe-split { gap: 40px; grid-template-columns: minmax(0, 1fr); }
+  .universe-split .index-universe { max-width: 540px; }
+  .bento { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: none; }
+  .bento-cell:nth-child(1) { grid-row: auto; min-height: 460px; }
+  .bento-cell:nth-child(2) { grid-column: auto; }
+  .bento-cell.is-light .bento-art { bottom: -6%; height: 52%; left: auto; top: auto; width: 86%; }
+  .bento-cell { min-height: 380px; }
+  .facts-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .facts-grid > div:nth-child(3) { border-left: 0; }
+  .facts-grid > div:nth-child(n + 3) { border-top: 1px solid var(--line); }
+  .not-found { grid-template-columns: minmax(0, 1fr); }
+  .not-found-art { max-width: 420px; }
+}
+
+@media (max-width: 660px) {
+  .section { padding-bottom: 72px; padding-top: 72px; }
+  .hero-card { border-radius: 24px; margin: 0 8px; }
+  .hero-inner { padding: 40px 16px 24px; }
+  .hero-copy h1 { font-size: clamp(2.6rem, 13vw, 3.4rem); }
+  .hero-lede { font-size: 1rem; }
+  .facts-panel { margin-top: 14px; }
+  .facts-grid > div { padding: 20px 18px; }
+  .facts-grid dd { font-size: 1.9rem; margin: 10px 0 6px; }
+  .facts-grid small { font-size: .74rem; }
+  .loop-step { gap: 14px; grid-template-columns: 70px minmax(0, 1fr); padding: 26px 0; }
+  .bento { grid-template-columns: minmax(0, 1fr); }
+  .bento-cell { min-height: 340px; padding: 24px; }
+  .bento-cell:nth-child(1) { min-height: 420px; }
+  .stock-marquee { margin-top: 48px; }
+  .stats-band { padding: 0 20px; }
+  .stats-inner > div { padding: 20px; }
+  .desk-panel { border-radius: 24px; margin: 0 8px; }
+  .hub-head, .page-intro { border-radius: 24px; margin: 0 8px; padding: 40px 18px 36px; }
+  .footer-wordmark { margin-top: 0; }
+}
+
+/* Ring above legend on the narrowest phones: side by side at 320 the legend had ~60px and every
+   company name truncated to its first letter. */
+@media (max-width: 420px) {
+  .universe-body { align-items: stretch; flex-direction: column; gap: 18px; }
+  .universe-ring { align-self: center; }
+}
+
+
+/* At 320 the first nav row holds brand, theme toggle and the wallet pill at its widest label
+   ("Connecting"), which measured 16px too long and pushed the pill onto a row of its own. */
+@media (max-width: 359px) {
+  .site-nav-inner { column-gap: 6px; }
+  .brandmark { font-size: 1rem; gap: 7px; }
+  .theme-toggle { height: 32px; width: 32px; }
+  .wallet-pill { padding: .45rem .7rem; }
+}

@@ -11,7 +11,7 @@ import { readVault } from "../lib/vault";
 import { IndexUniverse } from "./components/index-universe";
 import { RingMarker } from "./components/segment-ring";
 import { SiteFooter, SiteHeader } from "./components/site-chrome";
-import { StockGrid } from "./components/stock-grid";
+import { StockMarquee } from "./components/stock-marquee";
 import { StockStage, type StageStock } from "./components/stock-stage";
 import { SwapPanel } from "./components/swap-panel";
 
@@ -32,44 +32,46 @@ import { SwapPanel } from "./components/swap-panel";
  */
 export const dynamic = "force-dynamic";
 
-/**
- * TEMPORARY: the hero band is showing the render again instead of the card fan.
- *
- * Nothing is deleted. `StockStage` and everything it needs are still here and still built, and the
- * band still gets the same two figures either way — flip this back to `true` and the fan returns
- * exactly as it was.
- */
-const HERO_STAGE = false;
-
-/* `filled` advances the ring across the loop; only the final step is a payout,
-   so it is the only one allowed to light a segment lime. */
+/* The four products, laid out as a bento rather than a row of equal cards: the protocol the site is
+   named for gets the tall cell, and each cell gets the render that already stands for it elsewhere
+   on the site. `tone` picks the cell's surface. */
 const products = [
   {
     name: "$STFY",
     href: "/dividends",
     line: "Stock dividend protocol",
     copy: "Trading fees buy tokenized equity and push it to holders. Nothing to claim.",
+    tone: "blue",
+    art: "/distributions.png",
   },
   {
     name: "Indices",
     href: "/indices",
     line: "Turn token fees into a stocks basket",
     copy: "Point a launch's creator fees at an index and its holders are paid in real equity.",
+    tone: "light",
+    art: "/baskets.png",
   },
   {
     name: "Stocks Terminal",
     href: "/stocks",
     line: "Get info about any B20 stock",
     copy: "Supply, markets and how far each one trades from the share it represents.",
+    tone: "sunken",
+    art: "/stocks.png",
   },
   {
     name: "Shop",
     href: "/shop",
     line: "Spend the stock you were paid in",
     copy: "Gift cards, eSIM data and mobile top-ups across 2,000+ brands, in one transaction on Base.",
+    tone: "ink",
+    art: null,
   },
 ] as const;
 
+/* `filled` advances the ring across the loop; only the final step is a payout,
+   so it is the only one allowed to light a segment lime. */
 const mechanics = [
   { number: "01", filled: 3, lit: false, title: "Trade STFY", copy: "The ETH / STFY v4 market is designed to collect a 3% hook fee on trading." },
   { number: "02", filled: 6, lit: false, title: "Acquire the index", copy: "A keeper routes 90% of each collected hook fee into the active Base B20 equity index." },
@@ -164,6 +166,8 @@ export default async function Home() {
     };
   });
 
+  const hasStage = stageStocks.length > 0;
+
   return (
     <div className="site-shell">
       <SiteHeader active="home" />
@@ -171,23 +175,19 @@ export default async function Home() {
         <header className="hero-card" id="overview">
           <div className="hero-inner">
             <div className="hero-copy">
-              <p className="eyebrow">BASE · B20 EQUITY DIVIDENDS</p>
+              <p className="eyebrow">Base · B20 equity dividends</p>
               <h1>Hold Stockify.<br /><span>Receive stocks.</span></h1>
-              <p className="hero-lede">Stockify routes trading fees into Base-native tokenized equities, then distributes the acquired assets to qualifying STFY holders.</p>
+              <p className="hero-lede">Trading fees buy Base-native tokenized equities, and the vault pushes them straight to STFY holders.</p>
               <div className="hero-actions"><Link className="button button-ink" href="/dividends">View the dividends <span>→</span></Link><Link className="button button-ghost" href="/docs">Read the docs</Link></div>
-              <p className="hero-note"><i /> 3% trading fee · 90% allocated to stocks · push payouts</p>
             </div>
             <div className="hero-swap"><SwapPanel /></div>
           </div>
-          {/* THE BAND UNDER THE HERO. It was a 3:1 render of coins; it is now the thirteen assets
-              themselves, which is the same sentence told with the subject present. The two labels
-              stay because they are what the band is FOR — fees in on one side, stocks out on the
-              other — and the fan between them is the second half of that arrow.
-
-              The render is kept in the repo rather than deleted: it is still the OG image's
-              subject, and this swap is a layout decision that may want undoing. */}
-          <div className={`flow-strip${HERO_STAGE && stageStocks.length > 0 ? " is-stage" : " is-render"}`}>
-            {HERO_STAGE && stageStocks.length > 0 ? (
+          {/* THE BAND UNDER THE HERO: the equities the vault buys, as a fan of cards, with what has
+              actually been paid out either side of it. The render it replaced is still the OG
+              image's subject, and it comes back here only when the listing could not be read, so
+              the band never collapses into an empty strip. */}
+          <div className={`flow-strip${hasStage ? " is-stage" : " is-render"}`}>
+            {hasStage ? (
               <StockStage stocks={stageStocks} variant="band" />
             ) : (
               <>
@@ -209,50 +209,70 @@ export default async function Home() {
           </div>
         </header>
 
-        <section className="stats-band" aria-label="Protocol economics"><div className="stats-inner">
-          <div><span>Hook fee</span><strong>3%</strong><small>on STFY trades</small></div>
-          <div><span>Stock allocation</span><strong>90%</strong><small>of hook fee</small></div>
-          <div><span>LP fee</span><strong>1%</strong><small>to v4 liquidity providers</small></div>
-          <div><span>Initial supply</span><strong>1B</strong><small>STFY fixed supply</small></div>
-        </div></section>
-
-        <section className="section wrap" id="how"><div className="section-head"><p className="eyebrow">THE DIVIDEND LOOP</p><h2>A stock dividend that starts with volume.</h2><p>Stockify does not reflect another token into your wallet. The vault acquires the B20 assets themselves and pushes the resulting entitlement to holders.</p></div><div className="steps-grid">{mechanics.map((step) => <article className="step-card" key={step.number}><RingMarker filled={step.filled} label={step.number} lit={step.lit} /><h3>{step.title}</h3><p>{step.copy}</p></article>)}</div></section>
-
-        <section className="section wrap" id="index"><div className="index-showcase"><div className="section-head index-head"><div><p className="eyebrow">THE B20 STOCKS UNIVERSE</p><h2>{countWord(stocks.length)} listed. Five in the index.</h2></div><p>Every B20 equity Coinbase has issued on Base. The dividend vault buys a configurable subset of them, and the index can change between cycles.</p></div><IndexUniverse slices={slices} /></div>
-          <StockGrid compact>
-            {/* The two ways out sit IN the grid rather than under it: an action shaped like the
-                things it acts on reads as part of the set instead of as a banner below it. */}
-            <Link className="equity-card is-action" href="/stocks">
-              <span className="equity-name"><strong>All stocks</strong><span>Every B20 on Base</span></span>
-            </Link>
-            <Link className="equity-card is-action" href="/dividends">
-              <span className="equity-name"><strong>The vault</strong><span>What it buys</span></span>
-            </Link>
-          </StockGrid>
+        {/* The protocol's four constants, as one panel lifted over the hero's bottom edge. They were
+            also a line of small print under the hero buttons; saying them once, at this size, is
+            the version a reader actually takes in. */}
+        <section className="facts-panel wrap" aria-label="Protocol economics">
+          <dl className="facts-grid">
+            <div><dt>Hook fee</dt><dd>3%</dd><small>on every STFY trade</small></div>
+            <div><dt>To stocks</dt><dd>90%</dd><small>of each hook fee</small></div>
+            <div><dt>LP fee</dt><dd>1%</dd><small>to v4 liquidity providers</small></div>
+            <div><dt>Supply</dt><dd>1B</dd><small>STFY, fixed</small></div>
+          </dl>
         </section>
 
-        {/* WHAT THIS SITE IS, in three lines, after the universe it is built on.
-            Here rather than at the top because each one only means something once you know what a
-            B20 stock is — the section above is the premise and this is the consequence. */}
-        <section className="section wrap" id="products">
-          <div className="section-head">
-            <p className="eyebrow">FOUR WAYS IN</p>
-            <h2>The hub for B20 stocks on Base.</h2>
-            <p>
-              One protocol that pays them out, one that turns any launch&apos;s fees into them, one
-              place to look them up — and one place to spend them.
-            </p>
+        {/* The loop as a timeline beside its headline, not three equal cards: the steps happen in
+            order, and a vertical rail says so where a row of boxes does not. */}
+        <section className="section wrap loop-section" id="how">
+          <div className="loop-head reveal">
+            <h2>A stock dividend that starts with volume.</h2>
+            <p>Stockify does not reflect another token into your wallet. The vault buys the B20 assets themselves and pushes them to holders.</p>
           </div>
-          <div className="product-grid">
+          <ol className="loop-steps">
+            {mechanics.map((step) => (
+              <li className={`loop-step reveal${step.lit ? " is-lit" : ""}`} key={step.number}>
+                <RingMarker filled={step.filled} label={step.number} lit={step.lit} />
+                <div>
+                  <h3>{step.title}</h3>
+                  <p>{step.copy}</p>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </section>
+
+        <section className="section universe-section" id="index">
+          <div className="wrap universe-split">
+            <div className="universe-copy reveal">
+              <p className="eyebrow">The B20 stocks universe</p>
+              <h2>{countWord(stocks.length)} listed. Five in the index.</h2>
+              <p>Every B20 equity Coinbase has issued on Base. The vault buys a configurable subset of them, and the index can change between cycles.</p>
+              <Link className="button button-ghost" href="/stocks">Browse every stock <span>→</span></Link>
+            </div>
+            <div className="reveal"><IndexUniverse slices={slices} /></div>
+          </div>
+          <StockMarquee />
+        </section>
+
+        <section className="section wrap" id="products">
+          <div className="section-head reveal">
+            <h2>The hub for B20 stocks on Base.</h2>
+            <p>One protocol that pays them out, one that turns any launch&apos;s fees into them, one place to look them up, and one place to spend them.</p>
+          </div>
+          <div className="bento">
             {products.map((product) => (
-              <Link className="product-card" href={product.href} key={product.name}>
-                {/* The NAME leads. It was the small label above the description, which made the
-                    cards read as sentences that happened to be filed under something — and the
-                    thing a visitor has to leave with is what these things are called. */}
-                <strong className="product-name">{product.name}</strong>
-                <span className="product-line">{product.line}</span>
-                <p>{product.copy}</p>
-                <b aria-hidden="true">→</b>
+              <Link className={`bento-cell reveal is-${product.tone}`} href={product.href} key={product.name}>
+                <span className="bento-text">
+                  <strong className="product-name">{product.name}</strong>
+                  <span className="product-line">{product.line}</span>
+                  <span className="bento-copy">{product.copy}</span>
+                </span>
+                {product.art && (
+                  <span aria-hidden="true" className="bento-art">
+                    <Image alt="" fill sizes="(max-width: 760px) 80vw, 420px" src={product.art} />
+                  </span>
+                )}
+                <b aria-hidden="true" className="bento-go">→</b>
               </Link>
             ))}
           </div>
