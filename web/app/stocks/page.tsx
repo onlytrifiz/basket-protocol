@@ -154,7 +154,8 @@ export default async function StocksPage() {
       node: hubRow(row),
       text: [row.asset.symbol, row.asset.name, row.asset.ticker ?? "", row.asset.address].join(" ").toLowerCase(),
       minted: row.asset.shares !== 0,
-      trading: Boolean(row.pool?.best),
+      // A thin price is still a market someone can trade in; only its price is not THE price.
+      trading: Boolean(row.pool?.best || row.thin),
       values: {
         asset: row.asset.symbol,
         onChain: row.onChain,

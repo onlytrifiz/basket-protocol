@@ -199,7 +199,11 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
               <TradeCard
                 asset={{ address: asset.address, symbol: asset.symbol, name: asset.name, decimals: asset.decimals, logo: asset.logo, domain: asset.domain }}
                 referencePrice={quote?.price ?? null}
-                tradable={Boolean(pools.best)}
+                /* Any pool at all, not a quotable one. The $5,000 floor decides which price is
+                   shown, not whether a trade can happen: DJTc's $1.1K across two pools routes
+                   $100 through Aerodrome at ~$7.80. The aggregator answers for a pair it cannot
+                   fill, and that reaches the reader as a notice on the card. */
+                tradable={pools.poolCount > 0}
               />
 
               {profile && (
