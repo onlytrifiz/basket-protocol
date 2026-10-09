@@ -34,11 +34,12 @@ export default async function StocksPage() {
   const pools = await poolsForAll(assets.filter((a) => a.shares !== 0).map((a) => a.address));
 
   // Share prices AFTER pools, on purpose: a Nasdaq price only needs to be a minute fresh where there
-  // is an on-chain price to hold it against. Every other row's may be ten minutes old, which keeps
-  // a rebuild inside Finnhub's 60 calls a minute at this listing size. See `marketBoard`.
+  // is an on-chain price to hold it against — a quotable pool, or a thin one, which is only shown
+  // once the share price confirms it (see `thinPool`). Every other row's may be ten minutes old,
+  // which keeps a rebuild inside Finnhub's 60 calls a minute at this listing size. See `marketBoard`.
   const market = await marketBoard(assets.map((a) => a.ticker).filter(Boolean) as string[], {
     quiet: assets
-      .filter((a) => !pools[a.address.toLowerCase()]?.best)
+      .filter((a) => { const p = pools[a.address.toLowerCase()]; return !p?.best && !p?.thin; })
       .map((a) => a.ticker)
       .filter(Boolean) as string[],
   });
