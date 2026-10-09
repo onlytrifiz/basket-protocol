@@ -3242,6 +3242,8 @@ a.hub-row:focus-visible { outline: 2px solid var(--blue); outline-offset: -2px; 
   white-space: nowrap;
 }
 .hub-num .is-up { color: var(--payout-fg); }
+/* A thin pool's price: present, but visibly not THE price. */
+.hub-num b.is-thin, .price-block > strong.is-thin { color: var(--ink-3); }
 .hub-num .is-down { color: #b4342b; }
 :root:not([data-theme="light"]) .hub-num .is-down { color: #ff8f85; }
 [data-theme="dark"] .hub-num .is-down { color: #ff8f85; }

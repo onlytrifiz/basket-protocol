@@ -44,6 +44,33 @@ const PAIRS_TTL_MS = 60_000;
  */
 export const MIN_LIQUIDITY_USD = 5_000;
 
+/**
+ * Below the quotable floor but still worth naming: the deepest pool that holds at least this much.
+ *
+ * "No market" was wrong for a stock with a $652 Uniswap pool and a $471 Aerodrome one — there is a
+ * market, it is just too thin to be THE price. Such a pool's price is shown as a thin price: greyed,
+ * labelled with its depth, and never used for a premium. Below this floor (HTZc's $1 pool) a price
+ * says nothing at all, and the row stays a dash.
+ */
+export const THIN_FLOOR_USD = 250;
+
+/** How far a thin pool may sit from the share price and still be shown. */
+const THIN_BAND = 0.25;
+
+/**
+ * The thin pool a page may show, or null.
+ *
+ * A thin pool is shown only beside a share price it roughly agrees with. Concentrated pools this
+ * shallow can sit far out of range: PFEc's deepest, $1,046 on Aerodrome, quoted $143 for a $27 share.
+ * Printed as "the on-chain price, thin", that is a 5x error dressed as a fact. Without a share price
+ * to hold it against (a pre-IPO listing, an unread quote) there is no way to tell, so nothing shows.
+ */
+export function thinPool(pools: TokenPools | undefined, sharePrice: number | null | undefined): Pool | null {
+  const thin = pools?.best ? null : pools?.thin;
+  if (!thin || !sharePrice) return null;
+  return Math.abs(thin.priceUsd / sharePrice - 1) <= THIN_BAND ? thin : null;
+}
+
 type DexPair = {
   dexId: string;
   labels?: string[];
@@ -82,6 +109,9 @@ export type Pool = {
 export type TokenPools = {
   /** The deepest quotable pool — the one whose price the UI is allowed to show. */
   best: Pool | null;
+  /** When there is no `best`: the deepest priced pool above `THIN_FLOOR_USD`. Shown as a thin
+   *  price, never as THE price — no premium, no route, no sort position. */
+  thin: Pool | null;
   /** Deepest quotable pool per venue, so a visitor can compare Aerodrome against Uniswap. */
   venues: Pool[];
   poolCount: number;
@@ -176,8 +206,11 @@ export async function poolsFor(address: string, minLiq: number, full: boolean, b
   const seen = new Set<string>();
   const venues = quotable.filter((p) => (seen.has(p.venue) ? false : (seen.add(p.venue), true)));
 
+  const thin = quotable.length ? null : pools.find((p) => p.priceUsd > 0 && p.liquidityUsd >= THIN_FLOOR_USD) ?? null;
+
   return {
     best: quotable[0] ?? null,
+    thin,
     venues,
     poolCount: pools.length,
     liquidityUsd: pools.reduce((sum, p) => sum + p.liquidityUsd, 0),

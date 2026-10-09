@@ -4,7 +4,7 @@ import type { Metadata } from "next";
 
 import { readAssets } from "../../../lib/b20";
 import { marketDetail, venueLabel } from "../../../lib/market";
-import { poolsFor, MIN_LIQUIDITY_USD } from "../../../lib/pools";
+import { poolsFor, thinPool, MIN_LIQUIDITY_USD } from "../../../lib/pools";
 import { stocks } from "../../../lib/stocks";
 import { compactNumber, percent, premium, shares, since, usd, usdCompact } from "../../../lib/format";
 import { PriceChart } from "../../components/price-chart";
@@ -58,6 +58,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
   const visible = [...quotable, ...thin.slice(0, 5)];
   const hidden = thin.length - Math.min(thin.length, 5);
   const spread = premium(onChain, market?.quote?.price);
+  const thinPrice = thinPool(pools, market?.quote?.price);
   const quote = market?.quote;
   const profile = market?.profile;
 
@@ -90,8 +91,17 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
           <div className="detail-prices">
             <div className="price-block">
               <span>On-chain</span>
-              <strong>{usd(onChain)}</strong>
-              <small>{pools.best ? `${pools.best.venue}${pools.best.label ? ` ${pools.best.label}` : ""} · ${pools.best.quoteSymbol} pair` : "no quotable pool"}</small>
+              {thinPrice ? (
+                <>
+                  <strong className="is-thin">{usd(thinPrice.priceUsd)}</strong>
+                  <small>thin pool · {usdCompact(thinPrice.liquidityUsd)} on {thinPrice.venue}</small>
+                </>
+              ) : (
+                <>
+                  <strong>{usd(onChain)}</strong>
+                  <small>{pools.best ? `${pools.best.venue}${pools.best.label ? ` ${pools.best.label}` : ""} · ${pools.best.quoteSymbol} pair` : "no quotable pool"}</small>
+                </>
+              )}
             </div>
             <div className="price-block">
               <span>{venueLabel(profile?.exchange)}</span>
@@ -108,7 +118,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
               <strong className={spread === null ? undefined : spread <= 0 ? "is-up" : "is-down"}>
                 {spread === null ? "—" : percent(spread)}
               </strong>
-              <small>{spread === null ? "needs both prices" : spread >= 0 ? "token above the share" : "token below the share"}</small>
+              <small>{spread === null ? (thinPrice ? "pool too thin to quote" : "needs both prices") : spread >= 0 ? "token above the share" : "token below the share"}</small>
             </div>
           </div>
 

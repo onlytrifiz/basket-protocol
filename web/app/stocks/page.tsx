@@ -4,7 +4,7 @@ import type { Metadata } from "next";
 import { readAssets } from "../../lib/b20";
 import { marketBoard } from "../../lib/market";
 import { marketPulse } from "../../lib/blockworks";
-import { poolsForAll } from "../../lib/pools";
+import { poolsForAll, thinPool } from "../../lib/pools";
 import { percent, premium, shares, usd, usdCompact } from "../../lib/format";
 import { BrandRender } from "../components/brand-render";
 import { HubTable, type HubItem } from "../components/hub-table";
@@ -53,6 +53,7 @@ export default async function StocksPage() {
       pool,
       quote,
       onChain,
+      thin: thinPool(pool, quote?.price),
       spread: premium(onChain, quote?.price),
       series: asset.ticker ? market.series[asset.ticker] : undefined,
     };
@@ -73,7 +74,7 @@ export default async function StocksPage() {
   const poolCount = rows.reduce((sum, r) => sum + (r.pool?.poolCount ?? 0), 0);
 
   // One renderer for every row, whatever view or order the table puts it in.
-  const hubRow = ({ asset, pool, quote, onChain, spread, series }: (typeof rows)[number]) => (
+  const hubRow = ({ asset, pool, quote, onChain, thin, spread, series }: (typeof rows)[number]) => (
     <Link
       className="hub-row"
       href={`/stocks/${asset.symbol.toLowerCase()}`}
@@ -90,8 +91,19 @@ export default async function StocksPage() {
       </span>
 
       <span className="hub-num" data-label="On-chain" role="cell">
-        <b>{usd(onChain)}</b>
-        <small>{pool?.best ? `${pool.best.venue}${pool.best.label ? ` ${pool.best.label}` : ""}` : "no market"}</small>
+        {/* A thin pool's price is shown, greyed and labelled with its depth, rather than a dash
+            that reads as "no market" — see THIN_FLOOR_USD. It never feeds the premium. */}
+        {thin ? (
+          <>
+            <b className="is-thin">{usd(thin.priceUsd)}</b>
+            <small>thin · {usdCompact(thin.liquidityUsd)}</small>
+          </>
+        ) : (
+          <>
+            <b>{usd(onChain)}</b>
+            <small>{pool?.best ? `${pool.best.venue}${pool.best.label ? ` ${pool.best.label}` : ""}` : pool?.poolCount ? "no price" : "no market"}</small>
+          </>
+        )}
       </span>
 
       <span className="hub-num" data-label="Nasdaq" role="cell">
@@ -223,7 +235,8 @@ export default async function StocksPage() {
               A B20 equity is a claim on a real share, so its on-chain price should track the Nasdaq
               print. It often does not: thin pools drift, and the spread is what a trader is actually
               paying or collecting. Only pools holding at least $5,000 are allowed to set the on-chain
-              price — below that a single retail-sized order <em>is</em> the price.
+              price — below that a single retail-sized order <em>is</em> the price. A thinner pool&apos;s
+              price is still shown, in grey with its depth, and never sets a premium.
             </p>
           </details>
           <details>
