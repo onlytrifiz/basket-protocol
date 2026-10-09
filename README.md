@@ -158,6 +158,41 @@ The active index is **read from the chain**, never from this file: `stocksLength
 | SEZLc | Sezzle | `0xb2000000000000000000000c1f8acd3c4496a762` |
 | WDCc | Western Digital | `0xb2000000000000000000008fde21a1f5c69fec0b` |
 | XXIc | Twenty One Capital | `0xb200000000000000000000115bf2283265fb04db` |
+| ARMc | Arm Holdings plc | `0xb20000000000000000000026215d755356e5043f` |
+| BIDUc | Baidu | `0xb200000000000000000000d2b7d9aee52f6c6bef` |
+| BILIc | Bilibili | `0xb200000000000000000000ca7c6d1438e7245eb6` |
+| BUDc | Anheuser-Busch InBev SA/NV | `0xb200000000000000000000c36ce081dd09e86ca2` |
+| CANc | Canaan | `0xb200000000000000000000f32d61ba597eddfbfd` |
+| CBRSc | Cerebras Systems | `0xb200000000000000000000720133eedf525f93e2` |
+| CVNAc | Carvana Co. | `0xb200000000000000000000ffb10718f880a48274` |
+| FWDIc | Forward Industries | `0xb2000000000000000000001e838d4beb66cf8fb7` |
+| GAMEc | GameSquare Holdings | `0xb2000000000000000000005550e8506124236271` |
+| GEMIc | Gemini Space Station | `0xb2000000000000000000009c52748e1d1cbd5fd6` |
+| HSAIc | Hesai Group | `0xb200000000000000000000f3049f4aa834b23b64` |
+| INFYc | Infosys Limited | `0xb200000000000000000000f6b0417af5f52341fc` |
+| LIc | Li Auto | `0xb200000000000000000000d61efd9f54a23ef9eb` |
+| MNSTc | Monster Beverage Corporation | `0xb2000000000000000000005bcde0a6926919fef9` |
+| NIOc | NIO | `0xb2000000000000000000002d2b5dc53c61f1ba06` |
+| NOKc | Nokia Corporation | `0xb2000000000000000000005ac674f707e357409c` |
+| NOWc | ServiceNow | `0xb20000000000000000000082cd2c7801305808df` |
+| NVOc | Novo Nordisk A/S | `0xb2000000000000000000008d5328e9208773dc58` |
+| PDDc | PDD Holdings | `0xb200000000000000000000c8a7223510467d8563` |
+| PURRc | Hyperliquid Strategies | `0xb20000000000000000000065ca0f772a5502e976` |
+| RDWc | Redwire Corporation | `0xb200000000000000000000cd7dfaef0423f1f103` |
+| RKLBc | Rocket Lab Corporation | `0xb200000000000000000000e8e50cbbb9a3861a3c` |
+| SANc | Banco Santander, S.A. | `0xb20000000000000000000017bb66e9301e913a99` |
+| SAPc | SAP SE | `0xb200000000000000000000da6f64c306234127e0` |
+| SBETc | Sharplink | `0xb200000000000000000000559ec0bedaacf436ea` |
+| SEc | Sea Limited | `0xb2000000000000000000003088798f6d0722aaac` |
+| SGc | Sweetgreen | `0xb200000000000000000000b57f99acec3a7490d0` |
+| SKHYc | SK hynix | `0xb200000000000000000000187f7071d6e321a7d2` |
+| SOFIc | SoFi Technologies | `0xb2000000000000000000003ef37a7c863dc1482a` |
+| SONYc | Sony Group Corporation | `0xb200000000000000000000a26326a922ffa87f6c` |
+| ULc | Unilever Plc | `0xb200000000000000000000349ef3aa93a0897476` |
+| Uc | Unity Software | `0xb200000000000000000000902f48cba1f39149f7` |
+| VALEc | Vale S.A. | `0xb20000000000000000000063376b142c0764b489` |
+| WMTc | Walmart | `0xb2000000000000000000008a7508619c717a7106` |
+| WRDc | WeRide | `0xb200000000000000000000e88efe88d8ade3f0da` |
 
 Every one of these was created through the B20 factory (`0xB20f…0000`) by the same issuer account, `0xe090ecbee12d4b6aee5e73ff60945f2545ef5c6f`. Anyone can create a B20, and the factory has minted tens of thousands of them, so a symbol match proves nothing. Before adding a listing, check its creator in the factory's creation log.
 
