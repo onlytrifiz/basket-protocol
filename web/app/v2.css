@@ -779,3 +779,99 @@ h3 { font-weight: 600; letter-spacing: -.025em; }
   width: min(100%, max(4px, calc(var(--share) * 2.4px)));
 }
 .index-universe .universe-body { align-items: center; gap: 28px; }
+
+/* ---------- Theme toggle (sun and moon in a tiny sky) --------------------- */
+.theme-toggle.sky-toggle {
+  border: 1px solid var(--line-2);
+  height: 38px;
+  isolation: isolate;
+  overflow: hidden;
+  position: relative;
+  transition: filter .2s var(--ease);
+  width: 38px;
+}
+.theme-toggle.sky-toggle:hover { filter: brightness(1.12); transform: none; }
+.sky-layer { inset: 0; pointer-events: none; position: absolute; z-index: -1; }
+.sky-layer.is-night { background: linear-gradient(180deg, #090f2a 0%, #16204b 60%, #2a2f66 100%); }
+.sky-layer.is-day { background: linear-gradient(180deg, #4ea8ff 0%, #9fd3ff 60%, #e3f3ff 100%); }
+.sky-star { background: #fff; border-radius: 50%; opacity: .6; position: absolute; }
+.sky-body { align-items: center; display: flex; inset: 0; justify-content: center; pointer-events: none; position: absolute; }
+.sky-body svg { height: 50%; width: 50%; }
+.sky-body.is-moon { color: #fde68a; filter: drop-shadow(0 0 6px rgba(252, 211, 77, .6)); }
+.sky-body.is-sun { color: #fb923c; filter: drop-shadow(0 0 8px rgba(251, 146, 60, .7)); }
+@media (max-width: 359px) { .theme-toggle.sky-toggle { height: 32px; width: 32px; } }
+
+/* ---------- /stocks: the updates chip and the market card ---------------- */
+
+/* Inside the heading canvas now, as its first line: a chip in Telegram's blue at low strength, with
+   the mark on a solid disc of that blue so it still reads as Telegram at a glance. */
+.hub-head-copy > .updates-pill {
+  background: rgba(34, 158, 217, .12);
+  border: 1px solid rgba(34, 158, 217, .42);
+  box-shadow: none;
+  color: var(--ink);
+  font-size: .8rem;
+  gap: 10px;
+  margin-bottom: 24px;
+  padding: 5px 14px 5px 5px;
+}
+.hub-head-copy > .updates-pill:hover { background: rgba(34, 158, 217, .22); box-shadow: none; }
+.hub-head-copy > .updates-pill svg { background: #229ed9; border-radius: 50%; height: 26px; padding: 5px; width: 26px; }
+.hub-head-copy > .updates-pill b { color: #229ed9; opacity: 1; }
+:root[data-theme="dark"] .hub-head-copy > .updates-pill b { color: #6cc4ef; }
+
+/* The pointer to the market charts: a card on the rail under the stats panel, in the desk material
+   of the section it opens, instead of a full-bleed strip fused to the panel's underside. */
+.mkt-teaser { background: none; border: 0; margin: 12px auto 0; max-width: var(--maxw); padding: 0 24px; }
+.mkt-teaser:hover { background: none; }
+.mkt-teaser:focus-visible { outline: none; }
+.mkt-teaser:focus-visible .mkt-teaser-inner { outline: 2px solid var(--blue); outline-offset: 2px; }
+.mkt-teaser-inner {
+  background: radial-gradient(90% 170% at 0% -40%, var(--desk-sheen) 0%, transparent 62%), var(--desk);
+  border: 1px solid var(--desk-line);
+  border-radius: var(--r-lg);
+  display: grid;
+  gap: 8px 24px;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  max-width: none;
+  padding: 14px 14px 14px 24px;
+  transition: background-color .2s var(--ease);
+}
+.mkt-teaser:hover .mkt-teaser-inner { background-color: var(--desk-2); }
+.mkt-teaser-copy { white-space: normal; }
+.mkt-teaser-go {
+  background: rgba(255, 255, 255, .07);
+  border: 1px solid var(--desk-line-2);
+  border-radius: var(--r-pill);
+  color: var(--desk-fg);
+  font: 550 .82rem var(--ui-stack);
+  letter-spacing: 0;
+  padding: 9px 16px;
+}
+@media (max-width: 860px) {
+  .mkt-teaser-inner { grid-template-columns: minmax(0, 1fr); padding: 18px; }
+  .mkt-teaser-copy { display: block; }
+  .mkt-teaser-go { justify-self: start; }
+}
+@media (max-width: 660px) { .mkt-teaser { padding: 0 20px; } }
+@media (max-width: 440px) { .mkt-teaser-inner { gap: 10px; padding: 18px; } }
+.mkt-teaser { max-width: calc(var(--maxw) + 48px); }
+@media (max-width: 660px) {
+  .hub-head-copy > .updates-pill { align-items: center; border-radius: 20px; }
+  .hub-head-copy > .updates-pill span { white-space: normal; }
+}
+
+/* ---------- The loop's 3D marks ----------------------------------------- */
+.loop-step { align-items: center; grid-template-columns: 112px minmax(0, 1fr); }
+.loop-steps::before { left: 55px; width: 1px; }
+.loop-art { display: block; height: 112px; position: relative; width: 112px; }
+.loop-art img { filter: drop-shadow(0 18px 22px rgba(0, 20, 80, .35)); height: 100%; scale: 1.25; transition: transform .4s var(--ease-out); width: 100%; }
+.loop-step:hover .loop-art img { transform: translateY(-4px) rotate(-3deg); }
+.loop-number { color: var(--link); display: block; font: 500 .7rem var(--mono-stack); letter-spacing: .12em; margin-bottom: 6px; }
+.loop-step.is-lit .loop-number { color: var(--payout-fg); }
+@media (max-width: 660px) {
+  .loop-step { grid-template-columns: 80px minmax(0, 1fr); }
+  .loop-art { height: 80px; width: 80px; }
+  .loop-steps::before { left: 39px; }
+}
+@media (prefers-reduced-motion: reduce) { .loop-step:hover .loop-art img { transform: none; } }

@@ -9,7 +9,6 @@ import { marketBoard } from "../lib/market";
 import { stockByAddress, stocks, washColor } from "../lib/stocks";
 import { readVault } from "../lib/vault";
 import { IndexUniverse } from "./components/index-universe";
-import { RingMarker } from "./components/segment-ring";
 import { StockLogo } from "./components/stock-logo";
 import { SiteFooter, SiteHeader } from "./components/site-chrome";
 import { StockMarquee } from "./components/stock-marquee";
@@ -71,12 +70,13 @@ const products = [
   },
 ] as const;
 
-/* `filled` advances the ring across the loop; only the final step is a payout,
-   so it is the only one allowed to light a segment lime. */
+/* Each step carries its own 3D mark, generated to match the site's coin renders: the STFY coin
+   changing hands, the vault taking in stock, a wallet receiving it. Only the last is lit lime,
+   because it is the only step where value reaches a holder. */
 const mechanics = [
-  { number: "01", filled: 3, lit: false, title: "Trade STFY", copy: "The ETH / STFY v4 market is designed to collect a 3% hook fee on trading." },
-  { number: "02", filled: 6, lit: false, title: "Acquire the index", copy: "A keeper routes 90% of each collected hook fee into the active Base B20 equity index." },
-  { number: "03", filled: 8, lit: true, title: "Receive the stocks", copy: "The dividend vault pushes each acquired asset pro-rata to eligible STFY holders." },
+  { number: "01", art: "/icons/loop-trade.png", lit: false, title: "Trade STFY", copy: "The ETH / STFY v4 market is designed to collect a 3% hook fee on trading." },
+  { number: "02", art: "/icons/loop-acquire.png", lit: false, title: "Acquire the index", copy: "A keeper routes 90% of each collected hook fee into the active Base B20 equity index." },
+  { number: "03", art: "/icons/loop-receive.png", lit: true, title: "Receive the stocks", copy: "The dividend vault pushes each acquired asset pro-rata to eligible STFY holders." },
 ];
 
 export default async function Home() {
@@ -257,8 +257,11 @@ export default async function Home() {
           <ol className="loop-steps">
             {mechanics.map((step) => (
               <li className={`loop-step reveal${step.lit ? " is-lit" : ""}`} key={step.number}>
-                <RingMarker filled={step.filled} label={step.number} lit={step.lit} />
+                <span aria-hidden="true" className="loop-art">
+                  <Image alt="" height={112} sizes="112px" src={step.art} width={112} />
+                </span>
                 <div>
+                  <span className="loop-number">{step.number}</span>
                   <h3>{step.title}</h3>
                   <p>{step.copy}</p>
                 </div>

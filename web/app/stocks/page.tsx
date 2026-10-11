@@ -172,9 +172,11 @@ export default async function StocksPage() {
     <div className="site-shell">
       <SiteHeader active="stocks" />
       <main>
-        <div className="updates-row wrap"><UpdatesPill /></div>
         <header className="section wrap hub-head">
           <div className="hub-head-copy">
+            {/* The updates channel, inside the canvas it announces rather than floating over its
+                edge: the first thing in the heading, above the eyebrow, at chip size. */}
+            <UpdatesPill />
             <p className="eyebrow">BASE · B20 UNIVERSE</p>
             <h1>Every tokenized stock on Base.</h1>
             <p className="hub-lede">

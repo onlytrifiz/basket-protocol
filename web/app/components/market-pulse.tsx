@@ -22,8 +22,8 @@ export function MarketPulseTeaser({ kpis }: { kpis: PulseKpis }) {
       <span className="mkt-teaser-inner">
         <span className="mkt-teaser-label">Also here · The whole Base market</span>
         <span className="mkt-teaser-copy">
-          <b>{usdCompact(kpis.supplyUsd)}</b> of tokenized equities from <b>4</b> issuers — supply,
-          DEX volume, lending and holders, charted below
+          <b>{usdCompact(kpis.supplyUsd)}</b> of tokenized equities from <b>4</b> issuers. Supply,
+          DEX volume, lending and holders, charted below.
         </span>
         <span className="mkt-teaser-go">Jump to the charts <i aria-hidden="true">↓</i></span>
       </span>
