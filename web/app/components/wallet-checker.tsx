@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useRef, useState } from "react";
+import type React from "react";
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 
 import { shares as fmtShares, usdCompact } from "../../lib/format";
 import type { WalletDividends } from "../../lib/wallet-dividends";
@@ -23,21 +24,28 @@ type State =
   | { kind: "done"; recap: WalletDividends };
 
 /**
- * The wallet checker, inside /dividends rather than on a page of its own: paste an address or use
- * the connected one, and the recap opens right here. The address is written into the URL
- * (`?wallet=…#wallet`) without navigating, so the result is still a link someone can send, and a
- * link like that loads the recap on arrival.
+ * The wallet checker on /dividends, in two pieces that share one state: the lookup bar sits in the
+ * page's heading, and the recap opens directly under the heading once something is asked. Before a
+ * lookup the page is exactly as it was.
  *
- * Data comes from /api/wallet: one filtered explorer request per stock and a single chain batch,
- * cached per wallet for ten minutes (see lib/wallet-dividends).
+ * The address is written into the URL (`?wallet=…`) without navigating, so a recap is still a link
+ * someone can send, and a link like that loads it on arrival. Data comes from /api/wallet: one
+ * filtered explorer request per stock and a single chain batch, cached per wallet for ten minutes.
  */
-export function WalletChecker() {
-  const { account, connect, isConnecting } = useWallet();
+type Checker = { state: State; value: string; setValue: (v: string) => void; load: (raw: string) => void; clear: () => void; resultRef: React.RefObject<HTMLDivElement | null> };
+const CheckerContext = createContext<Checker | null>(null);
+const useChecker = () => {
+  const value = useContext(CheckerContext);
+  if (!value) throw new Error("WalletCheck pieces must sit inside <WalletCheckProvider>");
+  return value;
+};
+
+export function WalletCheckProvider({ children }: { children: React.ReactNode }) {
   const [value, setValue] = useState("");
   const [state, setState] = useState<State>({ kind: "idle" });
-  const resultRef = useRef<HTMLDivElement>(null);
+  const resultRef = useRef<HTMLDivElement | null>(null);
 
-  const load = useCallback(async (raw: string, scroll = true) => {
+  const run = useCallback(async (raw: string, scroll: boolean) => {
     const address = raw.trim().toLowerCase();
     if (!isAddress(address)) {
       setState({ kind: "error", message: "That is not a wallet address. It starts with 0x and has 42 characters." });
@@ -47,7 +55,7 @@ export function WalletChecker() {
     setState({ kind: "loading", address });
     const url = new URL(window.location.href);
     url.searchParams.set("wallet", address);
-    url.hash = "wallet";
+    url.hash = "";
     window.history.replaceState(null, "", url);
     if (scroll) requestAnimationFrame(() => resultRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }));
     try {
@@ -63,53 +71,80 @@ export function WalletChecker() {
   // A shared link (?wallet=0x…) opens with its recap already loading.
   useEffect(() => {
     const shared = new URL(window.location.href).searchParams.get("wallet");
-    if (shared && isAddress(shared)) void load(shared, false);
-  }, [load]);
+    if (shared && isAddress(shared)) void run(shared, false);
+  }, [run]);
+
+  const load = useCallback((raw: string) => { void run(raw, true); }, [run]);
+  const clear = useCallback(() => {
+    setState({ kind: "idle" });
+    setValue("");
+    const url = new URL(window.location.href);
+    url.searchParams.delete("wallet");
+    window.history.replaceState(null, "", url);
+    document.getElementById("wallet")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, []);
+  return <CheckerContext.Provider value={{ state, value, setValue, load, clear, resultRef }}>{children}</CheckerContext.Provider>;
+}
+
+/** The lookup bar, for the page heading: one pill holding the field and both actions. */
+export function WalletCheckForm() {
+  const { state, value, setValue, load } = useChecker();
+  const { account, connect, isConnecting } = useWallet();
 
   const useMine = async () => {
     try {
-      void load(account ?? await connect());
+      load(account ?? await connect());
     } catch {
-      setState({ kind: "error", message: "The wallet did not connect." });
+      /* the wallet did not connect: nothing to look up */
     }
   };
 
   return (
-    <section className="section wrap wallet-checker" id="wallet">
-      <div className="section-head">
-        <p className="eyebrow">Your payouts</p>
-        <h2>What has your wallet received?</h2>
-        <p>Paste any address, or use the one you are connected with. Every stock the vault has pushed to it, all time, at today&apos;s prices.</p>
-      </div>
-
-      <form className="wallet-lookup" onSubmit={(event) => { event.preventDefault(); void load(value); }}>
+    <form className="wallet-bar" id="wallet" onSubmit={(event) => { event.preventDefault(); load(value); }}>
+      <span className="wallet-bar-label">Check a wallet</span>
+      <div className="wallet-bar-field">
         <label className="sr-only" htmlFor="wallet-address">Wallet address</label>
         <input
           autoComplete="off"
           id="wallet-address"
           onChange={(event) => setValue(event.target.value)}
-          placeholder="Paste a wallet address, 0x…"
+          placeholder="Paste an address, 0x…"
           spellCheck={false}
           value={value}
         />
-        <button className="button button-ink" disabled={state.kind === "loading"} type="submit">Show payouts</button>
-        <button className="button button-ghost" disabled={isConnecting} onClick={useMine} type="button">
-          {isConnecting ? "Connecting" : account ? "Use my wallet" : "Connect wallet"}
+        <button className="wallet-bar-go" disabled={state.kind === "loading"} type="submit">
+          {state.kind === "loading" ? "Loading" : "Show payouts"}
         </button>
-        {state.kind === "error" && <p className="wallet-lookup-error" role="alert">{state.message}</p>}
-      </form>
-
-      <div aria-live="polite" className="wallet-result" ref={resultRef}>
-        {state.kind === "loading" && (
-          <div aria-busy="true" className="wallet-recap is-loading">
-            <span className="sr-only">Loading payouts for {short(state.address)}</span>
-            <i aria-hidden="true" className="sk sk-block" />
-            <i aria-hidden="true" className="sk sk-block" />
-          </div>
-        )}
-        {state.kind === "done" && <Recap recap={state.recap} />}
       </div>
-    </section>
+      <button className="wallet-bar-mine" disabled={isConnecting} onClick={useMine} type="button">
+        {isConnecting ? "Connecting" : account ? "or use my wallet" : "or connect your wallet"}
+      </button>
+      {state.kind === "error" && <p className="wallet-lookup-error" role="alert">{state.message}</p>}
+    </form>
+  );
+}
+
+/** The recap, under the heading. Renders nothing until a lookup starts. */
+export function WalletCheckResult() {
+  const { state, resultRef, clear } = useChecker();
+  const open = state.kind === "loading" || state.kind === "done";
+  return (
+    <div aria-live="polite" className={`wallet-result wrap${open ? " is-open" : ""}`} id="wallet-result" ref={resultRef}>
+      {open && (
+        <div className="wallet-result-head">
+          <span>Payouts to {short(state.kind === "loading" ? state.address : state.recap.address)}</span>
+          <button onClick={clear} type="button">Clear ×</button>
+        </div>
+      )}
+      {state.kind === "loading" && (
+        <div aria-busy="true" className="wallet-recap is-loading">
+          <span className="sr-only">Loading payouts for {short(state.address)}</span>
+          <i aria-hidden="true" className="sk sk-block" />
+          <i aria-hidden="true" className="sk sk-block" />
+        </div>
+      )}
+      {state.kind === "done" && <Recap recap={state.recap} />}
+    </div>
   );
 }
 

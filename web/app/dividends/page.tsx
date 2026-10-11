@@ -13,7 +13,7 @@ import { BrandRender } from "../components/brand-render";
 import { CycleProgress } from "../components/cycle-progress";
 import { StepsRail } from "../components/steps-rail";
 import { CountUp } from "../components/count-up";
-import { WalletChecker } from "../components/wallet-checker";
+import { WalletCheckForm, WalletCheckProvider, WalletCheckResult } from "../components/wallet-checker";
 import { SiteFooter, SiteHeader } from "../components/site-chrome";
 
 export const metadata: Metadata = {
@@ -177,6 +177,7 @@ export default async function DividendPage({ searchParams }: PageProps<"/dividen
     <div className="site-shell">
       <SiteHeader active="dividends" />
       <main>
+        <WalletCheckProvider>
         <header className="section wrap hub-head">
           <div className="hub-head-copy">
             <p className="eyebrow">DIVIDEND DESK</p>
@@ -185,12 +186,12 @@ export default async function DividendPage({ searchParams }: PageProps<"/dividen
               Which equities the vault bought, in what proportion, and how much of each has reached
               holders. The vault empties every cycle, so what matters is what left it.
             </p>
-            <div className="hub-head-cta">
-              <a className="button button-ink" href="#wallet">Check a wallet <span aria-hidden="true">↓</span></a>
-            </div>
+            <WalletCheckForm />
           </div>
           <BrandRender className="hub-render" priority size={340} src="/distributions.png" />
         </header>
+
+        <WalletCheckResult />
 
         <section className="stats-band" aria-label="Vault state">
           <div className="stats-inner">
@@ -234,8 +235,6 @@ export default async function DividendPage({ searchParams }: PageProps<"/dividen
             </div>
           </div>
         </section>
-
-        <WalletChecker />
 
 
         <section className="section wrap hub-section">
@@ -464,6 +463,7 @@ export default async function DividendPage({ searchParams }: PageProps<"/dividen
           <div><p className="eyebrow">NEXT</p><h2>Read the operating model.</h2></div>
           <Link className="button button-ink" href="/docs">Documentation <span>→</span></Link>
         </section>
+      </WalletCheckProvider>
       </main>
       <SiteFooter />
     </div>
