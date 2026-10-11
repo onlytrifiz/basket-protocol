@@ -217,10 +217,21 @@ export function WalletProvider({ children }: { children: React.ReactNode }) {
     try {
       const injected = window.ethereum;
       if (injected) {
-        await ensureBase(injected);
-        const accounts = await injected.request({ method: "eth_requestAccounts" }) as string[];
+        // Accounts first, then the chain. Switching before the site is connected makes MetaMask open
+        // a permissions prompt of its own, and the account prompt then queues behind it: two popups
+        // for one click, and a second click while either is open fails with -32002.
+        let accounts: string[];
+        try {
+          accounts = await injected.request({ method: "eth_requestAccounts" }) as string[];
+        } catch (error) {
+          if ((error as { code?: number }).code === -32002) {
+            throw new Error("Your wallet already has a connection request open. Finish it in the wallet window.");
+          }
+          throw error;
+        }
         const next = accounts[0];
         if (!next) throw new Error("No wallet account was selected.");
+        await ensureBase(injected);
         setAccount(next);
         return next;
       }
