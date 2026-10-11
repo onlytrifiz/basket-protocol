@@ -80,9 +80,14 @@ export function ThemeToggle() {
   const flight = useRef<Animation[]>([]);
   const committed = useRef({ theme, mounted });
 
+  /* The page's theme can change without this button: the boot script in layout.tsx follows the
+     system preference live. Watching the attribute keeps the sun and moon in step with it. */
   useEffect(() => {
     setTheme(readTheme());
     setMounted(true);
+    const observer = new MutationObserver(() => setTheme(readTheme()));
+    observer.observe(document.documentElement, { attributeFilter: ["data-theme"], attributes: true });
+    return () => observer.disconnect();
   }, []);
 
   useLayoutEffect(() => {
@@ -136,8 +141,12 @@ export function ThemeToggle() {
     const next: Theme = theme === "dark" ? "light" : "dark";
     setTheme(next);
     document.documentElement.setAttribute("data-theme", next);
+    /* A choice that matches the system is not an override: clearing it hands the page back to the
+       system, so a reader who flips away and back is not pinned to a theme forever. */
+    const system: Theme = window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
     try {
-      localStorage.setItem(STORAGE_KEY, next);
+      if (next === system) localStorage.removeItem(STORAGE_KEY);
+      else localStorage.setItem(STORAGE_KEY, next);
     } catch {
       /* private mode: the choice simply does not persist */
     }

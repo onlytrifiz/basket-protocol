@@ -65,14 +65,17 @@ export const viewport: Viewport = {
   // Lets the mobile bottom bar sit above the home indicator via env(safe-area-inset-bottom).
   viewportFit: "cover",
   themeColor: [
-    { media: "(prefers-color-scheme: light)", color: "#050a16" },
+    { media: "(prefers-color-scheme: light)", color: "#f4f5f8" },
     { media: "(prefers-color-scheme: dark)", color: "#050a16" },
   ],
 };
 
-/* Applied before first paint so a stored theme never flashes the other palette. The server renders
-   dark, which is the site's default since 2.0; this only ever switches a reader who chose light. */
-const themeBoot = `(function(){try{var t=localStorage.getItem("stfy-theme");if(t==="dark"||t==="light"){document.documentElement.setAttribute("data-theme",t)}}catch(e){}})()`;
+/* THE THEME FOLLOWS THE READER'S SYSTEM. Run before first paint, so no palette flashes:
+   - a choice made with the toggle (`stfy-theme`) wins;
+   - otherwise the OS preference decides, and keeps deciding: a system that switches to dark at
+     sunset switches the open page with it.
+   The server renders dark, the default for a reader whose browser reports no preference. */
+const themeBoot = `(function(){try{var d=document.documentElement,m=window.matchMedia("(prefers-color-scheme: dark)"),k="stfy-theme";var s=function(){var t=null;try{t=localStorage.getItem(k)}catch(e){}d.setAttribute("data-theme",t==="dark"||t==="light"?t:(m.matches?"dark":"light"))};s();m.addEventListener("change",function(){var t=null;try{t=localStorage.getItem(k)}catch(e){}if(t!=="dark"&&t!=="light")s()})}catch(e){}})()`;
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
