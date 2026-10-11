@@ -304,8 +304,6 @@ export default async function Home() {
               <dl className="buy-facts">
                 <div><dt>Hook fee</dt><dd>3%</dd><small>on every STFY trade</small></div>
                 <div><dt>To stocks</dt><dd>90%</dd><small>of each hook fee</small></div>
-                <div><dt>LP fee</dt><dd>1%</dd><small>to v4 liquidity providers</small></div>
-                <div><dt>Supply</dt><dd>1B</dd><small>STFY, fixed</small></div>
               </dl>
               <Link className="text-link" href="/docs">How the protocol works <span aria-hidden="true">→</span></Link>
             </div>
