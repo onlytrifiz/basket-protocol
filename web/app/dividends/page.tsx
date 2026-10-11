@@ -353,13 +353,16 @@ export default async function DividendPage({ searchParams }: PageProps<"/dividen
                     <span className="cycle-assets">
                       {cycle.bought.length ? cycle.bought.map((b) => {
                         const asset = byAddress.get(b.address.toLowerCase());
+                        // An index member that is not a B20 (STONKEX) is not in the listing.
+                        const extra = indexAsset(b.address);
+                        const logo = asset?.logo ?? extra?.logo;
                         return (
                           // A bare <img>, not <StockLogo>: nested in two flex containers the shared
                           // component's percentage sizing collapsed the mark to zero width, and its
                           // white chip is wrong on this dark panel anyway.
-                          <span className="cycle-asset" key={b.address} title={asset?.symbol ?? b.address}>
-                            {asset?.logo
-                              ? <img alt="" className="cycle-mark" loading="lazy" src={asset.logo} />
+                          <span className="cycle-asset" key={b.address} title={asset?.symbol ?? extra?.symbol ?? b.address}>
+                            {logo
+                              ? <img alt="" className="cycle-mark" loading="lazy" src={logo} />
                               : <span className="cycle-mark cycle-mark-blank" />}
                             {fmtShares(toUnits(b.receivedRaw, scaleOf(b.address)))}
                           </span>
