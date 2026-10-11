@@ -263,20 +263,22 @@ export function StockStage({ stocks, variant = "panel" }: { stocks: StageStock[]
                 type="button"
               >
                 <span aria-hidden="true" className="stage-card-body">
+                  {/* A member card, landscape: the issuer and the network across the top, the
+                      company's mark, and its name with the card number along the bottom. */}
                   <span className="stage-card-face">
                     <span className="stage-card-top">
+                      <span className="stage-card-issuer">Stockify</span>
                       <span>{stock.tag ?? "B20 / BASE"}</span>
-                      <span>{String(index + 1).padStart(2, "0")}</span>
                     </span>
-                    {/* The ticker in outline, behind the mark. It is the card's texture rather than
-                        its label — the readable one is in the strip below and in aria-label. */}
-                    <span className="stage-card-ghost">{stock.symbol.replace(/c$/, "")}</span>
-                    <span className="stage-card-emblem">
+                    <span className="stage-card-mid">
                       <StockLogo logo={stock.logo} size="large" stock={stock} />
                     </span>
-                    <span className="stage-card-foot">
-                      {/* The name only: a second line ("In the dividends") crowded the card on phones. */}
-                      <strong>{stock.name}</strong>
+                    <span className="stage-card-bottom">
+                      <span className="stage-card-holder">
+                        <small>{stock.symbol}</small>
+                        <strong>{stock.name}</strong>
+                      </span>
+                      <span className="stage-card-no">Nº {String(index + 1).padStart(2, "0")}</span>
                     </span>
                   </span>
                 </span>

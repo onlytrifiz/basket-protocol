@@ -1486,9 +1486,6 @@ img[src*="/partners/stonks-exchange"] { image-rendering: pixelated; }
   .index-mosaic .mosaic-col a { align-items: flex-start; flex-direction: column; gap: 8px; height: auto; padding: 10px; }
 }
 
-/* The emblem sat on the card's floor once the subtitle line was gone: lift it part of the way,
-   keeping it clear of the ghost ticker above. */
-.stage-card-emblem { padding: 4px 0 5%; }
 
 /* ---------- Index detail: hero canvas, activity column, facts sidebar ------- */
 .idx-top { padding-top: 28px; }
@@ -1696,3 +1693,111 @@ img[src*="/partners/stonks-exchange"] { image-rendering: pixelated; }
 .idx-stonks-link img { border-radius: 3px; }
 .idx-stonks-short { display: none; }
 @media (max-width: 480px) { .idx-stonks-full { display: none; } .idx-stonks-short { display: inline; } }
+
+/* ---------- Hero cards as member cards ----------------------------------------
+   Landscape at the ISO card ratio (1.586). Every size inside is a fraction of --card-w, so one
+   variable per breakpoint scales the whole card and nothing has to be re-tuned per screen. */
+.stock-stage.is-band {
+  --card-w: 248px; --card-h: 156px;
+  --fan-x1: 150px; --fan-z1: -68px;
+  --fan-x2: 296px; --fan-z2: -116px;
+  --fan-x3: 440px; --fan-z3: -142px;
+}
+.stock-stage.is-band .stage-floor { height: 262px; }
+.stock-stage.is-band .stage-card { top: 44px; }
+@media (max-width: 1200px) {
+  .stock-stage.is-band { --card-w: 232px; --card-h: 146px; --fan-x1: 140px; --fan-x2: 278px; --fan-x3: 414px; }
+  .stock-stage.is-band .stage-floor { height: 250px; }
+}
+@media (max-width: 1000px) {
+  .stock-stage.is-band { --card-w: 216px; --card-h: 136px; --fan-x1: 130px; --fan-x2: 259px; --fan-x3: 386px; }
+  .stock-stage.is-band .stage-floor { height: 240px; }
+}
+@media (max-width: 760px) {
+  .stock-stage.is-band { --card-w: 196px; --card-h: 124px; --fan-x1: 104px; --fan-x2: 206px; --fan-x3: 306px; }
+  .stock-stage.is-band .stage-floor { height: 222px; }
+  .stock-stage.is-band .stage-card { top: 36px; }
+}
+@media (max-width: 420px) {
+  .stock-stage.is-band { --card-w: 172px; --card-h: 108px; --fan-x1: 86px; --fan-x2: 170px; --fan-x3: 252px; }
+  .stock-stage.is-band .stage-floor { height: 200px; }
+  .stock-stage.is-band .stage-card { top: 32px; }
+}
+
+.stage-card { border-radius: calc(var(--card-w) * .058); }
+.stage-card-body { padding: 1.5px; }
+.stage-card-face {
+  background:
+    linear-gradient(135deg,
+      color-mix(in srgb, var(--brand) 78%, #0b1630) 0%,
+      color-mix(in srgb, var(--brand) 46%, #050a16) 100%);
+  border-radius: calc(var(--card-w) * .052);
+  color: #fff;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  padding: calc(var(--card-w) * .06) calc(var(--card-w) * .068);
+}
+/* Guilloché: fine concentric rings from opposite corners, the pattern on certificates and
+   membership cards, under a light sheen so a tilted card catches the light unevenly. */
+.stage-card-face::before {
+  background:
+    linear-gradient(118deg, rgba(255, 255, 255, .22), transparent 32% 64%, rgba(255, 255, 255, .08)),
+    repeating-radial-gradient(circle at 112% -30%, rgba(255, 255, 255, .09) 0 1px, transparent 1px 6px),
+    repeating-radial-gradient(circle at -20% 140%, rgba(255, 255, 255, .06) 0 1px, transparent 1px 8px);
+  z-index: -1;
+}
+/* The centred card gets a soft foil stripe. */
+.stage-card-face::after {
+  background: linear-gradient(100deg, transparent 58%, rgba(255, 214, 240, .2) 66%,
+    rgba(190, 236, 255, .22) 72%, rgba(255, 246, 200, .18) 78%, transparent 84%);
+  z-index: -1;
+}
+
+.stage-card .stage-card-top {
+  color: rgba(255, 255, 255, .72);
+  font: 500 calc(var(--card-w) * .038) var(--mono-stack);
+  letter-spacing: .08em;
+}
+.stage-card .stage-card-top > span:last-child { color: rgba(255, 255, 255, .72); }
+.stage-card-issuer {
+  color: #fff;
+  font: 800 calc(var(--card-w) * .062) var(--display-stack);
+  letter-spacing: -.03em;
+}
+
+.stage-card-mid { align-items: center; display: flex; min-height: 0; }
+.stage-card .stage-card-mid .stock-logo {
+  border: 0;
+  border-radius: calc(var(--card-w) * .05);
+  box-shadow: 0 0 0 calc(var(--card-w) * .012) rgba(255, 255, 255, .22), 0 6px 14px rgba(0, 0, 0, .28);
+  height: calc(var(--card-w) * .2);
+  width: calc(var(--card-w) * .2);
+}
+
+.stage-card-bottom { align-items: end; display: flex; gap: 8px; justify-content: space-between; min-width: 0; }
+.stage-card-holder { display: flex; flex-direction: column; min-width: 0; }
+.stage-card-holder small {
+  color: rgba(255, 255, 255, .66);
+  font: 500 calc(var(--card-w) * .036) var(--mono-stack);
+  letter-spacing: .08em;
+}
+.stage-card-holder strong {
+  color: #fff;
+  font: 700 calc(var(--card-w) * .072) var(--display-stack);
+  letter-spacing: -.02em;
+  line-height: 1.1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.stage-card-no {
+  color: rgba(255, 255, 255, .62);
+  flex: none;
+  font: 500 calc(var(--card-w) * .042) var(--mono-stack);
+}
+/* Cards right of centre lie UNDER their left neighbour, which covers their left half: mirrored,
+   their mark and name sit on the side that shows. */
+.stage-card:is([data-offset="1"], [data-offset="2"], [data-offset="3"]) .stage-card-mid { justify-content: flex-end; }
+.stage-card:is([data-offset="1"], [data-offset="2"], [data-offset="3"]) .stage-card-bottom { flex-direction: row-reverse; }
+.stage-card:is([data-offset="1"], [data-offset="2"], [data-offset="3"]) .stage-card-holder { align-items: flex-end; text-align: right; }
+.stage-card:is([data-offset="1"], [data-offset="2"], [data-offset="3"]) .stage-card-top { flex-direction: row-reverse; }
