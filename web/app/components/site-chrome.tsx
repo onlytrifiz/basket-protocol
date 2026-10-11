@@ -110,7 +110,9 @@ export function SiteHeader({ active }: { active?: ActivePage }) {
             and spending a nav slot on the word "Docs" crowds the ones that name what this site does. */}
         <div className="site-icons">
           {X_URL && (
-            <a aria-label="Stockify on X" href={X_URL} rel="noreferrer" target="_blank"><XIcon /></a>
+            <a aria-label="Stockify on X" className="x-link" href={X_URL} rel="noreferrer" target="_blank">
+              <span aria-hidden="true" className="x-tile"><XIcon /></span>
+            </a>
           )}
           <Link aria-label="Documentation" className={`docs-link${active === "docs" ? " active" : ""}`} href="/docs">
             <DocsTile />
