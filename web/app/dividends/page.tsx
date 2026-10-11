@@ -184,6 +184,9 @@ export default async function DividendPage({ searchParams }: PageProps<"/dividen
               Which equities the vault bought, in what proportion, and how much of each has reached
               holders. The vault empties every cycle, so what matters is what left it.
             </p>
+            <div className="hub-head-cta">
+              <Link className="button button-ink" href="/wallet">Check a wallet <span>→</span></Link>
+            </div>
           </div>
           <BrandRender className="hub-render" priority size={340} src="/distributions.png" />
         </header>

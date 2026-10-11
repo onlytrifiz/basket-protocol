@@ -197,7 +197,7 @@ export function SiteFooter() {
         {/* Documentation is deliberately absent from this list: it is one line
             away, in the row above, and naming the same destination twice in a
             footer this small reads as an oversight rather than as emphasis. */}
-        <div className="footer-links"><span>Explore</span><Link href="/stocks">Tokenized stocks</Link><Link href="/dividends">Dividends</Link><Link href="/indices">Indices</Link><Link href="/shop">Shop</Link><a href="https://base.org" target="_blank" rel="noreferrer">Built on Base ↗</a></div>
+        <div className="footer-links"><span>Explore</span><Link href="/stocks">Tokenized stocks</Link><Link href="/dividends">Dividends</Link><Link href="/wallet">Your payouts</Link><Link href="/indices">Indices</Link><Link href="/shop">Shop</Link><a href="https://base.org" target="_blank" rel="noreferrer">Built on Base ↗</a></div>
       </div>
       <div className="footer-meta"><span>© 2026 Stockify</span></div>
       {/* The name once more, at the size of the page rather than of a logo: the last thing a reader
