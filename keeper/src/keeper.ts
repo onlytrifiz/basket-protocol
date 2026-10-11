@@ -512,12 +512,29 @@ async function tokenPriceUsd(token: Address, decimals: number): Promise<number |
 }
 
 /** True when the floor says this cycle should not run. Always false outside `enforce`. */
+const POT_VALUE_ATTEMPTS = 5;
+const POT_VALUE_RETRY_MS = 15_000;
+
 async function belowPayoutFloor(): Promise<boolean> {
   if (payoutFloorMode === "off") return false;
-  const pot = await potValueUsd().catch(() => null);
   const tag = payoutFloorMode === "enforce" ? "" : " (log only)";
+  /*
+   * RETRY, THEN FAIL OPEN. On 2026-10-11 10:01 UTC one blip in the price reads (the site's APIs and
+   * a Velora quote) ran the cycle on a ~$44 pot the floor exists to hold. Those reads recover in
+   * seconds, so it now asks five times across about a minute before giving up. Giving up still
+   * RUNS the cycle: by decision, a broken price feed must never stop holders being paid.
+   */
+  let pot: Awaited<ReturnType<typeof potValueUsd>> = null;
+  for (let attempt = 1; attempt <= POT_VALUE_ATTEMPTS; attempt++) {
+    pot = await potValueUsd().catch(() => null);
+    if (pot && !Number.isNaN(pot.total)) break;
+    if (attempt < POT_VALUE_ATTEMPTS) {
+      console.log(`  [payout-floor] could not value the pot (attempt ${attempt}/${POT_VALUE_ATTEMPTS}), retrying in ${POT_VALUE_RETRY_MS / 1000}s`);
+      await sleep(POT_VALUE_RETRY_MS);
+    }
+  }
   if (!pot || Number.isNaN(pot.total)) {
-    console.log(`  [payout-floor] could not value the pot, running the cycle${tag}`);
+    console.log(`  [payout-floor] could not value the pot after ${POT_VALUE_ATTEMPTS} attempts, running the cycle${tag}`);
     return false;
   }
   const detail = pot.lines.map((l) => `${l.symbol} ${l.units.toPrecision(3)} = $${(l.usd ?? 0).toFixed(2)}`).join(", ");
@@ -562,7 +579,7 @@ async function distributeFromOnchainRegistry(): Promise<boolean> {
     }
 
     if (await belowPayoutFloor()) {
-      console.log(`  payout skipped: below the $${payoutFloorUsd} floor, the stock rolls into the next pot`);
+      console.log(`  payout skipped (floor $${payoutFloorUsd}), the stock rolls into the next pot`);
       return false;
     }
 
