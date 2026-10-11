@@ -5,7 +5,7 @@ import type { Metadata } from "next";
 import { readAssets } from "../../../lib/b20";
 import { marketDetail, venueLabel } from "../../../lib/market";
 import { poolsFor, thinPool, MIN_LIQUIDITY_USD } from "../../../lib/pools";
-import { stocks } from "../../../lib/stocks";
+import { stockByAddress, stocks, washColor } from "../../../lib/stocks";
 import { compactNumber, percent, premium, shares, since, usd, usdCompact } from "../../../lib/format";
 import { PriceChart } from "../../components/price-chart";
 import { SiteFooter, SiteHeader } from "../../components/site-chrome";
@@ -71,6 +71,9 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
       <SiteHeader active="stocks" />
       <main>
         <section className="section wrap detail-top">
+          {/* THE STOCK'S OWN CANVAS. The same inset, lit object every page opens on, lit here in the
+              company's colour, with the ticker at poster size and the three prices as its floor. */}
+          <div className="detail-canvas" style={{ "--brand": washColor(stockByAddress(asset.address)) } as React.CSSProperties}>
           <Link className="detail-back" href="/stocks">← All tokenized stocks</Link>
 
           <header className="detail-head">
@@ -120,6 +123,7 @@ export default async function StockPage({ params }: { params: Promise<{ symbol: 
               </strong>
               <small>{spread === null ? (thinPrice ? "pool too thin to quote" : "needs both prices") : spread >= 0 ? "token above the share" : "token below the share"}</small>
             </div>
+          </div>
           </div>
 
           <div className="detail-grid">

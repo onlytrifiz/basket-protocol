@@ -1,5 +1,5 @@
 import type { IndexTotals } from "../../lib/indices";
-import { usdCompact } from "../../lib/format";
+import { CountUp } from "./count-up";
 
 /**
  * What the whole set has done, in four figures.
@@ -18,7 +18,7 @@ export function IndexStats({ totals }: { totals: IndexTotals }) {
               quietly count the second under a word that does not describe it. */}
           <span>Paid to holders / Bought back</span>
           <strong>
-            {totals.returnedUsd === null || totals.returnedUsd === 0 ? "—" : usdCompact(totals.returnedUsd)}
+            {totals.returnedUsd === null || totals.returnedUsd === 0 ? "—" : <CountUp format="usdCompact" value={totals.returnedUsd} />}
           </strong>
           <small>across every index</small>
         </div>
@@ -38,7 +38,7 @@ export function IndexStats({ totals }: { totals: IndexTotals }) {
         </div>
         <div>
           <span>Payments made</span>
-          <strong>{totals.payments.toLocaleString("en-US")}</strong>
+          <strong><CountUp format="integer" value={totals.payments} /></strong>
           <small>one wallet, one round, each</small>
         </div>
       </div>

@@ -11,7 +11,7 @@ import {
   readPlatformFeeBps,
 } from "../../lib/indices";
 import { BrandRender } from "../components/brand-render";
-import { RingMarker } from "../components/segment-ring";
+import { StepsRail } from "../components/steps-rail";
 import { SiteFooter, SiteHeader } from "../components/site-chrome";
 import { IndexStats } from "../components/index-stats";
 import { coinArt } from "../../lib/coin-art";
@@ -41,10 +41,10 @@ export const dynamic = "force-dynamic";
 
 /* The sequence closes when equity reaches holders — the one lime-lit step. */
 const phases = [
-  { number: "01", filled: 2, lit: false, title: "A launch points its fees", copy: "The coin's creator names an index as the recipient of its share of the trading fees." },
-  { number: "02", filled: 4, lit: false, title: "The index collects", copy: "Anyone may crank it: the call only moves money in, so there is nothing to gate." },
-  { number: "03", filled: 6, lit: false, title: "It buys", copy: "Each name is bought only when its own slice is worth the gas, at a venue the factory allows." },
-  { number: "04", filled: 8, lit: true, title: "Holders are paid", copy: "Equity is pushed pro-rata on balance. Or, in buyback mode, the coin is destroyed instead." },
+  { number: "01", art: "/icons/step-launch.png", lit: false, title: "A launch points its fees", copy: "The coin's creator names an index as the recipient of its share of the trading fees." },
+  { number: "02", art: "/icons/loop-trade.png", lit: false, title: "The index collects", copy: "Anyone may crank it: the call only moves money in, so there is nothing to gate." },
+  { number: "03", art: "/icons/loop-acquire.png", lit: false, title: "It buys", copy: "Each name is bought only when its own slice is worth the gas, at a venue the factory allows." },
+  { number: "04", art: "/icons/loop-receive.png", lit: true, title: "Holders are paid", copy: "Equity is pushed pro-rata on balance. Or, in buyback mode, the coin is destroyed instead." },
 ];
 
 const cadence = (seconds: number) => {
@@ -146,15 +146,7 @@ export default async function IndicesPage() {
               nobody has to come and collect.
             </p>
           </div>
-          <div className="payout-list">
-            {phases.map((phase) => (
-              <article className={phase.lit ? "is-payout" : undefined} key={phase.number}>
-                <RingMarker filled={phase.filled} label={phase.number} lit={phase.lit} />
-                <div><h3>{phase.title}</h3><p>{phase.copy}</p></div>
-                <b>↗</b>
-              </article>
-            ))}
-          </div>
+          <StepsRail steps={phases} />
         </section>
 
         <section className="eligibility wrap">

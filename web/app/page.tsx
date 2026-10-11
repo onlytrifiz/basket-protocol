@@ -8,6 +8,7 @@ import { countWord, shares as fmtShares, usdCompact } from "../lib/format";
 import { marketBoard } from "../lib/market";
 import { stockByAddress, stocks, washColor } from "../lib/stocks";
 import { readVault } from "../lib/vault";
+import { CountUp } from "./components/count-up";
 import { IndexUniverse } from "./components/index-universe";
 import { StockLogo } from "./components/stock-logo";
 import { SiteFooter, SiteHeader } from "./components/site-chrome";
@@ -227,7 +228,7 @@ export default async function Home() {
           <section aria-label="Paid to holders so far" className="receipts wrap">
             <div className="receipts-total">
               <span>Paid to holders</span>
-              <strong>{paidValue > 0 ? usdCompact(paidValue) : fmtShares(paidShares)}</strong>
+              <strong>{paidValue > 0 ? <CountUp format="usdCompact" value={paidValue} /> : fmtShares(paidShares)}</strong>
               <small>{paidValue > 0 ? `${fmtShares(paidShares)} shares, at current prices` : "shares, all time"}</small>
             </div>
             <ul className="receipts-list">

@@ -11,7 +11,8 @@ import { shares as fmtShares, stamp, until, usd, usdCompact } from "../../lib/fo
 import { AssetCard, type AssetCardRow } from "../components/asset-card";
 import { BrandRender } from "../components/brand-render";
 import { CycleProgress } from "../components/cycle-progress";
-import { RingMarker } from "../components/segment-ring";
+import { StepsRail } from "../components/steps-rail";
+import { CountUp } from "../components/count-up";
 import { SiteFooter, SiteHeader } from "../components/site-chrome";
 
 export const metadata: Metadata = {
@@ -34,10 +35,10 @@ const SPARK_POINTS = 56;
 
 /* The sequence closes when assets reach holders — the one lime-lit step. */
 const phases = [
-  { number: "01", filled: 2, lit: false, title: "Fees arrive", copy: "The v4 hook sends its ETH trading fee to the dividend vault." },
-  { number: "02", filled: 4, lit: false, title: "Stocks are bought", copy: "The keeper carries out the index acquisition transactions." },
-  { number: "03", filled: 6, lit: false, title: "Holders are counted", copy: "Eligible holders are enumerated from the on-chain STFY holder registry." },
-  { number: "04", filled: 8, lit: true, title: "Assets are sent", copy: "The vault pushes each B20 entitlement to every eligible holder in batches." },
+  { number: "01", art: "/icons/loop-trade.png", lit: false, title: "Fees arrive", copy: "The v4 hook sends its ETH trading fee to the dividend vault." },
+  { number: "02", art: "/icons/loop-acquire.png", lit: false, title: "Stocks are bought", copy: "The keeper carries out the index acquisition transactions." },
+  { number: "03", art: "/icons/step-holders.png", lit: false, title: "Holders are counted", copy: "Eligible holders are enumerated from the on-chain STFY holder registry." },
+  { number: "04", art: "/icons/loop-receive.png", lit: true, title: "Assets are sent", copy: "The vault pushes each B20 entitlement to every eligible holder in batches." },
 ];
 
 export default async function DividendPage({ searchParams }: PageProps<"/dividends">) {
@@ -212,7 +213,7 @@ export default async function DividendPage({ searchParams }: PageProps<"/dividen
                 spends most of its life at zero — what reached holders is the one that accumulates. */}
             <div>
               <span>Distributed</span>
-              <strong>{anyDistributed ? usdCompact(distributedValue) : "—"}</strong>
+              <strong>{anyDistributed ? <CountUp format="usdCompact" value={distributedValue} /> : "—"}</strong>
               <small>{anyDistributed ? "to holders, all time" : "no cycle has settled yet"}</small>
             </div>
             <div>
@@ -428,15 +429,7 @@ export default async function DividendPage({ searchParams }: PageProps<"/dividen
               vault transfers stocks to qualifying holders directly.
             </p>
           </div>
-          <div className="payout-list">
-            {phases.map((phase) => (
-              <article className={phase.lit ? "is-payout" : undefined} key={phase.number}>
-                <RingMarker filled={phase.filled} label={phase.number} lit={phase.lit} />
-                <div><h3>{phase.title}</h3><p>{phase.copy}</p></div>
-                <b>↗</b>
-              </article>
-            ))}
-          </div>
+          <StepsRail steps={phases} />
         </section>
 
         <section className="eligibility wrap">

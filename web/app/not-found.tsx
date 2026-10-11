@@ -29,7 +29,7 @@ export default function NotFound() {
           </div>
         </div>
         <div aria-hidden="true" className="not-found-art">
-          <Image alt="" fill priority sizes="(max-width: 760px) 70vw, 420px" src="/stocks.png" />
+          <Image alt="" fill priority sizes="(max-width: 760px) 70vw, 460px" src="/lost.png" />
         </div>
       </main>
       <SiteFooter />

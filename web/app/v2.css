@@ -306,7 +306,7 @@ h3 { font-weight: 600; letter-spacing: -.025em; }
 .receipt-name b { font: 600 .8rem var(--mono-stack); }
 .receipt-name small { color: var(--ink-3); font-size: .74rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .receipt-figures { grid-column: 1 / -1; }
-.receipt-figures b { color: var(--payout-fg); font: 500 1.35rem var(--mono-stack); letter-spacing: -.04em; }
+.receipt-figures b { color: var(--ink); font: 500 1.35rem var(--mono-stack); letter-spacing: -.04em; }
 .receipt-figures small { color: var(--ink-3); font-size: .76rem; margin-top: 3px; }
 
 /* The second canvas on the page, lit from the other corner, holding the swap card. */
@@ -626,7 +626,7 @@ h3 { font-weight: 600; letter-spacing: -.025em; }
 .not-found h1 { font-size: clamp(2.6rem, 5vw, 4.2rem); line-height: .98; margin-bottom: 20px; max-width: 12ch; }
 .not-found-copy > p:not(.eyebrow) { color: var(--ink-2); font-size: 1.04rem; line-height: 1.6; max-width: 46ch; }
 .not-found-copy code { background: var(--surface-sunken); border-radius: 6px; font-size: .9em; padding: 2px 6px; }
-.not-found-art { aspect-ratio: 874 / 551; filter: grayscale(.7) opacity(.75); position: relative; }
+.not-found-art { aspect-ratio: 3 / 2; filter: drop-shadow(0 30px 40px rgba(0, 20, 80, .35)); position: relative; }
 .not-found-art img { object-fit: contain; }
 
 /* ---------- 13. Motion ---------------------------------------------------- */
@@ -980,3 +980,161 @@ h3 { font-weight: 600; letter-spacing: -.025em; }
 .index-mosaic .mosaic-col .stock-logo { border: 1px solid #e2e5ec; box-shadow: 0 6px 14px -8px rgba(11, 16, 32, .5); }
 .index-mosaic .mosaic-figures small { color: #464e64; }
 .index-mosaic .mosaic-strip i { box-shadow: inset 0 0 0 1px rgba(11, 16, 32, .06); }
+
+/* ---------- Steps rail (/dividends, /indices) ----------------------------- */
+.steps-rail {
+  counter-reset: none;
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(var(--steps), minmax(0, 1fr));
+  list-style: none;
+  margin: 52px 0 0;
+  padding: 0;
+  position: relative;
+}
+/* The line the marks sit on, from the first mark's centre to the last's. */
+.steps-rail::before {
+  background: linear-gradient(90deg, var(--line-2), var(--blue) 50%, var(--line-2));
+  content: "";
+  height: 1px;
+  left: calc(100% / var(--steps) / 2);
+  opacity: .7;
+  position: absolute;
+  right: calc(100% / var(--steps) / 2);
+  top: 60px;
+}
+.steps-rail-item {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  padding: 0 8px;
+  position: relative;
+  text-align: center;
+}
+.steps-rail-art {
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--blue) 26%, transparent), transparent 70%);
+  display: block;
+  height: 120px;
+  position: relative;
+  width: 120px;
+}
+.steps-rail-art img { filter: drop-shadow(0 18px 22px rgba(0, 20, 80, .35)); height: 100%; scale: 1.15; transition: transform .4s var(--ease-out); width: 100%; }
+.steps-rail-item:hover .steps-rail-art img { transform: translateY(-5px) rotate(-3deg); }
+.steps-rail-number { color: var(--link); font: 500 .7rem var(--mono-stack); letter-spacing: .12em; margin-top: 18px; }
+.steps-rail-item.is-lit .steps-rail-number { color: var(--payout-fg); }
+.steps-rail-item h3 { font-family: var(--display-stack); font-size: 1.35rem; font-weight: 650; margin: 8px 0; }
+.steps-rail-item p { color: var(--ink-2); font-size: .9rem; line-height: 1.55; margin: 0; max-width: 30ch; }
+@media (max-width: 860px) {
+  .steps-rail { gap: 0; grid-template-columns: minmax(0, 1fr); }
+  .steps-rail::before { bottom: 60px; height: auto; left: 47px; right: auto; top: 60px; width: 1px; background: linear-gradient(var(--line-2), var(--blue) 50%, var(--line-2)); }
+  .steps-rail-item {
+    align-items: start;
+    display: grid;
+    gap: 0 18px;
+    grid-template-columns: 96px minmax(0, 1fr);
+    grid-template-rows: auto auto 1fr;
+    padding: 14px 0;
+    text-align: left;
+  }
+  .steps-rail-art { grid-row: 1 / 4; height: 96px; width: 96px; }
+  .steps-rail-number { margin-top: 14px; }
+  .steps-rail-item h3 { margin: 4px 0 6px; }
+}
+@media (prefers-reduced-motion: reduce) { .steps-rail-item:hover .steps-rail-art img { transform: none; } }
+
+/* ---------- Eligibility / "what to know": a canvas with the figure as hero ---- */
+.eligibility {
+  background: radial-gradient(60% 80% at 0% 100%, rgba(0, 82, 255, .28), transparent 70%), var(--canvas-bg);
+  border: 1px solid var(--line);
+  box-shadow: var(--canvas-edge);
+  gap: 56px;
+  padding: 64px 0;
+}
+.eligibility > div { padding-left: 48px; }
+.eligibility h2 { font-size: clamp(2.2rem, 4vw, 3.4rem); font-weight: 750; line-height: .98; }
+.eligibility dl { margin-right: 48px; }
+.eligibility dl > div { border-color: var(--line-2); padding: 18px 0; }
+.eligibility dt { font-size: .86rem; }
+.eligibility dd { font-size: .9rem; }
+
+/* ---------- The closing call to action ------------------------------------ */
+.page-cta {
+  background: linear-gradient(120deg, #1f62ff 0%, #0046e0 55%, #0033b0 100%);
+  border-radius: var(--r-xl);
+  color: #fff;
+  margin-bottom: 96px;
+  margin-top: 96px;
+  overflow: hidden;
+  padding: 56px 56px;
+  position: relative;
+}
+.page-cta::after {
+  background: radial-gradient(closest-side, rgba(145, 212, 255, .45), transparent);
+  content: "";
+  height: 420px;
+  pointer-events: none;
+  position: absolute;
+  right: -120px;
+  top: -160px;
+  width: 420px;
+}
+.page-cta .eyebrow { color: rgba(255, 255, 255, .75); }
+.page-cta h2 { font-size: clamp(2rem, 3.8vw, 3rem); font-weight: 750; position: relative; }
+.page-cta .button-ink { background: #fff; box-shadow: 0 10px 24px -8px rgba(0, 0, 0, .4); color: #0033b0; position: relative; z-index: 1; }
+.page-cta .button-ink:hover { background: #eef3ff; }
+.page-cta-note { color: rgba(255, 255, 255, .78) !important; position: relative; }
+@media (max-width: 660px) {
+  .eligibility > div { padding-left: 22px; }
+  .eligibility dl { margin: 0 22px; }
+  .page-cta { flex-direction: column; align-items: flex-start; margin: 56px 20px; padding: 36px 24px; }
+}
+
+/* The counting figure sits inside headline <strong>s whose parents style every descendant <span> as
+   a small label (`.stats-inner span`, `.receipts-total span`). It must look exactly like the figure
+   it replaces, so it takes everything from that <strong>. */
+span.count-up {
+  color: inherit !important;
+  display: inline !important;
+  font: inherit !important;
+  letter-spacing: inherit !important;
+  margin: 0 !important;
+  opacity: 1 !important;
+  text-transform: none !important;
+}
+
+/* ---------- /indices: the leader gets the showcase ------------------------ */
+/* The overview's three are ranked, so the first is drawn as first: a tall card on the left with
+   its figure at headline size, the other two stacked beside it. */
+@media (min-width: 861px) {
+  #live .index-cards { grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); grid-template-rows: auto auto; }
+  #live .index-card:first-of-type { grid-row: span 2; }
+  #live .index-card:first-of-type .index-card-cap { flex: 1; justify-content: center; min-height: 230px; padding: 34px 24px 28px; }
+  #live .index-card:first-of-type .index-card-ghost { font-size: 92px; }
+  #live .index-card:first-of-type .index-card-mark { height: 72px; width: 72px; }
+  #live .index-card:first-of-type .index-card-cap strong { font-size: 1.6rem; }
+  #live .index-card:first-of-type .index-card-foot { padding: 18px 24px 22px; }
+  #live .index-card:first-of-type .index-card-foot b { font-size: clamp(1.8rem, 3vw, 2.6rem); letter-spacing: -.05em; }
+}
+
+/* ---------- Stock detail: the company's canvas ------------------------------ */
+.detail-top { padding-top: 0; }
+.detail-canvas {
+  background:
+    radial-gradient(60% 70% at 100% 0%, color-mix(in srgb, var(--brand, var(--blue)) 30%, transparent), transparent 70%),
+    var(--canvas-bg);
+  border: 1px solid var(--line);
+  border-radius: var(--r-xl);
+  box-shadow: var(--canvas-edge);
+  padding: 40px 40px 32px;
+}
+.detail-head { gap: 22px; }
+.detail-head > .stock-logo { border-radius: 22px; box-shadow: 0 18px 36px -14px color-mix(in srgb, var(--brand, var(--blue)) 80%, transparent); height: 84px; width: 84px; }
+.detail-id h1 { font-family: var(--display-stack); font-size: clamp(2.8rem, 6vw, 5rem); font-weight: 800; letter-spacing: -.05em; line-height: .95; }
+.detail-id p { font-size: 1.05rem; margin-top: 8px; }
+.detail-prices { background: color-mix(in srgb, var(--surface) 70%, transparent); backdrop-filter: blur(12px); box-shadow: none; margin-top: 32px; }
+.price-block { padding: 24px 28px; }
+.price-block > strong { font-size: clamp(1.9rem, 3vw, 2.5rem); font-weight: 500; letter-spacing: -.05em; }
+@media (max-width: 660px) {
+  .detail-canvas { border-radius: 24px; margin: 0 -12px; padding: 26px 18px 20px; }
+  .detail-head > .stock-logo { border-radius: 16px; height: 60px; width: 60px; }
+}
