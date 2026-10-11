@@ -275,8 +275,8 @@ export function StockStage({ stocks, variant = "panel" }: { stocks: StageStock[]
                       <StockLogo logo={stock.logo} size="large" stock={stock} />
                     </span>
                     <span className="stage-card-foot">
+                      {/* The name only: a second line ("In the dividends") crowded the card on phones. */}
                       <strong>{stock.name}</strong>
-                      <span>{stock.weightBps === null ? "Tokenized stock" : "In the dividends"}</span>
                     </span>
                   </span>
                 </span>
