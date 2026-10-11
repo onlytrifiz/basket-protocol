@@ -1191,7 +1191,7 @@ span.count-up {
     box-shadow: 0 1px 0 rgba(255, 255, 255, .06) inset, 0 20px 44px -14px rgba(0, 0, 0, .55);
     display: grid;
     gap: 2px;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     left: 10px;
     padding: 6px;
     position: fixed;
@@ -1382,3 +1382,7 @@ span.count-up {
 }
 .receipts-mine { color: #fff; display: inline-flex; font-size: .8rem; font-weight: 600; gap: 6px; margin-top: 14px; opacity: .92; }
 .receipts-mine:hover { opacity: 1; text-decoration: underline; text-underline-offset: 3px; }
+.wallet-result, #wallet { scroll-margin-top: 84px; }
+.wallet-checker .wallet-lookup { margin-top: 28px; }
+.wallet-result:empty { display: none; }
+.wallet-empty h3 { font-family: var(--display-stack); font-size: clamp(1.5rem, 3vw, 2.1rem); font-weight: 650; margin: 28px 0 10px; }

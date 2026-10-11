@@ -233,7 +233,7 @@ export default async function Home() {
               <span>Paid to holders</span>
               <strong>{paidValue > 0 ? <CountUp format="usdCompact" value={paidValue} /> : fmtShares(paidShares)}</strong>
               <small>{paidValue > 0 ? `${fmtShares(paidShares)} shares, at current prices` : "shares, all time"}</small>
-              <Link className="receipts-mine" href="/wallet">See what your wallet received <span aria-hidden="true">→</span></Link>
+              <Link className="receipts-mine" href="/dividends#wallet">See what your wallet received <span aria-hidden="true">→</span></Link>
             </div>
             <ul className="receipts-list">
               {receipts.map((stock) => (

@@ -13,6 +13,7 @@ import { BrandRender } from "../components/brand-render";
 import { CycleProgress } from "../components/cycle-progress";
 import { StepsRail } from "../components/steps-rail";
 import { CountUp } from "../components/count-up";
+import { WalletChecker } from "../components/wallet-checker";
 import { SiteFooter, SiteHeader } from "../components/site-chrome";
 
 export const metadata: Metadata = {
@@ -185,7 +186,7 @@ export default async function DividendPage({ searchParams }: PageProps<"/dividen
               holders. The vault empties every cycle, so what matters is what left it.
             </p>
             <div className="hub-head-cta">
-              <Link className="button button-ink" href="/wallet">Check a wallet <span>→</span></Link>
+              <a className="button button-ink" href="#wallet">Check a wallet <span aria-hidden="true">↓</span></a>
             </div>
           </div>
           <BrandRender className="hub-render" priority size={340} src="/distributions.png" />
@@ -233,6 +234,8 @@ export default async function DividendPage({ searchParams }: PageProps<"/dividen
             </div>
           </div>
         </section>
+
+        <WalletChecker />
 
 
         <section className="section wrap hub-section">
