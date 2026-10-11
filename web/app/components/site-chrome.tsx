@@ -121,7 +121,6 @@ export function SiteHeader({ active }: { active?: ActivePage }) {
           <Link className={active === "home" ? "active" : ""} href="/">Home<LinkPending /></Link>
           <Link className={active === "stocks" ? "active" : ""} href="/stocks">Stocks<LinkPending /></Link>
           <Link className={active === "dividends" ? "active" : ""} href="/dividends">Dividends<LinkPending /></Link>
-          <Link className={active === "indices" ? "active" : ""} href="/indices">Indices<LinkPending /></Link>
           {/* Last, because it is the end of the line rather than another way in:
               the three before it are how value is produced, and this is what it
               is finally spent on. */}
