@@ -1175,3 +1175,58 @@ span.count-up {
 .stonks-by.is-hero:hover .stonks-by-name { text-decoration: none; }
 .stonks-by.is-hero:hover .stonks-by-go { transform: translate(2px, -2px); }
 @media (max-width: 660px) { .hero-v2-kicker { margin-bottom: 18px; } }
+
+/* ---------- Mobile bottom bar --------------------------------------------- */
+.bottom-bar { display: none; }
+@media (max-width: 720px) {
+  .site-links { display: none; }
+  .site-nav-inner { flex-wrap: nowrap; justify-content: space-between; padding-bottom: 10px; }
+  .site-shell { padding-bottom: calc(92px + env(safe-area-inset-bottom)); }
+  .bottom-bar {
+    backdrop-filter: blur(22px) saturate(1.6);
+    background: color-mix(in srgb, var(--surface) 80%, transparent);
+    border: 1px solid var(--line-2);
+    border-radius: 24px;
+    bottom: calc(10px + env(safe-area-inset-bottom));
+    box-shadow: 0 1px 0 rgba(255, 255, 255, .06) inset, 0 20px 44px -14px rgba(0, 0, 0, .55);
+    display: grid;
+    gap: 2px;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    left: 10px;
+    padding: 6px;
+    position: fixed;
+    right: 10px;
+    z-index: 40;
+  }
+  .bottom-bar a {
+    align-items: center;
+    border-radius: 18px;
+    color: var(--ink-3);
+    display: flex;
+    flex-direction: column;
+    font-size: .66rem;
+    font-weight: 500;
+    gap: 3px;
+    min-width: 0;
+    padding: 6px 0 5px;
+    transition: background .2s var(--ease), color .2s var(--ease);
+  }
+  .bottom-bar a img { filter: saturate(.55) brightness(.9); height: 30px; opacity: .8; transition: transform .3s var(--ease-out), filter .2s var(--ease), opacity .2s var(--ease); width: 30px; }
+  .bottom-bar a span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .bottom-bar a.active { background: color-mix(in srgb, var(--blue) 16%, transparent); color: var(--ink); font-weight: 600; }
+  .bottom-bar a.active img { filter: drop-shadow(0 6px 8px rgba(0, 40, 160, .45)); opacity: 1; transform: translateY(-2px) scale(1.08); }
+  .bottom-bar a:active img { transform: scale(.92); }
+}
+@media (max-width: 720px) and (prefers-reduced-motion: reduce) { .bottom-bar a img, .bottom-bar a.active img { transform: none; transition: none; } }
+
+/* The hero pill only where the header cannot say it in full: above 1100px the header carries
+   "by The Stonks Exchange" itself, so saying it again under it would be the same line twice. */
+@media (min-width: 1101px) { .stonks-by.is-hero { display: none; } }
+@media (max-width: 720px) { .site-nav-inner > .theme-toggle { margin-left: auto; } }
+
+/* The credit sits ABOVE the eyebrow, small: a byline, not a second headline. */
+.hero-v2-kicker { align-items: flex-start; flex-direction: column; gap: 14px; }
+.stonks-by.is-hero { font-size: .72rem; gap: 6px; padding: 3px 11px 3px 4px; }
+.stonks-by.is-hero .stonks-by-word { padding-left: 5px; }
+.stonks-by.is-hero .stonks-by-mark { border-radius: 4px; height: 16px; width: 16px; }
+.stonks-by.is-hero .stonks-by-name { font-weight: 550; }

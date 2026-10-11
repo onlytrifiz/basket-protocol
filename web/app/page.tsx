@@ -240,9 +240,11 @@ export default async function Home() {
                   <Link href={`/stocks/${stock.symbol.toLowerCase()}`} style={{ "--brand": stock.brand } as React.CSSProperties}>
                     <StockLogo logo={stock.logo} size="small" stock={stock} />
                     <span className="receipt-name"><b>{stock.symbol}</b><small>{stock.name}</small></span>
+                    {/* Dollars lead, shares follow: a value is what a reader compares across five
+                        different equities, a share count only means something within one. */}
                     <span className="receipt-figures">
-                      <b>{fmtShares(stock.distributed)}</b>
-                      <small>{stock.distributedValue === null ? "unpriced" : usdCompact(stock.distributedValue)}</small>
+                      <b>{stock.distributedValue === null ? fmtShares(stock.distributed) : usdCompact(stock.distributedValue)}</b>
+                      <small>{fmtShares(stock.distributed)} shares{stock.distributedValue === null ? ", unpriced" : ""}</small>
                     </span>
                   </Link>
                 </li>

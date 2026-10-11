@@ -111,6 +111,7 @@ export function StockifyMark({ small = false }: { small?: boolean }) {
    can have it. It sits beside the wallet rather than with the icons, which disappear on phones. */
 export function SiteHeader({ active }: { active?: ActivePage }) {
   return (
+    <>
     <nav aria-label="Primary navigation" className="site-nav">
       <div className="site-nav-inner">
         <Link className="brandmark" href="/"><StockifyMark /><span>Stockify</span></Link>
@@ -140,6 +141,32 @@ export function SiteHeader({ active }: { active?: ActivePage }) {
         <ThemeToggle />
         <ConnectWalletButton />
       </div>
+    </nav>
+    <BottomBar active={active} />
+    </>
+  );
+}
+
+/* The phone's navigation. Below 720px the header keeps only the brand, the theme and the wallet, and
+   the five destinations move to a bar at the bottom of the screen, where a thumb reaches them. Each
+   tab carries one of the site's 3D marks; the current page is lit, the rest sit back. */
+const TABS: Array<{ key: ActivePage; href: string; label: string; icon: string }> = [
+  { key: "home", href: "/", label: "Home", icon: "/icons/tab-home.png" },
+  { key: "stocks", href: "/stocks", label: "Stocks", icon: "/icons/tab-stocks.png" },
+  { key: "dividends", href: "/dividends", label: "Dividends", icon: "/icons/loop-receive.png" },
+  { key: "indices", href: "/indices", label: "Indices", icon: "/icons/tab-indices.png" },
+  { key: "shop", href: "/shop", label: "Shop", icon: "/icons/tab-shop.png" },
+];
+
+function BottomBar({ active }: { active?: ActivePage }) {
+  return (
+    <nav aria-label="Primary navigation, mobile" className="bottom-bar">
+      {TABS.map((tab) => (
+        <Link aria-current={active === tab.key ? "page" : undefined} className={active === tab.key ? "active" : ""} href={tab.href} key={tab.key}>
+          <Image alt="" height={30} src={tab.icon} width={30} />
+          <span>{tab.label}</span>
+        </Link>
+      ))}
     </nav>
   );
 }
