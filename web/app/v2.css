@@ -152,17 +152,35 @@ h3 { font-weight: 600; letter-spacing: -.025em; }
 
 /* ---------- 4. Navigation ------------------------------------------------- */
 
-.site-nav { margin: 12px 0 14px; }
+/* EDGE TO EDGE, not a floating pill. The bar is part of the page's frame now: a translucent strip
+   across the top with a hairline under it, content on the shared rail. */
+.site-nav { margin: 0 0 14px; padding: 0; top: 0; }
 .site-nav-inner {
-  background: color-mix(in srgb, var(--surface) 76%, transparent);
-  border-color: color-mix(in srgb, var(--line) 80%, transparent);
-  box-shadow: var(--shadow-nav);
-  min-height: 60px;
+  backdrop-filter: blur(20px) saturate(1.5);
+  background: color-mix(in srgb, var(--paper) 74%, transparent);
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  box-shadow: none;
+  max-width: none;
+  min-height: 66px;
+  padding: 10px max(20px, calc((100vw - var(--maxw)) / 2 + 24px));
 }
-.brandmark { font-size: 1.28rem; font-weight: 700; letter-spacing: -.04em; }
-.site-links a { color: var(--ink-2); font-weight: 500; }
-.site-links a:hover { background: var(--surface-sunken); }
-.site-links a.active { background: var(--blue); color: #fff; font-weight: 550; }
+.brandmark { font-size: 1.32rem; font-weight: 700; letter-spacing: -.04em; }
+.site-links a { color: var(--ink-2); font-weight: 500; position: relative; }
+.site-links a:hover { background: transparent; color: var(--ink); }
+.site-links a.active { background: transparent; color: var(--ink); font-weight: 600; }
+/* The current page is underlined in the accent, sitting on the bar's own hairline. */
+.site-links a.active::after {
+  background: var(--blue);
+  border-radius: 2px;
+  bottom: -11px;
+  content: "";
+  height: 2px;
+  left: 14px;
+  position: absolute;
+  right: 14px;
+}
 .theme-toggle { box-shadow: none; }
 
 /* ---------- 5. Hero ------------------------------------------------------- */
@@ -181,16 +199,32 @@ h3 { font-weight: 600; letter-spacing: -.025em; }
   margin: 0 14px;
 }
 
-.hero-inner { gap: 64px; padding: 72px 24px 40px; }
-.hero-copy .eyebrow { margin-bottom: 20px; }
-.hero-copy h1 {
-  font-size: clamp(3rem, 5.6vw, 5rem);
-  line-height: .95;
-  margin-bottom: 24px;
-  max-width: 10.5ch;
+/* THE POSTER HERO. The headline takes the whole rail at display size, the lede and the two
+   actions sit under it on one line, and the fan stands below as the subject. */
+.hero-v2-top { margin: 0 auto; max-width: var(--maxw); padding: 76px 24px 6px; position: relative; z-index: 1; }
+.hero-v2-top .eyebrow { margin-bottom: 26px; }
+.hero-v2-title {
+  font-size: clamp(3rem, 8.6vw, 8.4rem);
+  font-weight: 800;
+  letter-spacing: -.058em;
+  line-height: .9;
+  margin: 0 0 40px;
 }
-.hero-lede { font-size: 1.12rem; line-height: 1.55; max-width: 38ch; }
-.hero-actions { margin-top: 34px; }
+.hero-v2-title span { color: var(--blue); }
+.hero-v2-side {
+  align-items: end;
+  display: grid;
+  gap: 32px;
+  grid-template-columns: minmax(0, 46ch) auto;
+  justify-content: space-between;
+}
+.hero-v2 .hero-lede { font-size: 1.16rem; line-height: 1.55; margin: 0; max-width: 46ch; }
+.hero-v2 .hero-actions { margin-top: 0; }
+.hero-v2 .flow-strip { margin-top: 18px; }
+.hero-v2-top > * { animation: settle-up .6s var(--ease-out) backwards; }
+.hero-v2-top > :nth-child(2) { animation-delay: .06s; }
+.hero-v2-top > :nth-child(3) { animation-delay: .14s; }
+@media (prefers-reduced-motion: reduce) { .hero-v2-top > * { animation: none; } }
 
 /* The fan's own chrome, re-tuned for the lighter floor. */
 .stock-stage.is-band .stage-wordmark { font-family: var(--display-stack); font-weight: 800; }
@@ -216,38 +250,99 @@ h3 { font-weight: 600; letter-spacing: -.025em; }
   box-shadow: 0 30px 70px -20px rgba(0, 0, 0, .8), 0 0 0 1px rgba(0, 0, 0, .3), inset 0 1px 0 rgba(255, 255, 255, .06);
 }
 
-/* ---------- 6. The facts panel -------------------------------------------- */
+/* ---------- 6. Receipts and the buy section ------------------------------ */
 
-.facts-panel { margin-top: 20px; }
-.facts-grid {
+.receipts {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: minmax(0, 270px) minmax(0, 1fr);
+  margin-top: 20px;
+}
+/* The total, in the accent, with the one colour reserved for value that reached a holder. */
+.receipts-total {
+  background:
+    radial-gradient(90% 70% at 100% 0%, rgba(145, 212, 255, .3), transparent 60%),
+    linear-gradient(160deg, #1f62ff 0%, #0046e0 55%, #0033b0 100%);
+  border-radius: var(--r-lg);
+  color: #fff;
+  padding: 24px 26px;
+}
+.receipts-total span, .receipts-total small { display: block; }
+.receipts-total span { font: 500 .68rem var(--mono-stack); letter-spacing: .12em; opacity: .8; text-transform: uppercase; }
+.receipts-total strong {
+  color: var(--lime);
+  display: block;
+  font: 500 clamp(2.2rem, 3.6vw, 2.9rem) var(--mono-stack);
+  letter-spacing: -.05em;
+  line-height: 1;
+  margin: 16px 0 10px;
+}
+.receipts-total small { font-size: .8rem; opacity: .78; }
+.receipts-list {
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--r-lg);
-  box-shadow: var(--shadow-1);
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 4px;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  list-style: none;
   margin: 0;
+  min-width: 0;
+  padding: 8px;
 }
-.facts-grid > div { min-width: 0; padding: 26px 28px 24px; }
-.facts-grid > div + div { border-left: 1px solid var(--line); }
-.facts-grid dt {
-  color: var(--ink-3);
-  font-family: var(--mono-stack);
-  font-size: .68rem;
-  font-weight: 500;
-  letter-spacing: .12em;
-  text-transform: uppercase;
+.receipts-list a {
+  border-radius: var(--r-md);
+  display: grid;
+  gap: 14px 10px;
+  grid-template-columns: 30px minmax(0, 1fr);
+  height: 100%;
+  padding: 14px;
+  transition: background .2s var(--ease);
 }
-.facts-grid dd {
-  font-family: var(--mono-stack);
-  font-size: clamp(2rem, 3.4vw, 2.75rem);
-  font-variant-numeric: tabular-nums;
-  font-weight: 500;
-  letter-spacing: -.05em;
-  line-height: 1;
-  margin: 14px 0 8px;
+.receipts-list a:hover { background: color-mix(in srgb, var(--brand, var(--blue)) 12%, transparent); }
+.receipts-list .stock-logo { background: #fff; border-color: transparent; border-radius: 50%; height: 30px; width: 30px; }
+.receipt-name, .receipt-figures { min-width: 0; }
+.receipt-name b, .receipt-name small, .receipt-figures b, .receipt-figures small { display: block; }
+.receipt-name b { font: 600 .8rem var(--mono-stack); }
+.receipt-name small { color: var(--ink-3); font-size: .74rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.receipt-figures { grid-column: 1 / -1; }
+.receipt-figures b { color: var(--payout-fg); font: 500 1.35rem var(--mono-stack); letter-spacing: -.04em; }
+.receipt-figures small { color: var(--ink-3); font-size: .76rem; margin-top: 3px; }
+
+/* The second canvas on the page, lit from the other corner, holding the swap card. */
+.buy-section {
+  background:
+    radial-gradient(60% 70% at 100% 50%, rgba(0, 82, 255, .3), transparent 70%),
+    var(--canvas-bg);
+  border: 1px solid var(--line);
+  border-radius: var(--r-xl);
+  box-shadow: var(--canvas-edge);
+  margin: 0 14px;
+  padding: 104px 0;
 }
-.facts-grid small { color: var(--ink-3); display: block; font-size: .8rem; }
+.buy-inner {
+  align-items: center;
+  display: grid;
+  gap: 72px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 500px);
+}
+.buy-copy h2 { font-size: clamp(2.4rem, 4.8vw, 4rem); font-weight: 750; line-height: .96; margin-bottom: 22px; }
+.buy-copy > p { color: var(--ink-2); font-size: 1.06rem; line-height: 1.6; margin: 0; max-width: 44ch; }
+.buy-facts {
+  display: grid;
+  gap: 0 28px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 36px 0 30px;
+  max-width: 520px;
+}
+.buy-facts > div { border-top: 1px solid var(--line-2); padding: 18px 0 20px; }
+.buy-facts dt { color: var(--ink-3); font: 500 .68rem var(--mono-stack); letter-spacing: .12em; text-transform: uppercase; }
+.buy-facts dd { font: 500 clamp(1.9rem, 3vw, 2.4rem) var(--mono-stack); letter-spacing: -.05em; line-height: 1; margin: 12px 0 6px; }
+.buy-facts small { color: var(--ink-3); font-size: .8rem; }
+.text-link { align-items: center; color: var(--link); display: inline-flex; font-weight: 550; gap: 8px; }
+.text-link span { transition: transform .2s var(--ease); }
+.text-link:hover span { transform: translateX(3px); }
+.buy-swap { position: relative; }
 
 /* ---------- 7. The dividend loop ------------------------------------------ */
 
@@ -568,6 +663,10 @@ h3 { font-weight: 600; letter-spacing: -.025em; }
 @media (max-width: 980px) {
   .hero-inner { gap: 40px; padding-top: 56px; }
   .loop-section { gap: 40px; grid-template-columns: minmax(0, 1fr); }
+  .hero-v2-side { grid-template-columns: minmax(0, 1fr); }
+  .receipts { grid-template-columns: minmax(0, 1fr); }
+  .buy-inner { gap: 48px; grid-template-columns: minmax(0, 1fr); }
+  .buy-swap { max-width: 540px; }
   .loop-head { position: static; }
   .universe-split { gap: 40px; grid-template-columns: minmax(0, 1fr); }
   .universe-split .index-universe { max-width: 540px; }
@@ -586,6 +685,18 @@ h3 { font-weight: 600; letter-spacing: -.025em; }
 @media (max-width: 660px) {
   .section { padding-bottom: 72px; padding-top: 72px; }
   .hero-card { border-radius: 24px; margin: 0 8px; }
+  .site-nav-inner { border-radius: 0; padding: 10px 14px 8px; }
+  .site-links a.active::after { bottom: -5px; left: 10px; right: 10px; }
+  .hero-v2-top { padding: 40px 16px 0; }
+  .hero-v2-top .eyebrow { margin-bottom: 18px; }
+  .hero-v2-title { font-size: clamp(2.7rem, 14vw, 3.8rem); margin-bottom: 24px; }
+  .hero-v2 .hero-lede { font-size: 1rem; }
+  .hero-v2 .hero-actions { align-items: stretch; flex-direction: column; }
+  .hero-v2 .hero-actions .button { width: 100%; }
+  .receipts { margin-top: 14px; }
+  .receipts-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .buy-section { border-radius: 24px; margin: 0 8px; padding: 64px 0; }
+  .buy-facts { gap: 0 18px; }
   .hero-inner { padding: 40px 16px 24px; }
   .hero-copy h1 { font-size: clamp(2.6rem, 13vw, 3.4rem); }
   .hero-lede { font-size: 1rem; }

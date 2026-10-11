@@ -10,6 +10,7 @@ import { stockByAddress, stocks, washColor } from "../lib/stocks";
 import { readVault } from "../lib/vault";
 import { IndexUniverse } from "./components/index-universe";
 import { RingMarker } from "./components/segment-ring";
+import { StockLogo } from "./components/stock-logo";
 import { SiteFooter, SiteHeader } from "./components/site-chrome";
 import { StockMarquee } from "./components/stock-marquee";
 import { StockStage, type StageStock } from "./components/stock-stage";
@@ -168,24 +169,35 @@ export default async function Home() {
 
   const hasStage = stageStocks.length > 0;
 
+  /* What each equity has paid out so far, largest first: the receipts under the hero. Built from the
+     same map the fan reads, so the strip and the centred card can never disagree. */
+  const receipts = stageStocks
+    .filter((stock) => stock.distributed > 0)
+    .sort((a, b) => (b.distributedValue ?? 0) - (a.distributedValue ?? 0));
+
   return (
     <div className="site-shell">
       <SiteHeader active="home" />
       <main>
-        <header className="hero-card" id="overview">
-          <div className="hero-inner">
-            <div className="hero-copy">
-              <p className="eyebrow">Base · B20 equity dividends</p>
-              <h1>Hold Stockify.<br /><span>Receive stocks.</span></h1>
+        {/* THE HERO IS THE CLAIM AND ITS EVIDENCE, nothing else. The headline runs the full rail at
+            poster size, and the cards the vault buys stand under it as the subject. The swap card
+            that used to share this band has its own section further down (#buy): a reader decides
+            to buy after the page has said what they would be buying. */}
+        <header className="hero-card hero-v2" id="overview">
+          <div className="hero-v2-top">
+            <p className="eyebrow">Base · B20 equity dividends</p>
+            <h1 className="hero-v2-title">Hold Stockify.<br /><span>Receive stocks.</span></h1>
+            <div className="hero-v2-side">
               <p className="hero-lede">Trading fees buy Base-native tokenized equities, and the vault pushes them straight to STFY holders.</p>
-              <div className="hero-actions"><Link className="button button-ink" href="/dividends">View the dividends <span>→</span></Link><Link className="button button-ghost" href="/docs">Read the docs</Link></div>
+              <div className="hero-actions">
+                <Link className="button button-ink" href="#buy">Buy STFY <span aria-hidden="true">↓</span></Link>
+                <Link className="button button-ghost" href="/dividends">View the dividends</Link>
+              </div>
             </div>
-            <div className="hero-swap"><SwapPanel /></div>
           </div>
-          {/* THE BAND UNDER THE HERO: the equities the vault buys, as a fan of cards, with what has
-              actually been paid out either side of it. The render it replaced is still the OG
-              image's subject, and it comes back here only when the listing could not be read, so
-              the band never collapses into an empty strip. */}
+          {/* The fan of the equities the vault buys, with what has actually been paid out either side
+              of it. The render it replaced is still the OG image's subject, and it comes back here only
+              when the listing could not be read, so the band never collapses into an empty strip. */}
           <div className={`flow-strip${hasStage ? " is-stage" : " is-render"}`}>
             {hasStage ? (
               <StockStage stocks={stageStocks} variant="band" />
@@ -209,17 +221,31 @@ export default async function Home() {
           </div>
         </header>
 
-        {/* The protocol's four constants, as one panel lifted over the hero's bottom edge. They were
-            also a line of small print under the hero buttons; saying them once, at this size, is
-            the version a reader actually takes in. */}
-        <section className="facts-panel wrap" aria-label="Protocol economics">
-          <dl className="facts-grid">
-            <div><dt>Hook fee</dt><dd>3%</dd><small>on every STFY trade</small></div>
-            <div><dt>To stocks</dt><dd>90%</dd><small>of each hook fee</small></div>
-            <div><dt>LP fee</dt><dd>1%</dd><small>to v4 liquidity providers</small></div>
-            <div><dt>Supply</dt><dd>1B</dd><small>STFY, fixed</small></div>
-          </dl>
-        </section>
+        {/* RECEIPTS. The total, then each equity's share of it. The figure a holder cares about most
+            is what has already arrived, so it sits directly under the claim it backs. */}
+        {receipts.length > 0 && (
+          <section aria-label="Paid to holders so far" className="receipts wrap">
+            <div className="receipts-total">
+              <span>Paid to holders</span>
+              <strong>{paidValue > 0 ? usdCompact(paidValue) : fmtShares(paidShares)}</strong>
+              <small>{paidValue > 0 ? `${fmtShares(paidShares)} shares, at current prices` : "shares, all time"}</small>
+            </div>
+            <ul className="receipts-list">
+              {receipts.map((stock) => (
+                <li key={stock.symbol}>
+                  <Link href={`/stocks/${stock.symbol.toLowerCase()}`} style={{ "--brand": stock.brand } as React.CSSProperties}>
+                    <StockLogo logo={stock.logo} size="small" stock={stock} />
+                    <span className="receipt-name"><b>{stock.symbol}</b><small>{stock.name}</small></span>
+                    <span className="receipt-figures">
+                      <b>{fmtShares(stock.distributed)}</b>
+                      <small>{stock.distributedValue === null ? "unpriced" : usdCompact(stock.distributedValue)}</small>
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
         {/* The loop as a timeline beside its headline, not three equal cards: the steps happen in
             order, and a vertical rail says so where a row of boxes does not. */}
@@ -239,6 +265,25 @@ export default async function Home() {
               </li>
             ))}
           </ol>
+        </section>
+
+        {/* WHERE THE SWAP CARD LIVES NOW: beside the four numbers that decide what a purchase earns,
+            which is the moment a reader is actually ready to use it. */}
+        <section className="buy-section" id="buy">
+          <div className="buy-inner wrap">
+            <div className="buy-copy reveal">
+              <h2>Buy STFY.<br />Get paid in stocks.</h2>
+              <p>Hold at least the eligibility threshold and every settled cycle lands in your wallet as tokenized equity.</p>
+              <dl className="buy-facts">
+                <div><dt>Hook fee</dt><dd>3%</dd><small>on every STFY trade</small></div>
+                <div><dt>To stocks</dt><dd>90%</dd><small>of each hook fee</small></div>
+                <div><dt>LP fee</dt><dd>1%</dd><small>to v4 liquidity providers</small></div>
+                <div><dt>Supply</dt><dd>1B</dd><small>STFY, fixed</small></div>
+              </dl>
+              <Link className="text-link" href="/docs">How the protocol works <span aria-hidden="true">→</span></Link>
+            </div>
+            <div className="buy-swap"><SwapPanel /></div>
+          </div>
         </section>
 
         <section className="section universe-section" id="index">
