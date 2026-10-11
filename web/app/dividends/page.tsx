@@ -146,6 +146,26 @@ export default async function DividendPage({ searchParams }: PageProps<"/dividen
   const pricedAddresses = [...new Set([...distributedByAsset.keys(), ...vault.holdings.map((h) => h.address.toLowerCase())])];
   const prices = new Map(await Promise.all(pricedAddresses.map(async (a) => [a, await assetUsd(a, market.quotes)] as const)));
 
+  /**
+   * What the next cycle would hand out, valued the way the keeper values it: stock the vault holds
+   * minus what it already owes, at today's prices. The keeper skips a due cycle while this is under
+   * its payout floor, so without it the countdown sat on "due now" for hours and read as stuck.
+   * Null when any part is unread or unpriced: no figure is better than a low one that is wrong.
+   */
+  const potUsd = (() => {
+    let total = 0;
+    for (const holding of vault.holdings) {
+      if (holding.heldRaw === null || holding.unpaidRaw === null) return null;
+      const free = BigInt(holding.heldRaw) - BigInt(holding.unpaidRaw);
+      if (free <= 0n) continue;
+      const units = toUnits(free.toString(), holding.decimals);
+      const price = prices.get(holding.address.toLowerCase());
+      if (units === null || !price) return null;
+      total += units * price;
+    }
+    return total;
+  })();
+
   const rows = vault.holdings.map((holding) => {
     const asset = byAddress.get(holding.address.toLowerCase());
     const price = prices.get(holding.address.toLowerCase()) ?? undefined;
@@ -281,6 +301,7 @@ export default async function DividendPage({ searchParams }: PageProps<"/dividen
                 from={latest?.timestamp ?? 0}
                 label={vault.cycleActive ? "running" : latest ? `#${latest.n + 1}` : "one"}
                 now={Date.now() / 1000}
+                pot={vault.live ? potUsd : null}
                 to={vault.nextDistribution}
               />
             </div>

@@ -21,11 +21,19 @@ import { useEffect, useState } from "react";
  * contract is in rather than an assumed hour. When the vault has not named a next start, or the
  * window would be empty, there is nothing to be a fraction of and the track stays dark.
  */
+/**
+ * The keeper's payout floor (`PAYOUT_FLOOR_USD` in keeper/src/keeper.ts). A due cycle is skipped
+ * while the stock waiting to go out is worth less than this, and opens on the first hourly check
+ * after it is not. Change the two together.
+ */
+export const PAYOUT_FLOOR_USD = 100;
+
 export function CycleProgress({
   active,
   from,
   label,
   now: seeded,
+  pot,
   to,
 }: {
   /** A cycle is settling right now: the wait is over and the fraction is meaningless. */
@@ -36,6 +44,8 @@ export function CycleProgress({
   label: string;
   /** Unix seconds at render time, from the server. */
   now: number;
+  /** USD value of the stock waiting to go out, as the keeper values it. Null when unknown. */
+  pot?: number | null;
   /** Unix seconds of the earliest start the vault reports. 0 when it reports none. */
   to: number;
 }) {
@@ -51,12 +61,17 @@ export function CycleProgress({
   const known = to > 0 && span > 0;
   const fraction = active ? 1 : known ? Math.min(1, Math.max(0, (now - from) / span)) : 0;
   const remaining = Math.max(0, Math.round(to - now));
+  /* Due by the clock but held back by the floor: the wait is now for value, not time, so the bar
+     measures the pot against the floor and the figure says how far it has to go. */
+  const waiting = !active && known && remaining <= 0 && pot != null && pot < PAYOUT_FLOOR_USD;
+  const shown = waiting ? Math.min(1, Math.max(0, pot / PAYOUT_FLOOR_USD)) : fraction;
 
   /* Seconds only inside the last minute. Above it they are noise on a cadence measured in hours,
      and a digit changing every second draws the eye to the least important part of the figure. */
   const countdown = () => {
     if (active) return "settling";
     if (!known) return "unscheduled";
+    if (waiting) return `$${Math.floor(pot)} of $${PAYOUT_FLOOR_USD}`;
     if (remaining <= 0) return "due now";
     const h = Math.floor(remaining / 3600);
     const m = Math.floor((remaining % 3600) / 60);
@@ -78,12 +93,12 @@ export function CycleProgress({
       {/* The bar is decoration over the two figures above it, which is why it is hidden rather than
           given a role: a `progressbar` here would make a screen reader read the same wait twice. */}
       <div aria-hidden="true" className={`cycle-progress-track${active ? " is-active" : ""}`}>
-        <span style={{ transform: `scaleX(${fraction.toFixed(4)})` }} />
+        <span style={{ transform: `scaleX(${shown.toFixed(4)})` }} />
       </div>
 
       <div className="cycle-progress-foot">
-        <span>{active ? "Pushing assets to holders" : "Hook fees accruing"}</span>
-        <span>{known || active ? "earliest start" : "no start scheduled"}</span>
+        <span>{active ? "Pushing assets to holders" : waiting ? "Waiting for the pot to fill" : "Hook fees accruing"}</span>
+        <span>{waiting ? `runs at $${PAYOUT_FLOOR_USD}` : known || active ? "earliest start" : "no start scheduled"}</span>
       </div>
     </div>
   );
