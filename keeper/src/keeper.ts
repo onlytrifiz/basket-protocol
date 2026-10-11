@@ -479,11 +479,36 @@ async function potValueUsd(): Promise<{ total: number; lines: PotLine[]; owed: b
     const decimals = asset?.decimals ?? (await decimalsOf(pot.token));
     if (decimals === null || decimals === undefined) return null;
     const units = Number(pot.raw) / 10 ** decimals;
-    const price = asset?.ticker ? market.quotes[asset.ticker]?.price : undefined;
+    // A token with no stock ticker (STONKEX, added 2026-10-11) is priced by what one whole token
+    // sells for on Velora, so the floor keeps working once one sits in the pot.
+    const price = asset?.ticker ? market.quotes[asset.ticker]?.price : await tokenPriceUsd(pot.token, decimals);
     lines.push({ token: pot.token, symbol: asset?.symbol ?? pot.token, units, usd: price ? units * price : null });
   }
   if (lines.some((line) => line.usd === null)) return { total: Number.NaN, lines, owed: owedAny };
   return { total: lines.reduce((sum, line) => sum + (line.usd ?? 0), 0), lines, owed: owedAny };
+}
+
+/** USD for one whole token, from a Velora sell quote into USDC. Undefined when it will not quote. */
+async function tokenPriceUsd(token: Address, decimals: number): Promise<number | undefined> {
+  const query = new URLSearchParams({
+    srcToken: token,
+    srcDecimals: String(decimals),
+    destToken: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    destDecimals: "6",
+    amount: (10n ** BigInt(decimals)).toString(),
+    side: "SELL",
+    network: "8453",
+    version: "6.2",
+  });
+  try {
+    const response = await fetch(`https://api.velora.xyz/prices?${query}`, { signal: AbortSignal.timeout(15_000) });
+    if (!response.ok) return undefined;
+    const payload = await response.json() as { priceRoute?: { destAmount?: string } };
+    const out = payload.priceRoute?.destAmount;
+    return out ? Number(out) / 1e6 : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /** True when the floor says this cycle should not run. Always false outside `enforce`. */
