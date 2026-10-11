@@ -140,6 +140,8 @@ export function SwapPanel() {
   const pickerRef = useRef<HTMLDivElement>(null);
   /** Which leg's dropdown is open, if any — the two pickers share one outside-click handler. */
   const [openPicker, setOpenPicker] = useState<"source" | "target" | null>(null);
+  /** What is typed in the open picker's search; cleared every time a picker opens. */
+  const [pickerQuery, setPickerQuery] = useState("");
 
   // A dropdown that ignores Escape or a click elsewhere is a dropdown that traps you.
   useEffect(() => {
@@ -442,7 +444,7 @@ export function SwapPanel() {
           aria-haspopup="listbox"
           className="asset-trigger"
           id={side === "target" ? "swap-target" : "swap-source"}
-          onClick={() => setOpenPicker((open) => (open === side ? null : side))}
+          onClick={() => { setPickerQuery(""); setOpenPicker((open) => (open === side ? null : side)); }}
           type="button"
         >
           {current.stock ? <StockLogo stock={current.stock} /> : current.symbol === "ETH"
@@ -450,31 +452,55 @@ export function SwapPanel() {
           <span>{current.symbol}</span>
           <svg aria-hidden="true" className="asset-caret" viewBox="0 0 10 6"><path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" strokeLinecap="round" strokeWidth="1.6" /></svg>
         </button>
-        {openPicker === side && (
-          <ul className="asset-menu" role="listbox" tabIndex={-1}>
-            {assets.map((entry) => (
-              <li key={entry.symbol}>
-                <button
-                  aria-selected={entry.symbol === current.symbol}
-                  className={entry.symbol === current.symbol ? "is-active" : undefined}
-                  onClick={() => {
-                    if (entry.symbol === other.symbol) flip();
-                    else if (side === "source") { setSourceSymbol(entry.symbol); clearTradeState(); }
-                    else { setTargetSymbol(entry.symbol); clearTradeState(); }
-                    setOpenPicker(null);
-                  }}
-                  role="option"
-                  type="button"
-                >
-                  {entry.stock ? <StockLogo stock={entry.stock} /> : entry.symbol === "ETH"
-                    ? <CoinMark symbol="ETH" size={22} /> : <StockifyMark small />}
-                  <span className="asset-symbol">{entry.symbol}</span>
-                  <span className="asset-name">{entry.name}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
+        {openPicker === side && (() => {
+          const query = pickerQuery.trim().toLowerCase();
+          const matches = query
+            ? assets.filter((entry) => entry.symbol.toLowerCase().includes(query) || entry.name.toLowerCase().includes(query))
+            : assets;
+          const choose = (entry: (typeof assets)[number]) => {
+            if (entry.symbol === other.symbol) flip();
+            else if (side === "source") { setSourceSymbol(entry.symbol); clearTradeState(); }
+            else { setTargetSymbol(entry.symbol); clearTradeState(); }
+            setOpenPicker(null);
+          };
+          return (
+            <div className="asset-menu">
+              <label className="asset-search">
+                <svg aria-hidden="true" viewBox="0 0 20 20"><circle cx="9" cy="9" r="5.5" fill="none" stroke="currentColor" strokeWidth="1.6" /><path d="M13.2 13.2L17 17" stroke="currentColor" strokeLinecap="round" strokeWidth="1.6" /></svg>
+                <input
+                  aria-label="Search assets"
+                  autoComplete="off"
+                  autoFocus
+                  onChange={(event) => setPickerQuery(event.target.value)}
+                  onKeyDown={(event) => { if (event.key === "Enter" && matches[0]) { event.preventDefault(); choose(matches[0]); } }}
+                  placeholder="Search name or ticker"
+                  spellCheck={false}
+                  type="search"
+                  value={pickerQuery}
+                />
+              </label>
+              <ul className="asset-menu-list" role="listbox" tabIndex={-1}>
+                {matches.map((entry) => (
+                  <li key={entry.symbol}>
+                    <button
+                      aria-selected={entry.symbol === current.symbol}
+                      className={entry.symbol === current.symbol ? "is-active" : undefined}
+                      onClick={() => choose(entry)}
+                      role="option"
+                      type="button"
+                    >
+                      {entry.stock ? <StockLogo stock={entry.stock} /> : entry.symbol === "ETH"
+                        ? <CoinMark symbol="ETH" size={22} /> : <StockifyMark small />}
+                      <span className="asset-symbol">{entry.symbol}</span>
+                      <span className="asset-name">{entry.name}</span>
+                    </button>
+                  </li>
+                ))}
+                {matches.length === 0 && <li className="asset-empty">No asset matches “{pickerQuery.trim()}”</li>}
+              </ul>
+            </div>
+          );
+        })()}
       </div>
     );
   };

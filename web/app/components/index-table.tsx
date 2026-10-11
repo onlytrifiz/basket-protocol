@@ -64,7 +64,7 @@ export function IndexTable({
         return (
           <Link className="idx-row" href={`/indices/${row.address}`} key={row.address} role="row">
             <span className="idx-coin idx-coin-logo" role="cell">
-              <span aria-hidden="true" className="coin-mark" data-coin={row.coin.toLowerCase()}>
+              <span aria-hidden="true" className="launch-mark" data-coin={row.coin.toLowerCase()}>
                 <i>{(row.coinSymbol ?? "?").slice(0, 2)}</i>
               </span>
               <span>

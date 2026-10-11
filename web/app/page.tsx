@@ -132,7 +132,7 @@ export default async function Home() {
      instead of on "not bought by the vault". */
   /* The order the fan reads in. Named cards come first in this order; anything else follows by
      weight, so a holding added later still lands somewhere sensible without an edit here. */
-  const STAGE_ORDER = ["NVDAc", "COINc", "AAPLc", "METAc", "GOOGLc", "STONKEX", "SPCXc"];
+  const STAGE_ORDER = ["NVDAc", "METAc", "AAPLc", "GOOGLc", "STONKEX", "SPCXc"];
   const stageRank = (symbol: string) => {
     const i = STAGE_ORDER.indexOf(symbol);
     return i === -1 ? STAGE_ORDER.length : i;
@@ -171,11 +171,9 @@ export default async function Home() {
         distributedValue: units && price ? units * price : null, tag: "TOKEN / BASE",
       }];
     }))
-    /* THE FIVE THE VAULT BUYS, PLUS COINBASE. Thirteen cards made the band a catalogue; the five
-       that actually pay out are the claim the page is making, and Coinbase is on it because it is
-       the issuer of every one of these tokens rather than because the vault holds it. The full
-       thirteen are one section down, as a grid, which is the shape a catalogue wants. */
-    .filter((stock) => stock.weightBps !== null || stock.symbol === "COINc")
+    /* ONLY WHAT THE VAULT BUYS. A card for every listing made the band a catalogue; the assets that
+       actually pay out are the claim the page is making. The full list is one section down. */
+    .filter((stock) => stock.weightBps !== null)
     .sort((a, b) => stageRank(a.symbol) - stageRank(b.symbol) || (b.weightBps ?? -1) - (a.weightBps ?? -1));
 
   const slices = vault.holdings.map((h) => {

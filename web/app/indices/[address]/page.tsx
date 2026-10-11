@@ -283,7 +283,7 @@ export default async function IndexPage({
               <div className="idx-hero-id">
                 {/* Filled here when the server got the artwork, and by the browser when it did not. */}
                 <span
-                  className={`idx-mark coin-mark${art ? " has-art" : ""}`}
+                  className={`idx-mark launch-mark${art ? " has-art" : ""}`}
                   data-coin={bound ? index.coin.toLowerCase() : undefined}
                   style={art ? ({ "--art": `url("${art}")` } as React.CSSProperties) : undefined}
                 >
