@@ -1439,3 +1439,22 @@ span.count-up {
 .wallet-result-head span { color: var(--ink-3); font: 500 .7rem var(--mono-stack); letter-spacing: .12em; text-transform: uppercase; }
 .wallet-result-head button { background: none; border: 1px solid var(--line-2); border-radius: var(--r-pill); color: var(--ink-2); cursor: pointer; font: 550 .8rem var(--ui-stack); padding: 6px 12px; }
 .wallet-result-head button:hover { border-color: var(--ink-3); color: var(--ink); }
+
+/* ---------- /dividends: the index heading carries the vault's two figures ---- */
+.index-head-v2 { align-items: end; display: flex; flex-wrap: wrap; gap: 28px 56px; justify-content: space-between; }
+.index-head-v2 .section-head { flex: 1 1 420px; }
+.index-kpis { display: flex; gap: 12px; margin: 0; }
+.index-kpis > div {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  min-width: 200px;
+  padding: 20px 24px;
+}
+.index-kpis dt { color: var(--ink-3); font: 500 .66rem var(--mono-stack); letter-spacing: .12em; text-transform: uppercase; }
+.index-kpis dd { font: 500 clamp(1.9rem, 3vw, 2.4rem) var(--mono-stack); letter-spacing: -.05em; line-height: 1; margin: 12px 0 8px; }
+.index-kpis small { color: var(--ink-3); display: block; font-size: .78rem; }
+@media (max-width: 560px) {
+  .index-kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; }
+  .index-kpis > div { min-width: 0; padding: 16px 18px; }
+}

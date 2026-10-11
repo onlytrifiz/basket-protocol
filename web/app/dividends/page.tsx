@@ -7,7 +7,7 @@ import { readLedger } from "../../lib/ledger";
 import { stockByAddress, washColor } from "../../lib/stocks";
 import { marketBoard } from "../../lib/market";
 import { readVault } from "../../lib/vault";
-import { shares as fmtShares, stamp, until, usd, usdCompact } from "../../lib/format";
+import { shares as fmtShares, stamp, usd } from "../../lib/format";
 import { AssetCard, type AssetCardRow } from "../components/asset-card";
 import { BrandRender } from "../components/brand-render";
 import { CycleProgress } from "../components/cycle-progress";
@@ -152,11 +152,9 @@ export default async function DividendPage({ searchParams }: PageProps<"/dividen
     };
   });
 
-  const acquired = rows.reduce((sum, r) => sum + (r.value ?? 0), 0);
   // What has actually left for holders, summed across every cycle the vault ever settled — from the
   // per-asset totals above, so an unread scale is skipped in one place rather than two.
   const distributedShares = [...distributedByAsset.values()].reduce((sum, units) => sum + units, 0);
-  const anyHeld = rows.some((r) => (r.held ?? 0) > 0);
   /**
    * Off the SAME map as the share count above, so the two describe one set of assets.
    *
@@ -193,55 +191,32 @@ export default async function DividendPage({ searchParams }: PageProps<"/dividen
 
         <WalletCheckResult />
 
-        <section className="stats-band" aria-label="Vault state">
-          <div className="stats-inner">
-            {/* What the vault is sitting on right now. "Idle" was true but empty: the cycle state
-                is a label, while the stock waiting to be pushed is the thing a holder is owed. The
-                cadence moves into the caption, where it explains WHEN this clears rather than
-                occupying the number. */}
-            <div>
-              <span>In the vault</span>
-              <strong>{anyHeld ? usdCompact(acquired) : "—"}</strong>
-              <small>
-                {vault.cycleActive
-                  ? "distributing now"
-                  : anyHeld
-                    ? vault.nextDistribution > 0
-                      ? `pushes out ${until(vault.nextDistribution)}`
-                      : "awaiting the first cycle"
-                    : "nothing acquired yet"}
-              </small>
-            </div>
-            {/* Distributed first. The vault is drained every cycle, so its balance is a number that
-                spends most of its life at zero — what reached holders is the one that accumulates. */}
-            <div>
-              <span>Distributed</span>
-              <strong>{anyDistributed ? <CountUp format="usdCompact" value={distributedValue} /> : "—"}</strong>
-              <small>{anyDistributed ? "to holders, all time" : "no cycle has settled yet"}</small>
-            </div>
-            <div>
-              <span>Awaiting the next buy</span>
-              <strong>{eth === null ? "—" : `${eth.toFixed(4)} ETH`}</strong>
-              <small>{anyHeld ? `plus ${usdCompact(acquired)} in stock` : "hook fees, not yet deployed"}</small>
-            </div>
-            <div>
-              <span>Eligible holders</span>
-              <strong>{vault.holderCount === null ? "—" : vault.holderCount}</strong>
-              <small>
-                {vault.holderCount === null
-                  ? "registry unreadable"
-                  : threshold === null ? "threshold unread" : `holding ${fmtShares(threshold)}+ STFY`}
-              </small>
-            </div>
-          </div>
-        </section>
-
-
         <section className="section wrap hub-section">
-          <div className="section-head">
-            <p className="eyebrow">THE ACTIVE INDEX</p>
-            <h2>{vault.holdings.length || "No"} stocks in the index.</h2>
-            <p>Stockify dividends are currently distributing the following stocks:</p>
+          {/* The vault's two lasting figures sit with the index they come from, instead of a band of
+              four where two (the vault's balance and the ETH awaiting a buy) spend most of their life
+              at zero between cycles. */}
+          <div className="index-head-v2">
+            <div className="section-head">
+              <p className="eyebrow">THE ACTIVE INDEX</p>
+              <h2>{vault.holdings.length || "No"} stocks in the index.</h2>
+              <p>Stockify dividends are currently distributing the following stocks:</p>
+            </div>
+            <dl className="index-kpis">
+              <div>
+                <dt>Distributed</dt>
+                <dd>{anyDistributed ? <CountUp format="usdCompact" value={distributedValue} /> : "—"}</dd>
+                <small>{anyDistributed ? "to holders, all time" : "no cycle has settled yet"}</small>
+              </div>
+              <div>
+                <dt>Eligible holders</dt>
+                <dd>{vault.holderCount === null ? "—" : vault.holderCount.toLocaleString("en-US")}</dd>
+                <small>
+                  {vault.holderCount === null
+                    ? "registry unreadable"
+                    : threshold === null ? "threshold unread" : `holding ${fmtShares(threshold)}+ STFY`}
+                </small>
+              </div>
+            </dl>
           </div>
 
           {vault.live && rows.length > 0 ? (
