@@ -3,6 +3,8 @@ import { Fragment } from "react";
 import Link from "next/link";
 
 import { readAssets } from "../../../lib/b20";
+import { coinArt } from "../../../lib/coin-art";
+import { indexAsset } from "../../../lib/index-assets";
 import { readDecimals, readDecimalsOf, toUnits } from "../../../lib/decimals";
 import {
   MIN_HOLDER_COINS,
@@ -148,32 +150,206 @@ export default async function IndexPage({
   const waiting = toUnits(index.spendable.toString(), quoteDecimals);
   const creatorWaiting = toUnits(index.creatorClaimable.toString(), quoteDecimals);
 
+  const returned = returnedUsd({
+    mode: index.mode,
+    paidUsd: history?.paidUsd ?? null,
+    burnedUsd: history?.burnedUsd ?? null,
+  });
+  const symbol = index.coinSymbol ?? (bound ? shorten(index.coin) : "Unbound");
+  // A coin the site already carries art for wins over the launchpad lookup, which can miss.
+  const art = bound
+    ? indexAsset(index.coin)?.logo ?? (await coinArt([index.coin])).get(index.coin.toLowerCase())
+    : undefined;
+  const tint = burns ? "var(--burn-fg)" : "var(--blue)";
+  const pct = (bps: number) => `${(bps / 100).toFixed(0)}%`;
+
+  const feed = events.length > 0 && (
+    <section aria-labelledby="idx-activity" className="idx-panel idx-activity">
+      <header className="idx-panel-head">
+        <h2 id="idx-activity">Activity</h2>
+        <span>{events.length.toLocaleString("en-US")} {events.length === 1 ? "entry" : "entries"}</span>
+      </header>
+
+      {/* An ordered list, not a stack of links: the order IS the record, and a screen
+          reader that cannot tell one entry from the next loses the only structure here. */}
+      <ol className="idx-feed">
+        {visible.map((event, i) => {
+          const asset = event.token ? byAddress.get(event.token.toLowerCase()) : undefined;
+          /**
+           * The scale of whatever this row moved, and it is three different tokens.
+           *
+           * Fees arrive in the quote. A payout is an equity, which is eight. A burn and a
+           * buyback's purchase are the COIN — not a B20, so looking it up in the asset map
+           * found nothing and every one of those rows rendered an em dash.
+           */
+          const isCoin = !!event.token && event.token.toLowerCase() === index.coin.toLowerCase();
+          const scale = event.kind === "fees"
+            ? quoteDecimals
+            : isCoin
+              ? coinDecimals
+              : event.token
+                ? basketDecimals.get(event.token.toLowerCase()) ?? null
+                : null;
+          const spent = event.spentRaw ? toUnits(event.spentRaw, quoteDecimals) : null;
+          const value = toUnits(event.amountRaw, scale);
+          const rowSymbol = event.kind === "fees"
+            ? quoteLabel
+            : isCoin
+              ? index.coinSymbol ?? ""
+              : asset?.symbol ?? symbolOfHolding(event.token) ?? "";
+          const label = event.kind === "fees"
+            ? "Fees in"
+            : event.kind === "bought"
+              ? "Bought"
+              : event.kind === "burn"
+                ? "Burned"
+                : "Paid out";
+          const day = dayOf(event.timestamp);
+          const opensDay = i === 0 || dayOf(visible[i - 1].timestamp) !== day;
+
+          return (
+            <Fragment key={`${event.txHash}-${event.kind}-${event.logIndex}`}>
+              {/* Only where the day actually turns. A divider on every row would be a
+                  decoration; here it is the one thing "12m ago" cannot tell you. */}
+              {opensDay && (
+                <li aria-hidden="true" className="idx-feed-day"><span>{day}</span></li>
+              )}
+              <li className={`idx-feed-item is-${event.kind}`}>
+                <a
+                  className="idx-feed-row"
+                  href={`https://basescan.org/tx/${event.txHash}`}
+                  rel="noreferrer"
+                  target="_blank"
+                >
+                  {/* The node carries the one thing four identical grey rows could not say:
+                      which way value moved. Filled where it settled — in, or out for good —
+                      and hollow for a buy, which is the only state where value is inside the
+                      treasury and has not left yet. */}
+                  <span aria-hidden="true" className="idx-feed-node" />
+                  <span className="idx-kind">{label}</span>
+                  <span className="idx-feed-what">
+                    <b className="idx-feed-amount">{value === null ? "—" : amount(value)}</b>
+                    {rowSymbol && <span className="idx-feed-sym">{rowSymbol}</span>}
+                    {event.holders !== undefined && (
+                      <small>to {event.holders.toLocaleString("en-US")} holder{event.holders === 1 ? "" : "s"}</small>
+                    )}
+                    {/* What the buy cost, so the feed reads as one motion: fee in, equity out. */}
+                    {spent !== null && <small>for {amount(spent)} {quoteLabel}</small>}
+                  </span>
+                  <span className="idx-feed-when">{since(event.timestamp)}</span>
+                </a>
+              </li>
+            </Fragment>
+          );
+        })}
+      </ol>
+
+      {pageCount > 1 && (
+        <nav aria-label="Activity pages" className="idx-pager">
+          {page > 1 ? (
+            <Link className="idx-pager-step" href={`/indices/${index.address}?page=${page - 1}`} rel="prev" scroll={false}>
+              ← Newer
+            </Link>
+          ) : (
+            /* The end of the record is shown, not hidden: a missing control reads as a bug,
+               a spent one reads as the edge of what there is. */
+            <span aria-disabled="true" className="idx-pager-step is-spent">← Newer</span>
+          )}
+          <span className="idx-pager-count">
+            Page <b>{page}</b> of <b>{pageCount.toLocaleString("en-US")}</b>
+          </span>
+          {page < pageCount ? (
+            <Link className="idx-pager-step" href={`/indices/${index.address}?page=${page + 1}`} rel="next" scroll={false}>
+              Older →
+            </Link>
+          ) : (
+            <span aria-disabled="true" className="idx-pager-step is-spent">Older →</span>
+          )}
+        </nav>
+      )}
+    </section>
+  );
+
   return (
     <div className="site-shell">
       <SiteHeader active="indices" />
-      <main>
-        <section className="section wrap idx-head">
-          <Link className="detail-back" href="/indices">← The live set</Link>
+      <main className="idx-page">
+        <section className="wrap idx-top">
+          <Link className="detail-back" href="/indices">← All indices</Link>
 
-          <header className="detail-head">
-            <div className="idx-head-id">
-              <p className="eyebrow">{burns ? "BUYBACK AND BURN" : "HOLDER REWARDS"}</p>
-              <h1>{index.coinSymbol ?? (bound ? shorten(index.coin) : "Not bound yet")}</h1>
-              <p className="detail-id">
-                <a href={`https://basescan.org/address/${index.address}`} rel="noreferrer" target="_blank">
-                  {index.address} ↗
-                </a>
-              </p>
-            </div>
-            {/* Paused is a state that changes what this index is doing right now. Whether the fee
-                stream could in principle be taken back is not — and when it actually IS taken back,
-                `stillCollecting` says so below, in the only terms a holder can act on. */}
-            {index.paused && (
-              <div className="detail-badges">
-                <span className="chip">Paused</span>
+          <div className="detail-canvas idx-canvas" style={{ "--brand": tint } as React.CSSProperties}>
+            <div className="idx-hero">
+              <div className="idx-hero-id">
+                <span className="idx-mark">
+                  {art
+                    // eslint-disable-next-line @next/next/no-img-element
+                    ? <img alt="" height={72} src={art} width={72} />
+                    : <i aria-hidden="true">{symbol.slice(0, 2)}</i>}
+                </span>
+                <div>
+                  <p className="idx-tags">
+                    <span className={`idx-tag${burns ? " is-burn" : ""}`}>{burns ? "Buyback and burn" : "Holder rewards"}</span>
+                    {/* Paused changes what this index is doing right now, so it sits by the name. */}
+                    {index.paused && <span className="idx-tag is-paused">Paused</span>}
+                  </p>
+                  <h1>{symbol}</h1>
+                  <a className="idx-addr-pill" href={`https://basescan.org/address/${index.address}`} rel="noreferrer" target="_blank">
+                    {shorten(index.address)} ↗
+                  </a>
+                </div>
               </div>
-            )}
-          </header>
+
+              <div className="idx-hero-figure">
+                <span>{burns ? "Burned" : "Paid to holders"}</span>
+                {/* The list's own definition, fed from this page's figures, so the headline here
+                    and the row over on /indices can never print two different numbers. */}
+                <strong>{returned ? usdCompact(returned) : "—"}</strong>
+                <small>
+                  {unread
+                    ? "could not be read"
+                    : burns
+                      ? history?.burnedUnits
+                        ? `${fmtShares(history.burnedUnits)} ${index.coinSymbol ?? "coins"} destroyed`
+                        : "nothing yet"
+                      : history?.paidUnits.length
+                        ? history.paidUnits.map((p) => `${amount(p.units)} ${p.symbol}`).join(" · ")
+                        : "nothing yet"}
+                </small>
+              </div>
+            </div>
+
+            <dl className="idx-kpis">
+              {/* "Rounds paid: 0" beside "$60 burned" reads as an index that has done nothing. A
+                  buyback has no rounds — it has burns, and that is the count worth showing. */}
+              <div>
+                <dt>{burns ? "Burns run" : "Rounds paid"}</dt>
+                <dd>{history ? (burns ? burnCount : history.rounds).toLocaleString("en-US") : "—"}</dd>
+                <small>
+                  {unread
+                    ? "could not be read"
+                    : burns
+                      ? burnCount > 0 ? "supply destroyed each time" : "none yet"
+                      : history && history.rounds > 0
+                        ? `${history.payments.toLocaleString("en-US")} wallet payments`
+                        : "none yet"}
+                </small>
+              </div>
+              <div>
+                <dt>Fees collected</dt>
+                <dd>{history?.feesUsd ? usdCompact(history.feesUsd) : "—"}</dd>
+                <small>
+                  {unread ? "could not be read" : history?.feesUnits ? `${amount(history.feesUnits)} ${quoteLabel}` : "none yet"}
+                </small>
+              </div>
+              <div>
+                <dt>Creator earnings</dt>
+                <dd>{history?.creatorUsd ? usd(history.creatorUsd) : "—"}</dd>
+                <small>
+                  {index.creatorShareBps > 0 ? `${pct(split.creator)} of net fees` : "all of it goes to holders"}
+                </small>
+              </div>
+            </dl>
+          </div>
 
           {bound && !index.stillCollecting && (
             <p className="hub-note-degraded">
@@ -190,294 +366,109 @@ export default async function IndexPage({
           )}
         </section>
 
-        {/* What it has actually done. */}
-        <section className="stats-band" aria-label="What this index has done">
-          <div className="stats-inner">
-            {/* What this index produces, which is not the same thing in both modes. */}
-            <div>
-              <span>{burns ? "Burned" : "Paid to holders"}</span>
-              <strong>
-                {(() => {
-                  // The list's own definition, fed from this page's figures, so the headline here
-                  // and the row over on /indices can never print two different numbers.
-                  const returned = returnedUsd({
-                    mode: index.mode,
-                    paidUsd: history?.paidUsd ?? null,
-                    burnedUsd: history?.burnedUsd ?? null,
-                  });
-                  return returned ? usdCompact(returned) : "—";
-                })()}
-              </strong>
-              <small>
-                {unread
-                  ? "could not be read"
-                  : burns
-                    ? history?.burnedUnits
-                      ? `${fmtShares(history.burnedUnits)} ${index.coinSymbol ?? "coins"} destroyed`
-                      : "nothing yet"
-                    : history?.paidUnits.length
-                      ? history.paidUnits.map((p) => `${amount(p.units)} ${p.symbol}`).join(" · ")
-                      : "nothing yet"}
-              </small>
-            </div>
-            {/* "Rounds paid: 0" beside "$60 burned" reads as an index that has done nothing. A
-                buyback has no rounds — it has burns, and that is the count worth showing. */}
-            <div>
-              <span>{burns ? "Burns run" : "Rounds paid"}</span>
-              <strong>{history ? (burns ? burnCount : history.rounds) : "—"}</strong>
-              <small>
-                {unread
-                  ? "could not be read"
-                  : burns
-                    ? burnCount > 0 ? "supply destroyed each time" : "none yet"
-                    : history && history.rounds > 0
-                      ? `${history.payments.toLocaleString("en-US")} wallet payments`
-                      : "none yet"}
-              </small>
-            </div>
-            <div>
-              <span>Fees collected</span>
-              <strong>{history?.feesUsd ? usdCompact(history.feesUsd) : "—"}</strong>
-              <small>
-                {unread
-                  ? "could not be read"
-                  : history?.feesUnits
-                    ? `${amount(history.feesUnits)} ${quoteLabel}`
-                    : "none yet"}
-              </small>
-            </div>
-            <div>
-              <span>Creator earnings</span>
-              <strong>{history?.creatorUsd ? usd(history.creatorUsd) : "—"}</strong>
-              <small>
-                {index.creatorShareBps > 0
-                  ? `${(split.creator / 100).toFixed(0)}% of net fees`
-                  : "all of it goes to holders"}
-              </small>
-            </div>
-          </div>
-        </section>
-
-        {/* Where it stands right now. */}
-        <section className="stats-band" aria-label="Where this index stands">
-          <div className="stats-inner">
-            <div>
-              <span>Waiting to be invested</span>
-              <strong>{waiting === null ? "—" : `${amount(waiting)} ${quoteLabel}`}</strong>
-              <small>collected, not yet spent</small>
-            </div>
-            <div>
-              <span>Payout round</span>
-              <strong>{burns ? "any time" : cadence(index.interval)}</strong>
-              <small>{burns ? "the burn is open to anyone" : "at the earliest"}</small>
-            </div>
-            <div>
-              <span>Waiting for the creator</span>
-              <strong>{creatorWaiting === null ? "—" : `${amount(creatorWaiting)} ${quoteLabel}`}</strong>
-              <small>claimable by them, not spendable</small>
-            </div>
-            <div>
-              <span>To {burns ? "the burn" : "holders"}</span>
-              <strong>{(split.holders / 100).toFixed(0)}%</strong>
-              <small>{(split.platform / 100).toFixed(0)}% protocol · {(split.creator / 100).toFixed(0)}% creator</small>
-            </div>
-          </div>
-        </section>
-
-        <section className="section wrap hub-section">
-          <div className="section-head">
-            <p className="eyebrow">{burns ? "WHAT IT BUYS" : "WHAT IT HOLDS"}</p>
-            <h2>{burns ? "Its own coin, then destroys it." : `${index.basket.length} ${index.basket.length === 1 ? "name" : "names"}, fixed at creation.`}</h2>
-            <p>
-              {burns
-                ? "Nothing is handed out and no holder list is ever read, which is why the burn below is open to anyone."
-                : `Bought by weight, paid out per name. Holders under ${MIN_HOLDER_COINS.toLocaleString("en-US")} coins are skipped and their slice stays with everyone above the line.`}
-            </p>
-          </div>
-
-          {!burns && index.basket.length > 0 && (
-            <div className="idx-table" role="table" aria-label="Composition">
-              <div className="idx-row idx-row-head idx-row-holds" role="row">
-                <span role="columnheader">Holding</span>
-                <span role="columnheader">Weight</span>
-                <span role="columnheader">Paid out so far</span>
-              </div>
-              {index.basket.map((token, i) => {
-                const asset = byAddress.get(token.toLowerCase());
-                const symbolFor = (idx: number, t: string) =>
-                  asset?.symbol ?? index.basketSymbols[idx] ?? shorten(t);
-                const paid = history?.paidUnits.find((p) => p.token.toLowerCase() === token.toLowerCase());
-                return (
-                  <div className="idx-row idx-row-holds" key={token} role="row">
-                    <span className="idx-coin idx-coin-logo" role="cell">
-                      {/* A basket entry is any ERC-20 the treasury was created with, so the seed
-                          list answers for the equities and the chain answers for everything else.
-                          Only a token that will not say either falls back to its address. */}
-                      <StockLogo logo={asset?.logo} stock={{ symbol: symbolFor(i, token), domain: asset?.domain }} />
-                      <span>
-                        <b>{symbolFor(i, token)}</b>
-                        <small>{asset?.name ?? token}</small>
-                      </span>
-                    </span>
-                    <span className="idx-num" data-label="Weight" role="cell">
-                      <b>{((index.weights[i] ?? 0) / 100).toFixed(0)}%</b>
-                    </span>
-                    <span className="idx-num" data-label="Paid out so far" role="cell">
-                      <b>{paid ? `${amount(paid.units)}` : "—"}</b>
-                      {paid && <small>{symbolFor(i, token)}</small>}
-                    </span>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </section>
-
-        {events.length > 0 && (
-          <section className="section wrap hub-section">
-            <div className="section-head">
-              <p className="eyebrow">EVERYTHING IT HAS DONE</p>
-              <h2>{events.length} {events.length === 1 ? "entry" : "entries"}.</h2>
-            </div>
-
-            {/* An ordered list, not a stack of links: the order IS the record, and a screen
-                reader that cannot tell one entry from the next loses the only structure here. */}
-            <ol className="idx-feed">
-              {visible.map((event, i) => {
-                const asset = event.token ? byAddress.get(event.token.toLowerCase()) : undefined;
-                /**
-                 * The scale of whatever this row moved, and it is three different tokens.
-                 *
-                 * Fees arrive in the quote. A payout is an equity, which is eight. A burn and a
-                 * buyback's purchase are the COIN — not a B20, so looking it up in the asset map
-                 * found nothing and every one of those rows rendered an em dash.
-                 */
-                const isCoin = !!event.token && event.token.toLowerCase() === index.coin.toLowerCase();
-                const scale = event.kind === "fees"
-                  ? quoteDecimals
-                  : isCoin
-                    ? coinDecimals
-                    : event.token
-                      ? basketDecimals.get(event.token.toLowerCase()) ?? null
-                      : null;
-                const spent = event.spentRaw ? toUnits(event.spentRaw, quoteDecimals) : null;
-                const value = toUnits(event.amountRaw, scale);
-                const symbol = event.kind === "fees"
-                  ? quoteLabel
-                  : isCoin
-                    ? index.coinSymbol ?? ""
-                    : asset?.symbol ?? symbolOfHolding(event.token) ?? "";
-                const label = event.kind === "fees"
-                  ? "Fees in"
-                  : event.kind === "bought"
-                    ? "Bought"
-                    : event.kind === "burn"
-                      ? "Burned"
-                      : "Paid out";
-                const day = dayOf(event.timestamp);
-                const opensDay = i === 0 || dayOf(visible[i - 1].timestamp) !== day;
-
-                return (
-                  <Fragment key={`${event.txHash}-${event.kind}-${event.logIndex}`}>
-                    {/* Only where the day actually turns. A divider on every row would be a
-                        decoration; here it is the one thing "12m ago" cannot tell you. */}
-                    {opensDay && (
-                      <li aria-hidden="true" className="idx-feed-day"><span>{day}</span></li>
-                    )}
-                    <li className={`idx-feed-item is-${event.kind}`}>
-                      <a
-                        className="idx-feed-row"
-                        href={`https://basescan.org/tx/${event.txHash}`}
-                        rel="noreferrer"
-                        target="_blank"
-                      >
-                        {/* The node carries the one thing four identical grey rows could not say:
-                            which way value moved. Filled where it settled — in, or out for good —
-                            and hollow for a buy, which is the only state where value is inside the
-                            treasury and has not left yet. */}
-                        <span aria-hidden="true" className="idx-feed-node" />
-                        <span className="idx-kind">{label}</span>
-                        <span className="idx-feed-what">
-                          <b className="idx-feed-amount">{value === null ? "—" : amount(value)}</b>
-                          {symbol && <span className="idx-feed-sym">{symbol}</span>}
-                          {event.holders !== undefined && (
-                            <small>to {event.holders.toLocaleString("en-US")} holder{event.holders === 1 ? "" : "s"}</small>
-                          )}
-                          {/* What the buy cost, so the feed reads as one motion: fee in, equity out. */}
-                          {spent !== null && <small>for {amount(spent)} {quoteLabel}</small>}
+        <div className="wrap idx-layout">
+          <div className="idx-main">
+            {!burns && index.basket.length > 0 && (
+              <section aria-labelledby="idx-holds" className="idx-panel idx-holds-panel">
+                <header className="idx-panel-head">
+                  <h2 id="idx-holds">What it holds</h2>
+                  <span>{index.basket.length} {index.basket.length === 1 ? "name" : "names"}, fixed at creation</span>
+                </header>
+                <ul className="idx-holdings">
+                  {index.basket.map((token, i) => {
+                    const asset = byAddress.get(token.toLowerCase());
+                    // A basket entry is any ERC-20 the treasury was created with, so the seed list
+                    // answers for the equities and the chain answers for everything else. Only a
+                    // token that will not say either falls back to its address.
+                    const name = asset?.symbol ?? index.basketSymbols[i] ?? shorten(token);
+                    const paid = history?.paidUnits.find((p) => p.token.toLowerCase() === token.toLowerCase());
+                    const weight = (index.weights[i] ?? 0) / 100;
+                    return (
+                      <li key={token}>
+                        <StockLogo logo={asset?.logo} stock={{ symbol: name, domain: asset?.domain }} />
+                        <span className="idx-holding-id">
+                          <b>{name}</b>
+                          <small>{paid ? `${amount(paid.units)} paid out` : "nothing paid yet"}</small>
                         </span>
-                        <span className="idx-feed-when">{since(event.timestamp)}</span>
-                      </a>
-                    </li>
-                  </Fragment>
-                );
-              })}
-            </ol>
-
-            {pageCount > 1 && (
-              <nav aria-label="Activity pages" className="idx-pager">
-                {page > 1 ? (
-                  <Link className="idx-pager-step" href={`/indices/${index.address}?page=${page - 1}`} rel="prev">
-                    ← Newer
-                  </Link>
-                ) : (
-                  /* The end of the record is shown, not hidden: a missing control reads as a bug,
-                     a spent one reads as the edge of what there is. */
-                  <span aria-disabled="true" className="idx-pager-step is-spent">← Newer</span>
-                )}
-                <span className="idx-pager-count">
-                  Page <b>{page}</b> of <b>{pageCount}</b>
-                </span>
-                {page < pageCount ? (
-                  <Link className="idx-pager-step" href={`/indices/${index.address}?page=${page + 1}`} rel="next">
-                    Older →
-                  </Link>
-                ) : (
-                  <span aria-disabled="true" className="idx-pager-step is-spent">Older →</span>
-                )}
-              </nav>
+                        <span className="idx-holding-weight">
+                          <b>{weight.toFixed(0)}%</b>
+                          <i aria-hidden="true"><span style={{ width: `${weight}%` }} /></i>
+                        </span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
             )}
-          </section>
-        )}
-
-        <section className="section wrap hub-section">
-          <div className="section-head">
-            <p className="eyebrow">CONTRACTS</p>
-            <h2>The addresses behind it.</h2>
+            {feed}
           </div>
-          <div className="idx-addrs">
-            {([["Coin", bound ? index.coin : null], ["Index treasury", index.address], ["Fees arrive in", index.quote === "0x0000000000000000000000000000000000000000" ? null : index.quote]] as Array<[string, string | null]>)
-              .filter(([, value]) => !!value)
-              .map(([label, value]) => (
-                <div className="idx-addr" key={label}>
-                  <span>{label}</span>
-                  <a href={`https://basescan.org/address/${value}`} rel="noreferrer" target="_blank">{value}</a>
+
+          <aside className="idx-side">
+            <section aria-labelledby="idx-now" className="idx-panel idx-now">
+              <header className="idx-panel-head"><h2 id="idx-now">Right now</h2></header>
+              <dl className="idx-facts">
+                <div>
+                  <dt>Waiting to be invested</dt>
+                  <dd>{waiting === null ? "—" : `${amount(waiting)} ${quoteLabel}`}</dd>
                 </div>
-              ))}
-          </div>
-        </section>
+                <div>
+                  <dt>{burns ? "Next burn" : "Payout round"}</dt>
+                  <dd>{burns ? "Any time" : `Every ${cadence(index.interval)}`}</dd>
+                </div>
+                <div>
+                  <dt>Owed to the creator</dt>
+                  <dd>{creatorWaiting === null ? "—" : `${amount(creatorWaiting)} ${quoteLabel}`}</dd>
+                </div>
+              </dl>
+            </section>
 
-        <section className="section wrap hub-section">
-          <div className="section-head">
-            <p className="eyebrow">ANYONE CAN RUN THESE</p>
-            <h2>None of them can be pointed anywhere.</h2>
-            <p>
-              Collecting only moves money in. The burn has one destination. The creator payment goes to
-              the creator whoever pays the gas. That is why they are open to everyone.
-            </p>
-          </div>
-          <IndexActions address={index.address} buyback={burns} />
-        </section>
+            <section aria-labelledby="idx-split" className="idx-panel idx-split">
+              <header className="idx-panel-head"><h2 id="idx-split">Where each fee goes</h2></header>
+              <div aria-hidden="true" className="idx-split-bar">
+                <span className="is-holders" style={{ flexGrow: split.holders }} />
+                {split.platform > 0 && <span className="is-platform" style={{ flexGrow: split.platform }} />}
+                {split.creator > 0 && <span className="is-creator" style={{ flexGrow: split.creator }} />}
+              </div>
+              <ul className="idx-split-legend">
+                <li className="is-holders"><span>{burns ? "Buyback and burn" : "Holders"}</span><b>{pct(split.holders)}</b></li>
+                <li className="is-platform"><span>Protocol</span><b>{pct(split.platform)}</b></li>
+                <li className="is-creator"><span>Creator</span><b>{pct(split.creator)}</b></li>
+              </ul>
+              <p className="idx-panel-note">
+                {burns
+                  ? `Every fee buys ${index.coinSymbol ?? "the coin"} back and destroys it. No holder list is read, so the burn is open to anyone.`
+                  : `Paid pro-rata on the coin balance held when a round runs; nothing to claim. Wallets under ${MIN_HOLDER_COINS.toLocaleString("en-US")} coins are skipped and their slice stays with everyone else.`}
+              </p>
+            </section>
 
-        <p className="desk-note wrap" style={{ paddingBottom: "3rem" }}>
-          Holders are paid pro-rata on the coin balance they hold when a round runs. There is nothing
-          to claim. Wallets under {MIN_HOLDER_COINS.toLocaleString("en-US")} coins are skipped, and
-          their slice stays with everyone else instead of going to gas. Stockify keeps{" "}
-          {(split.platform / 100).toFixed(0)}% of the fees;{" "}
-          {index.creatorShareBps > 0
-            ? `the creator keeps ${(split.creator / 100).toFixed(0)}% of what is left.`
-            : "the creator keeps nothing, so all of the rest goes to holders."}
-        </p>
+            <section aria-labelledby="idx-run" className="idx-panel idx-run">
+              <header className="idx-panel-head"><h2 id="idx-run">Run it yourself</h2></header>
+              <p className="idx-panel-note">
+                Collecting only moves money in, the burn has one destination, and the creator is paid
+                whoever pays the gas. So anyone can press these.
+              </p>
+              <IndexActions address={index.address} buyback={burns} />
+            </section>
+
+            <section aria-labelledby="idx-contracts" className="idx-panel idx-contracts">
+              <header className="idx-panel-head"><h2 id="idx-contracts">Contracts</h2></header>
+              <dl className="idx-facts">
+                {([["Coin", bound ? index.coin : null], ["Index treasury", index.address], ["Fees arrive in", index.quote === "0x0000000000000000000000000000000000000000" ? null : index.quote]] as Array<[string, string | null]>)
+                  .filter(([, value]) => !!value)
+                  .map(([label, value]) => (
+                    <div key={label}>
+                      <dt>{label}</dt>
+                      <dd>
+                        <a href={`https://basescan.org/address/${value}`} rel="noreferrer" target="_blank" title={value!}>
+                          {shorten(value!)} ↗
+                        </a>
+                      </dd>
+                    </div>
+                  ))}
+              </dl>
+            </section>
+          </aside>
+        </div>
       </main>
       <SiteFooter />
     </div>
