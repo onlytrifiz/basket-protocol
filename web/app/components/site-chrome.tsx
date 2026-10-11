@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { LinkPending } from "./link-pending";
 import { ThemeToggle } from "./theme-toggle";
 import { ConnectWalletButton } from "./wallet";
 
@@ -117,14 +118,14 @@ export function SiteHeader({ active }: { active?: ActivePage }) {
         <Link className="brandmark" href="/"><StockifyMark /><span>Stockify</span></Link>
         <StonksBy />
         <div className="site-links">
-          <Link className={active === "home" ? "active" : ""} href="/">Home</Link>
-          <Link className={active === "stocks" ? "active" : ""} href="/stocks">Stocks</Link>
-          <Link className={active === "dividends" ? "active" : ""} href="/dividends">Dividends</Link>
-          <Link className={active === "indices" ? "active" : ""} href="/indices">Indices</Link>
+          <Link className={active === "home" ? "active" : ""} href="/">Home<LinkPending /></Link>
+          <Link className={active === "stocks" ? "active" : ""} href="/stocks">Stocks<LinkPending /></Link>
+          <Link className={active === "dividends" ? "active" : ""} href="/dividends">Dividends<LinkPending /></Link>
+          <Link className={active === "indices" ? "active" : ""} href="/indices">Indices<LinkPending /></Link>
           {/* Last, because it is the end of the line rather than another way in:
               the three before it are how value is produced, and this is what it
               is finally spent on. */}
-          <Link className={active === "shop" ? "active" : ""} href="/shop">Shop</Link>
+          <Link className={active === "shop" ? "active" : ""} href="/shop">Shop<LinkPending /></Link>
         </div>
         {/* Icons rather than words: these two are destinations people already know the shape of,
             and spending a nav slot on the word "Docs" crowds the ones that name what this site does. */}
@@ -165,6 +166,7 @@ function BottomBar({ active }: { active?: ActivePage }) {
         <Link aria-current={active === tab.key ? "page" : undefined} className={active === tab.key ? "active" : ""} href={tab.href} key={tab.key}>
           <Image alt="" height={30} src={tab.icon} width={30} />
           <span>{tab.label}</span>
+          <LinkPending />
         </Link>
       ))}
     </nav>

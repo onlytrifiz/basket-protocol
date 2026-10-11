@@ -1230,3 +1230,77 @@ span.count-up {
 .stonks-by.is-hero .stonks-by-word { padding-left: 5px; }
 .stonks-by.is-hero .stonks-by-mark { border-radius: 4px; height: 16px; width: 16px; }
 .stonks-by.is-hero .stonks-by-name { font-weight: 550; }
+
+/* ---------- Loading skeletons --------------------------------------------- */
+.sk {
+  background:
+    linear-gradient(90deg, transparent 0%, color-mix(in srgb, var(--ink) 7%, transparent) 45%, transparent 90%) 0 0 / 220% 100% no-repeat,
+    color-mix(in srgb, var(--ink) 7%, transparent);
+  border-radius: 10px;
+  display: block;
+}
+@keyframes sk-sweep { from { background-position: 160% 0, 0 0; } to { background-position: -60% 0, 0 0; } }
+@media (prefers-reduced-motion: no-preference) { .sk { animation: sk-sweep 1.4s ease-in-out infinite; } }
+.sk-line { height: 14px; margin-top: 12px; }
+.sk-xs { height: 11px; max-width: 70%; width: 160px; }
+.sk-s { width: 120px; }
+.sk-m { width: min(420px, 70%); }
+.sk-l { width: min(620px, 90%); }
+.sk-title { border-radius: 16px; height: clamp(40px, 6vw, 76px); margin-top: 18px; width: min(760px, 92%); }
+.sk-title-2 { margin-top: 12px; width: min(560px, 70%); }
+.sk-pill { border-radius: 99px; height: 46px; margin-left: auto; width: 260px; }
+.sk-figure { height: 34px; margin-top: 14px; width: 60%; }
+.sk-card { border-radius: 18px; height: 200px; width: 160px; }
+.sk-block { border-radius: var(--r-lg); height: 260px; }
+.sk-rowline { border-radius: 12px; height: 58px; }
+.sk-tile { aspect-ratio: 16 / 10; border-radius: 14px; }
+.skeleton-row { align-items: center; display: flex; gap: 24px; margin-top: 28px; }
+.skeleton-hero .hero-v2-top { padding-bottom: 20px; }
+.skeleton-fan { display: flex; gap: 14px; justify-content: center; padding: 20px 24px 48px; }
+.skeleton-fan .sk-card:nth-child(1), .skeleton-fan .sk-card:nth-child(5) { opacity: .5; transform: translateY(16px) scale(.9); }
+.skeleton-fan .sk-card:nth-child(2), .skeleton-fan .sk-card:nth-child(4) { opacity: .75; transform: translateY(6px) scale(.95); }
+.skeleton-head { min-height: 260px; }
+.skeleton-stats .stats-inner > div { padding: 24px 28px; }
+.skeleton-body { padding-bottom: 96px; padding-top: 56px; }
+.skeleton-cards { display: grid; gap: 16px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.skeleton-table { display: grid; gap: 8px; }
+.skeleton-shop { display: grid; gap: 36px; }
+.skeleton-shop-tiles { display: grid; gap: 14px; grid-template-columns: repeat(6, minmax(0, 1fr)); margin-top: 16px; }
+@media (max-width: 760px) {
+  .skeleton-fan .sk-card:nth-child(1), .skeleton-fan .sk-card:nth-child(5) { display: none; }
+  .sk-card { height: 150px; width: 110px; }
+  .skeleton-cards { grid-template-columns: minmax(0, 1fr); }
+  .skeleton-shop-tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .skeleton-row { flex-direction: column; align-items: stretch; }
+  .sk-pill { margin-left: 0; width: 100%; }
+}
+
+/* ---------- The pressed link, while its page is on the way ------------------ */
+.link-pending { display: none; }
+.site-links a .link-pending, .bottom-bar a .link-pending {
+  border-radius: 99px;
+  display: block;
+  height: 2px;
+  left: 50%;
+  opacity: 0;
+  pointer-events: none;
+  position: absolute;
+  translate: -50% 0;
+  width: 0;
+}
+.site-links a .link-pending { background: var(--blue); bottom: -11px; }
+.bottom-bar a { position: relative; }
+.bottom-bar a .link-pending { background: var(--blue); bottom: 3px; }
+.site-links a .link-pending.is-pending, .bottom-bar a .link-pending.is-pending {
+  animation: link-pending 1s .12s ease-in-out infinite both;
+}
+@keyframes link-pending {
+  0% { opacity: 1; width: 0; }
+  60% { opacity: 1; width: 60%; }
+  100% { opacity: 0; width: 80%; }
+}
+.bottom-bar a:has(.is-pending) { background: color-mix(in srgb, var(--blue) 10%, transparent); color: var(--ink); }
+.bottom-bar a:has(.is-pending) img { filter: none; opacity: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .site-links a .link-pending.is-pending, .bottom-bar a .link-pending.is-pending { animation: none; opacity: 1; width: 40%; }
+}
