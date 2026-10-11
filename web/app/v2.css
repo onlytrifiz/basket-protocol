@@ -258,7 +258,7 @@ h3 { font-weight: 600; letter-spacing: -.025em; }
   grid-template-columns: minmax(0, 270px) minmax(0, 1fr);
   margin-top: 20px;
 }
-/* The total, in the accent, with the one colour reserved for value that reached a holder. */
+/* The total, on the accent, in plain white: the blue panel already carries it. */
 .receipts-total {
   background:
     radial-gradient(90% 70% at 100% 0%, rgba(145, 212, 255, .3), transparent 60%),
@@ -270,7 +270,7 @@ h3 { font-weight: 600; letter-spacing: -.025em; }
 .receipts-total span, .receipts-total small { display: block; }
 .receipts-total span { font: 500 .68rem var(--mono-stack); letter-spacing: .12em; opacity: .8; text-transform: uppercase; }
 .receipts-total strong {
-  color: var(--lime);
+  color: #fff;
   display: block;
   font: 500 clamp(2.2rem, 3.6vw, 2.9rem) var(--mono-stack);
   letter-spacing: -.05em;
