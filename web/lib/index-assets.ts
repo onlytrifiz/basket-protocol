@@ -43,16 +43,19 @@ const PRICE_TTL_MS = 120_000;
 /**
  * USD for one unit of any asset the vault distributes.
  *
- * A B20 takes its share price from the market board the caller already holds. Anything else takes
- * the price of its deepest pool, the same source /indices values coins with, and keeps the last
- * good one when a read fails, so one refused upstream call does not turn a figure into a dash.
+ * A B20 takes its share price from the market board the caller already holds. Anything else, and a
+ * B20 whose quote did not land, takes the price of its deepest pool, the same source /indices values
+ * coins with, and keeps the last good one when a read fails, so one refused upstream call does not
+ * turn a figure into a dash.
  * Null only when the token has never been priced in this process.
  */
 export async function assetUsd(address: string, quotes: Record<string, { price: number } | undefined>): Promise<number | null> {
   const ticker = stockByAddress(address)?.ticker;
   const quoted = ticker ? quotes[ticker]?.price : undefined;
   if (typeof quoted === "number" && Number.isFinite(quoted) && quoted > 0) return quoted;
-  if (ticker) return null;
+  // No share quote (no ticker, or both quote sources refused): the token's deepest pool, via DexScreener.
+  // For a B20 that is the token, not the share, so it can sit a little off the market price; it is
+  // still a truer figure than "unpriced".
   try {
     return await cached(`asset:price:${address.toLowerCase()}`, PRICE_TTL_MS, async () => {
       const price = (await poolsFor(address.toLowerCase(), 0, false)).best?.priceUsd ?? null;

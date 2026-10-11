@@ -293,8 +293,15 @@ const QUOTE_TTL_MS = 60_000;
 const QUIET_TTL_MS = 600_000;
 
 /** One key per ticker whatever the TTL, so a detail page asking fresh refreshes the hub's copy too. */
+/**
+ * Finnhub first, Yahoo when Finnhub does not answer. A cold instance has no last-good quote for
+ * `cached()` to fall back on, and Finnhub's 60-a-minute key is easily spent by one render of the
+ * stocks hub, so a refused quote used to reach the page as "unpriced". Yahoo is asked only then.
+ */
 const quoteFor = (ticker: string, ttlMs = QUOTE_TTL_MS, optional = false) =>
-  cached(`quote:${ticker}`, ttlMs, () => (KEY ? finnhubQuote(ticker, optional) : yahooQuote(ticker))).catch(() => null);
+  cached(`quote:${ticker}`, ttlMs, () => (KEY
+    ? finnhubQuote(ticker, optional).catch(() => yahooQuote(ticker))
+    : yahooQuote(ticker))).catch(() => null);
 
 async function profileFor(ticker: string): Promise<Profile | null> {
   const [profile, metrics] = await Promise.all([
