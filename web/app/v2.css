@@ -1485,3 +1485,6 @@ img[src*="/partners/stonks-exchange"] { image-rendering: pixelated; }
 @media (max-width: 420px) {
   .index-mosaic .mosaic-col a { align-items: flex-start; flex-direction: column; gap: 8px; height: auto; padding: 10px; }
 }
+
+/* The emblem sat on the card's floor once the subtitle line was gone; centre it in the face. */
+.stage-card-emblem { align-items: center; padding: 0 0 6px; }
