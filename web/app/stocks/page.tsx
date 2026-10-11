@@ -180,8 +180,8 @@ export default async function StocksPage() {
             <p className="eyebrow">BASE · B20 UNIVERSE</p>
             <h1>Every tokenized stock on Base.</h1>
             <p className="hub-lede">
-              Coinbase issues these equities directly on Base as B20 tokens. The column worth reading
-              is the last one — how far a token trades from the share it represents.
+              Coinbase issues these equities directly on Base as B20 tokens. The last column is the
+              one to watch: how far each token trades from the share it represents.
             </p>
             {/* The page's two halves, offered up front: the B20 table it exists for, and the
                 whole-market overview below it. Anchors — both destinations are this page. */}
@@ -229,8 +229,8 @@ export default async function StocksPage() {
             <summary><h2>Why most of these have no supply</h2><i aria-hidden="true">+</i></summary>
             <p>
               Base&apos;s equities are new and most have not been issued yet: for the majority, no
-              shares exist at all. A token whose supply we could not check shows <b>—</b>, never a
-              zero. Those are very different claims and only one of them is ours to make.
+              shares exist at all. A token whose supply could not be read shows <b>—</b> rather than
+              a zero.
             </p>
           </details>
           <details>

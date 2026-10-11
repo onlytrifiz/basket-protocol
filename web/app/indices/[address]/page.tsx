@@ -443,7 +443,7 @@ export default async function IndexPage({
         <section className="section wrap hub-section">
           <div className="section-head">
             <p className="eyebrow">CONTRACTS</p>
-            <h2>Nothing here is off-chain.</h2>
+            <h2>The addresses behind it.</h2>
           </div>
           <div className="idx-addrs">
             {([["Coin", bound ? index.coin : null], ["Index treasury", index.address], ["Fees arrive in", index.quote === "0x0000000000000000000000000000000000000000" ? null : index.quote]] as Array<[string, string | null]>)
@@ -470,13 +470,13 @@ export default async function IndexPage({
         </section>
 
         <p className="desk-note wrap" style={{ paddingBottom: "3rem" }}>
-          Holders are paid pro-rata on the coin balance they hold when a round runs — there is nothing
+          Holders are paid pro-rata on the coin balance they hold when a round runs. There is nothing
           to claim. Wallets under {MIN_HOLDER_COINS.toLocaleString("en-US")} coins are skipped, and
           their slice stays with everyone else instead of going to gas. Stockify keeps{" "}
           {(split.platform / 100).toFixed(0)}% of the fees;{" "}
           {index.creatorShareBps > 0
             ? `the creator keeps ${(split.creator / 100).toFixed(0)}% of what is left.`
-            : "the creator keeps nothing — all of the rest goes to holders."}
+            : "the creator keeps nothing, so all of the rest goes to holders."}
         </p>
       </main>
       <SiteFooter />

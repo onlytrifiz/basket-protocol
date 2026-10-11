@@ -121,9 +121,8 @@ export default function DocsPage() {
           <p className="eyebrow">TECHNICAL REFERENCE / LIVE ON BASE</p>
           <h1>Protocol<br /><em>documentation.</em></h1>
           <p>
-            This is an implementation reference for the contracts and keepers behind Stockify—not a yield page.
-            It describes what the deployed code does, and names the operational trust assumptions rather than
-            leaving them implied.
+            How the contracts and keepers behind Stockify work: what the deployed code does, and the
+            operational trust assumptions it relies on.
           </p>
           <div className="docs-status-row" aria-label="Protocol status">
             <span>Base mainnet · 8453</span><span>Solidity · 0.8.26</span><span>Unaudited</span>

@@ -80,11 +80,9 @@ export default async function IndicesPage() {
             <p className="eyebrow">INDICES</p>
             <h1>Make a launch pay its holders.</h1>
             <p className="hub-lede">
-              A coin earns its creator a share of every trade. Left alone that is income to a wallet.
-              Pointed at an index it becomes a mechanism anyone can audit on-chain: the fees buy real
-              tokenized equity and it is pushed out to the coin&apos;s holders, or they buy the coin
-              back and destroy it. Nothing is claimed, nothing is staked, and what an index buys is
-              fixed the day it is created.
+              A coin earns its creator a share of every trade. Point that share at an index and the
+              fees buy tokenized equity for the coin&apos;s holders, or buy the coin back and burn it.
+              Nothing to claim, nothing to stake.
             </p>
             <div className="hub-head-cta">
               <Link className="button button-ink" href="/indices/create">
@@ -109,9 +107,8 @@ export default async function IndicesPage() {
                   : `The ${FEATURED} that have given back the most.`}
             </h2>
             <p>
-              What each one holds, what it has given back, and how often it has done it. Ordered by
-              that — equity pushed to holders, or coins bought back and destroyed, whichever the
-              index was built to do. Made here, or inside a launch on{" "}
+              Ranked by what each one has given back: equity pushed to holders, or coins bought back
+              and destroyed, whichever the index was built to do. Made here, or inside a launch on{" "}
               <a href={LAUNCHPAD.url} rel="noreferrer" target="_blank">{LAUNCHPAD.name} ↗</a>; an index
               does not care which launchpad its coin came from.
             </p>
@@ -184,7 +181,7 @@ export default async function IndicesPage() {
               <dt>Composition is immutable</dt>
               <dd>
                 What an index buys is fixed at creation. Changing it means a new index and pointing the
-                fees again — there is no setter.
+                fees again.
               </dd>
             </div>
           </dl>
@@ -195,7 +192,7 @@ export default async function IndicesPage() {
             <p className="eyebrow">CREATE ONE</p>
             <h2>Five questions, one transaction.</h2>
             <p className="page-cta-note">
-              Then point your coin&apos;s creator fees at it — from{" "}
+              Then point your coin&apos;s creator fees at it from{" "}
               <a href={LAUNCHPAD.url} rel="noreferrer" target="_blank">{LAUNCHPAD.name}</a>&apos;s launch
               form, or any launchpad this service supports.
             </p>

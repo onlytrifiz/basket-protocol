@@ -195,7 +195,7 @@ export default async function AllIndicesPage({ searchParams }: PageProps<"/indic
             <p className="eyebrow">CREATE ONE</p>
             <h2>Five questions, one transaction.</h2>
             <p className="page-cta-note">
-              Then point your coin&apos;s creator fees at it — from{" "}
+              Then point your coin&apos;s creator fees at it from{" "}
               <a href={LAUNCHPAD.url} rel="noreferrer" target="_blank">{LAUNCHPAD.name}</a>&apos;s launch
               form, or any launchpad this service supports.
             </p>

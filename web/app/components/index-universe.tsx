@@ -43,8 +43,7 @@ export function IndexUniverse({ slices }: { slices: IndexSlice[] }) {
       <aside className="index-universe is-unread" aria-label="Dividend index weights">
         <div className="universe-head"><span>DIVIDEND INDEX</span><b>—</b></div>
         <p className="universe-unread">
-          The vault&apos;s index could not be read just now. It is not shown as empty, because empty
-          is a different claim.
+          The vault&apos;s index could not be read just now. Try again in a minute.
         </p>
       </aside>
     );

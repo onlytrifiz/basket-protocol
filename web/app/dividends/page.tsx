@@ -181,10 +181,8 @@ export default async function DividendPage({ searchParams }: PageProps<"/dividen
             <p className="eyebrow">DIVIDEND DESK</p>
             <h1>See the assets leave the vault.</h1>
             <p className="hub-lede">
-              What has actually reached holders: which equities the vault bought, in what proportion,
-              and how much of each has been pushed out. The vault is drained every cycle, so its
-              balance is not the story — what left it is. Nothing here is a projection, and there is
-              no yield counter.
+              Which equities the vault bought, in what proportion, and how much of each has reached
+              holders. The vault empties every cycle, so what matters is what left it.
             </p>
           </div>
           <BrandRender className="hub-render" priority size={340} src="/distributions.png" />
@@ -263,8 +261,8 @@ export default async function DividendPage({ searchParams }: PageProps<"/dividen
             </div>
           ) : (
             <p className="detail-empty">
-              The dividend vault did not answer, so its index cannot be shown. Nothing is filled in
-              with an assumed set.
+              The dividend vault did not answer just now, so its index cannot be shown. Try again in
+              a minute.
             </p>
           )}
 
