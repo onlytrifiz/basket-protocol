@@ -732,3 +732,50 @@ h3 { font-weight: 600; letter-spacing: -.025em; }
   .theme-toggle { height: 32px; width: 32px; }
   .wallet-pill { padding: .45rem .7rem; }
 }
+
+/* ---------- The dividend index table -------------------------------------- */
+/* Replaces the legend beside the ring: two columns, a header, the company over its ticker, and the
+   weight as a figure plus a bar drawn in the arc's colour (no track behind it: the bar's length is
+   the share, and an empty rail would only add a second shape to read). */
+.universe-table { border-collapse: collapse; flex: 1; min-width: 0; width: 100%; }
+.universe-table thead th {
+  border-bottom: 1px solid var(--desk-line);
+  color: var(--desk-fg-3);
+  font: 500 .6rem var(--mono-stack);
+  letter-spacing: .12em;
+  padding: 0 0 9px;
+  text-align: left;
+  text-transform: uppercase;
+}
+.universe-table thead th:last-child, .universe-table td { text-align: right; }
+.universe-table tbody tr { border-bottom: 1px solid var(--desk-line); transition: opacity .2s var(--ease); }
+.universe-table tbody tr:last-child { border-bottom: 0; }
+.universe-table tbody tr.is-dimmed { opacity: .35; }
+.universe-table tbody th { font-weight: inherit; padding: 0; text-align: left; }
+.universe-table tbody th a {
+  align-items: center;
+  border-radius: 8px;
+  color: var(--desk-fg);
+  display: flex;
+  gap: 10px;
+  min-width: 0;
+  padding: 8px 0;
+}
+.universe-table tbody th a:focus-visible { outline: 2px solid var(--sky); outline-offset: 2px; }
+.universe-table .stock-logo { background: #fff; border-color: transparent; border-radius: 7px; flex: none; height: 24px; width: 24px; }
+.universe-asset { min-width: 0; }
+.universe-asset b, .universe-asset small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.universe-asset b { font-size: .8rem; font-weight: 600; }
+.universe-asset small { color: var(--desk-fg-3); font: .64rem var(--mono-stack); margin-top: 1px; }
+.universe-table tr.is-active .universe-asset b { color: var(--arc); }
+.universe-table td { padding: 8px 0 8px 12px; vertical-align: middle; white-space: nowrap; }
+.universe-table td b { color: var(--desk-fg); display: block; font: 500 .86rem var(--mono-stack); }
+.universe-bar {
+  background: var(--arc);
+  border-radius: 2px;
+  display: block;
+  height: 3px;
+  margin: 6px 0 0 auto;
+  width: min(100%, max(4px, calc(var(--share) * 2.4px)));
+}
+.index-universe .universe-body { align-items: center; gap: 28px; }

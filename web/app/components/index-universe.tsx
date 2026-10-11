@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 
 import { StockLogo } from "./stock-logo";
@@ -31,6 +32,11 @@ export type IndexSlice = {
  * green next to Apple silver is legible without the legend at all.
  */
 const RADIUS = 58;
+
+/** Whole percent when the weight is whole, one decimal when it is not: 20% stays "20%", and an
+ *  index weighted 33.33 / 33.33 / 33.34 does not round three slices into the same figure. */
+const formatWeight = (percentage: number) =>
+  `${Number.isInteger(Math.round(percentage * 10) / 10) ? percentage.toFixed(0) : percentage.toFixed(1)}%`;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
 export function IndexUniverse({ slices }: { slices: IndexSlice[] }) {
@@ -92,25 +98,43 @@ export function IndexUniverse({ slices }: { slices: IndexSlice[] }) {
             <span>{active === null ? "assets" : arcs[active].symbol}</span>
           </div>
         </div>
-        <div className="universe-legend">
-          {arcs.map((arc, index) => (
-            <button
-              className={active !== null && active !== index ? "is-dimmed" : ""}
-              key={arc.symbol}
-              onBlur={() => setActive(null)}
-              onFocus={() => setActive(index)}
-              onMouseEnter={() => setActive(index)}
-              onMouseLeave={() => setActive(null)}
-              style={{ "--arc": arc.color } as React.CSSProperties}
-              type="button"
-            >
-              <i aria-hidden="true" className="legend-swatch" />
-              <StockLogo logo={arc.logo} size="small" stock={{ symbol: arc.symbol, domain: arc.domain }} />
-              <span>{arc.name}</span>
-              <b>{(arc.weightBps / 100).toFixed(0)}%</b>
-            </button>
-          ))}
-        </div>
+        {/* A TABLE, not a legend. Each row names the company and its ticker, carries its weight as a
+            figure and as a bar in the arc's own colour, and opens that stock's page. Hovering or
+            focusing a row still lights its slice of the ring, and the ring lights the row back. */}
+        <table className="universe-table">
+          <thead>
+            <tr><th scope="col">Asset</th><th scope="col">Weight</th></tr>
+          </thead>
+          <tbody>
+            {arcs.map((arc, index) => (
+              <tr
+                className={active !== null && active !== index ? "is-dimmed" : active === index ? "is-active" : ""}
+                key={arc.symbol}
+                style={{ "--arc": arc.color, "--share": arc.percentage } as React.CSSProperties}
+              >
+                <th scope="row">
+                  <Link
+                    href={`/stocks/${arc.symbol.toLowerCase()}`}
+                    onBlur={() => setActive(null)}
+                    onFocus={() => setActive(index)}
+                    onMouseEnter={() => setActive(index)}
+                    onMouseLeave={() => setActive(null)}
+                  >
+                    <StockLogo logo={arc.logo} size="small" stock={{ symbol: arc.symbol, domain: arc.domain }} />
+                    <span className="universe-asset">
+                      <b>{arc.name}</b>
+                      <small>{arc.symbol}</small>
+                    </span>
+                  </Link>
+                </th>
+                <td>
+                  <b>{formatWeight(arc.percentage)}</b>
+                  <i aria-hidden="true" className="universe-bar" />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
       <p>Target weights. The index can change between cycles.</p>
     </aside>
