@@ -11,7 +11,7 @@ import { readVault } from "../lib/vault";
 import { CountUp } from "./components/count-up";
 import { IndexUniverse } from "./components/index-universe";
 import { StockLogo } from "./components/stock-logo";
-import { SiteFooter, SiteHeader } from "./components/site-chrome";
+import { SiteFooter, SiteHeader, StonksBy } from "./components/site-chrome";
 import { StockMarquee } from "./components/stock-marquee";
 import { StockStage, type StageStock } from "./components/stock-stage";
 import { SwapPanel } from "./components/swap-panel";
@@ -186,7 +186,10 @@ export default async function Home() {
             to buy after the page has said what they would be buying. */}
         <header className="hero-card hero-v2" id="overview">
           <div className="hero-v2-top">
-            <p className="eyebrow">Base · B20 equity dividends</p>
+            <div className="hero-v2-kicker">
+              <StonksBy variant="hero" />
+              <p className="eyebrow">Base · B20 equity dividends</p>
+            </div>
             <h1 className="hero-v2-title">Hold Stockify.<br /><span>Receive stocks.</span></h1>
             <div className="hero-v2-side">
               <p className="hero-lede">Trading fees buy Base-native tokenized equities, and the vault pushes them straight to STFY holders.</p>

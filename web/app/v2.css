@@ -1138,3 +1138,40 @@ span.count-up {
   .detail-canvas { border-radius: 24px; margin: 0 -12px; padding: 26px 18px 20px; }
   .detail-head > .stock-logo { border-radius: 16px; height: 60px; width: 60px; }
 }
+
+/* ---------- "by The Stonks Exchange" -------------------------------------- */
+.stonks-by { align-items: center; color: var(--ink-3); display: inline-flex; flex: none; gap: 6px; white-space: nowrap; }
+.stonks-by-mark { border-radius: 4px; display: block; image-rendering: pixelated; }
+.stonks-by:hover { color: var(--ink); }
+.stonks-by:hover .stonks-by-name { text-decoration: underline; text-underline-offset: 3px; }
+
+/* Header: a quiet endorsement after the wordmark, divided from it by a hairline. */
+.stonks-by.is-header { border-left: 1px solid var(--line-2); font-size: .74rem; margin-left: -4px; padding-left: 14px; }
+.stonks-by.is-header .stonks-by-mark { height: 18px; width: 18px; }
+.stonks-by.is-header .stonks-by-word { color: var(--ink-3); }
+.stonks-by.is-header .stonks-by-name { color: var(--ink-2); font-weight: 500; }
+@media (max-width: 1100px) { .stonks-by.is-header .stonks-by-word, .stonks-by.is-header .stonks-by-name { display: none; } }
+@media (max-width: 720px) { .stonks-by.is-header { display: none; } }
+
+/* Hero: a pill on the eyebrow's line, above the headline. */
+.hero-v2-kicker { align-items: center; display: flex; flex-wrap: wrap; gap: 10px 18px; margin-bottom: 26px; }
+.hero-v2-kicker .eyebrow { margin: 0; }
+.stonks-by.is-hero {
+  background: color-mix(in srgb, var(--surface) 55%, transparent);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--line-2);
+  border-radius: var(--r-pill);
+  color: var(--ink-2);
+  font-size: .82rem;
+  gap: 8px;
+  padding: 5px 14px 5px 6px;
+  transition: border-color .2s var(--ease), background .2s var(--ease);
+}
+.stonks-by.is-hero .stonks-by-word { padding-left: 6px; }
+.stonks-by.is-hero .stonks-by-mark { border-radius: 5px; height: 22px; width: 22px; }
+.stonks-by.is-hero .stonks-by-name { color: var(--ink); font-weight: 600; }
+.stonks-by.is-hero .stonks-by-go { color: var(--link); transition: transform .2s var(--ease); }
+.stonks-by.is-hero:hover { background: color-mix(in srgb, var(--surface) 85%, transparent); border-color: var(--blue); }
+.stonks-by.is-hero:hover .stonks-by-name { text-decoration: none; }
+.stonks-by.is-hero:hover .stonks-by-go { transform: translate(2px, -2px); }
+@media (max-width: 660px) { .hero-v2-kicker { margin-bottom: 18px; } }

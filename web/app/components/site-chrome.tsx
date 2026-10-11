@@ -79,6 +79,24 @@ function DocsTile() {
   );
 }
 
+/**
+ * "by The Stonks Exchange": Stockify is built by The Stonks Exchange, and says so beside its own name
+ * in the header and above the homepage headline. Their own mark, pixel art, so it is drawn with
+ * `image-rendering: pixelated` to stay crisp at small sizes. Links out to their site.
+ */
+export const STONKS_URL = "https://www.thestonks.exchange/";
+
+export function StonksBy({ variant = "header" }: { variant?: "header" | "hero" }) {
+  return (
+    <a aria-label="By The Stonks Exchange" className={`stonks-by is-${variant}`} href={STONKS_URL} rel="noreferrer" target="_blank" title="By The Stonks Exchange">
+      <span className="stonks-by-word">by</span>
+      <Image alt="" className="stonks-by-mark" height={20} src="/partners/stonks-exchange.png" unoptimized width={20} />
+      <span className="stonks-by-name">The Stonks Exchange</span>
+      {variant === "hero" && <span aria-hidden="true" className="stonks-by-go">↗</span>}
+    </a>
+  );
+}
+
 /** The 3D coin render at UI scale — the brand's material world in miniature. */
 export function StockifyMark({ small = false }: { small?: boolean }) {
   const size = small ? 26 : 34;
@@ -96,6 +114,7 @@ export function SiteHeader({ active }: { active?: ActivePage }) {
     <nav aria-label="Primary navigation" className="site-nav">
       <div className="site-nav-inner">
         <Link className="brandmark" href="/"><StockifyMark /><span>Stockify</span></Link>
+        <StonksBy />
         <div className="site-links">
           <Link className={active === "home" ? "active" : ""} href="/">Home</Link>
           <Link className={active === "stocks" ? "active" : ""} href="/stocks">Stocks</Link>
