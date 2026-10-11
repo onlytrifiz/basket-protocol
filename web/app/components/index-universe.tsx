@@ -85,17 +85,6 @@ export function IndexUniverse({ slices }: { slices: IndexSlice[] }) {
         ))}
       </ul>
 
-      {/* The same composition in one line: each segment as long as its weight. */}
-      <div aria-hidden="true" className="mosaic-strip">
-        {parts.map((part, index) => (
-          <i
-            className={dim(index).trim()}
-            key={part.symbol}
-            style={{ "--arc": part.brand, flexGrow: part.percentage } as React.CSSProperties}
-          />
-        ))}
-      </div>
-
       <p>Target weights. The index can change between cycles.</p>
     </aside>
   );

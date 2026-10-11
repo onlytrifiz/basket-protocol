@@ -1475,3 +1475,13 @@ img[src*="/partners/stonks-exchange"] { image-rendering: pixelated; }
 .asset-cards { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
 @media (max-width: 860px) { .asset-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 520px) { .asset-cards { grid-template-columns: minmax(0, 1fr); } }
+
+/* Compact tiles: mark beside the figure instead of a tall column with empty space in the middle. */
+.index-mosaic .mosaic-col a { align-items: center; flex-direction: row; gap: 12px; height: auto; justify-content: flex-start; padding: 12px 14px; }
+.index-mosaic .mosaic-col .stock-logo { flex: none; }
+.index-mosaic .mosaic-figures b { font-size: 1.15rem; }
+.index-mosaic .mosaic-figures small { margin-top: 3px; }
+.index-mosaic > p { margin-top: 14px; }
+@media (max-width: 420px) {
+  .index-mosaic .mosaic-col a { align-items: flex-start; flex-direction: column; gap: 8px; height: auto; padding: 10px; }
+}
