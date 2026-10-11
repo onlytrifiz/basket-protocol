@@ -60,6 +60,20 @@ const ledgerUrl = process.env.LEDGER_INGEST_URL;
 const ledgerSecret = process.env.LEDGER_INGEST_SECRET;
 const dryRun = process.env.DRY_RUN === "1";
 
+/**
+ * THE PAYOUT FLOOR. A cycle opens whenever the vault holds any unit of any stock, and after every
+ * payout the rounding remainder (a few hundred units, ~1e-6 of a share) is exactly that: measured
+ * 2026-10-11, an hourly cycle costing ~0.00013 ETH in gas that paid every holder zero. Below the floor
+ * the stock is simply left where it is and rolls into the next pot; nothing is lost.
+ *
+ * `log` (the default) only reports what it would have done and then behaves exactly as before.
+ * `enforce` skips. `off` disables the check. Valued in USD through the site's own cached endpoints,
+ * so it costs two HTTP requests per due cycle and no RPC. Anything it cannot value runs the cycle.
+ */
+const payoutFloorMode = (process.env.PAYOUT_FLOOR_MODE ?? "log") as "log" | "enforce" | "off";
+const payoutFloorUsd = Number(process.env.PAYOUT_FLOOR_USD ?? "100");
+const siteUrl = (process.env.SITE_URL ?? "https://stockify.finance").replace(/\/$/, "");
+
 const publicClient = createPublicClient({ chain, transport: http(rpcUrl, { timeout: 60_000 }) });
 const walletClient = createWalletClient({ account, chain, transport: http(rpcUrl, { timeout: 60_000 }) });
 
@@ -416,6 +430,123 @@ async function hasDistributionWork(): Promise<boolean> {
   return false;
 }
 
+type PotLine = { token: Address; symbol: string; units: number; usd: number | null };
+
+let assetMap: { at: number; byAddress: Map<string, { symbol: string; ticker?: string; decimals: number | null }> } | undefined;
+
+async function siteJson<T>(path: string): Promise<T | null> {
+  try {
+    const response = await fetch(`${siteUrl}${path}`, { signal: AbortSignal.timeout(15_000) });
+    return response.ok ? await response.json() as T : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * What the next cycle would hand out, in dollars. Null when any part of it cannot be valued, which
+ * the caller treats as "run the cycle": the floor may only ever remove a cycle it is sure about.
+ */
+async function potValueUsd(): Promise<{ total: number; lines: PotLine[]; owed: boolean } | null> {
+  if (!assetMap || Date.now() - assetMap.at > 60 * 60_000) {
+    const payload = await siteJson<{ assets: Array<{ address: string; symbol: string; ticker?: string; decimals: number | null }> }>("/api/b20/assets");
+    if (!payload?.assets) return null;
+    assetMap = { at: Date.now(), byAddress: new Map(payload.assets.map((a) => [a.address.toLowerCase(), a])) };
+  }
+
+  const count = await read<bigint>("distributionStocksLength");
+  const pots: Array<{ token: Address; raw: bigint }> = [];
+  let owedAny = false;
+  for (let index = 0n; index < count; index += 1n) {
+    const token = await read<Address>("distributionStockAt", [index]);
+    const [held, owed] = await Promise.all([
+      publicClient.readContract({ address: token, abi: erc20Abi, functionName: "balanceOf", args: [vault] }) as Promise<bigint>,
+      read<bigint>("unpaidTotal", [token]),
+    ]);
+    if (owed !== 0n) owedAny = true;
+    if (held > owed) pots.push({ token, raw: held - owed });
+  }
+
+  const tickers = [...new Set(pots.map((p) => assetMap!.byAddress.get(p.token.toLowerCase())?.ticker).filter(Boolean))] as string[];
+  const market = tickers.length
+    ? await siteJson<{ quotes: Record<string, { price: number } | undefined> }>(`/api/market?tickers=${tickers.join(",")}`)
+    : { quotes: {} };
+  if (!market) return null;
+
+  const lines: PotLine[] = [];
+  for (const pot of pots) {
+    const asset = assetMap.byAddress.get(pot.token.toLowerCase());
+    const decimals = asset?.decimals ?? (await decimalsOf(pot.token));
+    if (decimals === null || decimals === undefined) return null;
+    const units = Number(pot.raw) / 10 ** decimals;
+    // A token with no stock ticker (STONKEX, added 2026-10-11) is priced by what one whole token
+    // sells for on Velora, so the floor keeps working once one sits in the pot.
+    const price = asset?.ticker ? market.quotes[asset.ticker]?.price : await tokenPriceUsd(pot.token, decimals);
+    lines.push({ token: pot.token, symbol: asset?.symbol ?? pot.token, units, usd: price ? units * price : null });
+  }
+  if (lines.some((line) => line.usd === null)) return { total: Number.NaN, lines, owed: owedAny };
+  return { total: lines.reduce((sum, line) => sum + (line.usd ?? 0), 0), lines, owed: owedAny };
+}
+
+/** USD for one whole token, from a Velora sell quote into USDC. Undefined when it will not quote. */
+async function tokenPriceUsd(token: Address, decimals: number): Promise<number | undefined> {
+  const query = new URLSearchParams({
+    srcToken: token,
+    srcDecimals: String(decimals),
+    destToken: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    destDecimals: "6",
+    amount: (10n ** BigInt(decimals)).toString(),
+    side: "SELL",
+    network: "8453",
+    version: "6.2",
+  });
+  try {
+    const response = await fetch(`https://api.velora.xyz/prices?${query}`, { signal: AbortSignal.timeout(15_000) });
+    if (!response.ok) return undefined;
+    const payload = await response.json() as { priceRoute?: { destAmount?: string } };
+    const out = payload.priceRoute?.destAmount;
+    return out ? Number(out) / 1e6 : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/** True when the floor says this cycle should not run. Always false outside `enforce`. */
+const POT_VALUE_ATTEMPTS = 5;
+const POT_VALUE_RETRY_MS = 15_000;
+
+async function belowPayoutFloor(): Promise<boolean> {
+  if (payoutFloorMode === "off") return false;
+  const tag = payoutFloorMode === "enforce" ? "" : " (log only)";
+  /*
+   * RETRY, THEN FAIL OPEN. On 2026-10-11 10:01 UTC one blip in the price reads (the site's APIs and
+   * a Velora quote) ran the cycle on a ~$44 pot the floor exists to hold. Those reads recover in
+   * seconds, so it now asks five times across about a minute before giving up. Giving up still
+   * RUNS the cycle: by decision, a broken price feed must never stop holders being paid.
+   */
+  let pot: Awaited<ReturnType<typeof potValueUsd>> = null;
+  for (let attempt = 1; attempt <= POT_VALUE_ATTEMPTS; attempt++) {
+    pot = await potValueUsd().catch(() => null);
+    if (pot && !Number.isNaN(pot.total)) break;
+    if (attempt < POT_VALUE_ATTEMPTS) {
+      console.log(`  [payout-floor] could not value the pot (attempt ${attempt}/${POT_VALUE_ATTEMPTS}), retrying in ${POT_VALUE_RETRY_MS / 1000}s`);
+      await sleep(POT_VALUE_RETRY_MS);
+    }
+  }
+  if (!pot || Number.isNaN(pot.total)) {
+    console.log(`  [payout-floor] could not value the pot after ${POT_VALUE_ATTEMPTS} attempts, running the cycle${tag}`);
+    return false;
+  }
+  const detail = pot.lines.map((l) => `${l.symbol} ${l.units.toPrecision(3)} = $${(l.usd ?? 0).toFixed(2)}`).join(", ");
+  if (pot.owed) {
+    console.log(`  [payout-floor] unpaid dividends outstanding, running the cycle${tag} | pot $${pot.total.toFixed(2)}: ${detail}`);
+    return false;
+  }
+  const below = pot.total < payoutFloorUsd;
+  console.log(`  [payout-floor] pot $${pot.total.toFixed(2)} vs floor $${payoutFloorUsd}: ${below ? "would skip" : "would run"}${tag} | ${detail || "empty"}`);
+  return below && payoutFloorMode === "enforce";
+}
+
 /**
  * Finish or open a payout cycle. Returns true when one is settled by the time we walk away.
  *
@@ -433,6 +564,8 @@ async function distributeFromOnchainRegistry(): Promise<boolean> {
   }
   if (dryRun) {
     console.log(`  dry run: on-chain payout cycle is ${active ? "active" : "idle"}`);
+    // Report what the payout floor would decide, so a dry run shows the whole decision.
+    if (!active) await belowPayoutFloor();
     return false;
   }
 
@@ -442,6 +575,11 @@ async function distributeFromOnchainRegistry(): Promise<boolean> {
     if (next !== 0n && next > BigInt(Math.floor(Date.now() / 1_000))) {
       payoutDueAt = Number(next);
       console.log(`  payout not due until ${new Date(payoutDueAt * 1_000).toISOString()}`);
+      return false;
+    }
+
+    if (await belowPayoutFloor()) {
+      console.log(`  payout skipped (floor $${payoutFloorUsd}), the stock rolls into the next pot`);
       return false;
     }
 
