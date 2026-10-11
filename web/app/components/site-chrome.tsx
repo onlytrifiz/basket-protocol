@@ -57,6 +57,28 @@ function DocsIcon() {
   );
 }
 
+/**
+ * The header's docs mark: a filled page on a brand-blue disc, made to sit beside the theme toggle's
+ * tiny sky as its pair. The footer keeps the plain outline `DocsIcon`, where it sits in a text pill.
+ */
+function DocsTile() {
+  return (
+    <span aria-hidden="true" className="docs-tile">
+      <svg viewBox="0 0 24 24" focusable="false">
+        <defs>
+          <linearGradient id="docs-tile-page" x1="0" x2="0" y1="0" y2="1">
+            <stop offset="0" stopColor="#ffffff" />
+            <stop offset="1" stopColor="#d6e2ff" />
+          </linearGradient>
+        </defs>
+        <path d="M6.6 2.8h7.3l4.9 4.9v11.9a1.6 1.6 0 0 1-1.6 1.6H6.6A1.6 1.6 0 0 1 5 19.6V4.4a1.6 1.6 0 0 1 1.6-1.6z" fill="url(#docs-tile-page)" />
+        <path d="M13.9 2.8v3.4a1.5 1.5 0 0 0 1.5 1.5h3.4z" fill="#8fb0ff" />
+        <path d="M8.2 11.6h7.4M8.2 14.6h7.4M8.2 17.6h4.4" stroke="#0052ff" strokeLinecap="round" strokeWidth="1.5" />
+      </svg>
+    </span>
+  );
+}
+
 /** The 3D coin render at UI scale — the brand's material world in miniature. */
 export function StockifyMark({ small = false }: { small?: boolean }) {
   const size = small ? 26 : 34;
@@ -90,8 +112,8 @@ export function SiteHeader({ active }: { active?: ActivePage }) {
           {X_URL && (
             <a aria-label="Stockify on X" href={X_URL} rel="noreferrer" target="_blank"><XIcon /></a>
           )}
-          <Link aria-label="Documentation" className={active === "docs" ? "active" : ""} href="/docs">
-            <DocsIcon />
+          <Link aria-label="Documentation" className={`docs-link${active === "docs" ? " active" : ""}`} href="/docs">
+            <DocsTile />
           </Link>
         </div>
         <ThemeToggle />

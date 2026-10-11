@@ -166,14 +166,28 @@ export function ThemeToggle() {
           />
         ))}
       </span>
-      <span aria-hidden="true" className="sky-layer is-day" ref={day} style={{ opacity: mounted && theme === "light" ? 1 : 0 }} />
+      {/* The day's answer to the stars: two small clouds drifting across, so the light state is a
+          scene as much as the night is, not a flat gradient behind an outline. */}
+      <span aria-hidden="true" className="sky-layer is-day" ref={day} style={{ opacity: mounted && theme === "light" ? 1 : 0 }}>
+        <span className="sky-cloud is-a" />
+        <span className="sky-cloud is-b" />
+      </span>
       <span aria-hidden="true" className="sky-body is-moon" ref={moon} style={rest(MOON, theme === "dark")}>
         <svg fill="currentColor" viewBox="0 0 24 24"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" /></svg>
       </span>
       <span aria-hidden="true" className="sky-body is-sun" ref={sun} style={rest(SUN, theme === "light")}>
-        <svg fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" viewBox="0 0 24 24">
-          <circle cx="12" cy="12" r="4" />
-          <path d="M12 2v2M12 20v2m-7.07-14.07 1.41 1.41m11.32 11.32 1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
+        {/* Filled, like the moon: a warm disc with short rounded rays, where Lucide's outline sun read
+            as a thin glyph next to a solid crescent. */}
+        <svg viewBox="0 0 24 24">
+          <defs>
+            <radialGradient cx="40%" cy="35%" id="sky-sun-fill" r="70%">
+              <stop offset="0" stopColor="#fff3b0" />
+              <stop offset=".55" stopColor="#ffc93d" />
+              <stop offset="1" stopColor="#ff9416" />
+            </radialGradient>
+          </defs>
+          <path d="M12 1.8v2.6M12 19.6v2.6M4.8 4.8l1.8 1.8m10.8 10.8 1.8 1.8M1.8 12h2.6m15.2 0h2.6M4.8 19.2l1.8-1.8m10.8-10.8 1.8-1.8" stroke="#ffb22e" strokeLinecap="round" strokeWidth="2.2" />
+          <circle cx="12" cy="12" fill="url(#sky-sun-fill)" r="5.6" />
         </svg>
       </span>
     </button>

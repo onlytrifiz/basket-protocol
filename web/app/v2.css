@@ -733,52 +733,64 @@ h3 { font-weight: 600; letter-spacing: -.025em; }
   .wallet-pill { padding: .45rem .7rem; }
 }
 
-/* ---------- The dividend index table -------------------------------------- */
-/* Replaces the legend beside the ring: two columns, a header, the company over its ticker, and the
-   weight as a figure plus a bar drawn in the arc's colour (no track behind it: the bar's length is
-   the share, and an empty rail would only add a second shape to read). */
-.universe-table { border-collapse: collapse; flex: 1; min-width: 0; width: 100%; }
-.universe-table thead th {
-  border-bottom: 1px solid var(--desk-line);
-  color: var(--desk-fg-3);
-  font: 500 .6rem var(--mono-stack);
-  letter-spacing: .12em;
-  padding: 0 0 9px;
-  text-align: left;
-  text-transform: uppercase;
-}
-.universe-table thead th:last-child, .universe-table td { text-align: right; }
-.universe-table tbody tr { border-bottom: 1px solid var(--desk-line); transition: opacity .2s var(--ease); }
-.universe-table tbody tr:last-child { border-bottom: 0; }
-.universe-table tbody tr.is-dimmed { opacity: .35; }
-.universe-table tbody th { font-weight: inherit; padding: 0; text-align: left; }
-.universe-table tbody th a {
-  align-items: center;
-  border-radius: 8px;
+/* ---------- The dividend index mosaic ----------------------------------- */
+/* One column per equity, as wide as its weight, washed in the company's own colour from the top. */
+.mosaic { display: flex; gap: 8px; list-style: none; margin: 20px 0 0; padding: 0; }
+.mosaic-col { flex-basis: 0; min-width: 0; transition: opacity .2s var(--ease), flex-grow .3s var(--ease-out); }
+.mosaic-col.is-dimmed { opacity: .4; }
+.mosaic-col a {
+  background:
+    radial-gradient(120% 60% at 50% 0%, color-mix(in srgb, var(--arc) 55%, transparent), transparent 75%),
+    linear-gradient(180deg, color-mix(in srgb, var(--arc) 24%, var(--desk)) 0%, var(--desk) 100%);
+  border: 1px solid color-mix(in srgb, var(--arc) 40%, var(--desk-line));
+  border-radius: 14px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .08);
   color: var(--desk-fg);
   display: flex;
-  gap: 10px;
-  min-width: 0;
-  padding: 8px 0;
+  flex-direction: column;
+  height: 196px;
+  justify-content: space-between;
+  overflow: hidden;
+  padding: 12px 10px;
+  transition: transform .3s var(--ease-out), box-shadow .3s var(--ease-out), border-color .2s var(--ease);
 }
-.universe-table tbody th a:focus-visible { outline: 2px solid var(--sky); outline-offset: 2px; }
-.universe-table .stock-logo { background: #fff; border-color: transparent; border-radius: 7px; flex: none; height: 24px; width: 24px; }
-.universe-asset { min-width: 0; }
-.universe-asset b, .universe-asset small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.universe-asset b { font-size: .8rem; font-weight: 600; }
-.universe-asset small { color: var(--desk-fg-3); font: .64rem var(--mono-stack); margin-top: 1px; }
-.universe-table tr.is-active .universe-asset b { color: var(--arc); }
-.universe-table td { padding: 8px 0 8px 12px; vertical-align: middle; white-space: nowrap; }
-.universe-table td b { color: var(--desk-fg); display: block; font: 500 .86rem var(--mono-stack); }
-.universe-bar {
-  background: var(--arc);
-  border-radius: 2px;
+.mosaic-col a:hover, .mosaic-col a:focus-visible {
+  border-color: color-mix(in srgb, var(--arc) 80%, transparent);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .1), 0 14px 30px -12px color-mix(in srgb, var(--arc) 70%, transparent);
+  transform: translateY(-4px);
+}
+.mosaic-col a:focus-visible { outline: 2px solid var(--sky); outline-offset: 2px; }
+.mosaic-col .stock-logo {
+  background: #fff;
+  border-color: transparent;
+  border-radius: 10px;
+  box-shadow: 0 6px 14px -6px rgba(0, 0, 0, .6);
+  height: 34px;
+  width: 34px;
+}
+.mosaic-figures { display: block; min-width: 0; }
+.mosaic-figures b { display: block; font: 500 clamp(1.05rem, 1.7vw, 1.35rem) var(--mono-stack); letter-spacing: -.05em; line-height: 1; }
+.mosaic-figures small {
+  color: var(--desk-fg-2);
   display: block;
-  height: 3px;
-  margin: 6px 0 0 auto;
-  width: min(100%, max(4px, calc(var(--share) * 2.4px)));
+  font: .62rem var(--mono-stack);
+  margin-top: 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.index-universe .universe-body { align-items: center; gap: 28px; }
+.mosaic-strip { border-radius: 99px; display: flex; gap: 3px; height: 6px; margin: 14px 0 0; overflow: hidden; }
+.mosaic-strip i { background: var(--arc); flex-basis: 0; transition: opacity .2s var(--ease); }
+.mosaic-strip i.is-dimmed { opacity: .3; }
+.index-mosaic > p { margin-top: 16px; }
+@media (max-width: 420px) {
+  .mosaic { gap: 6px; }
+  .mosaic-col a { height: 164px; padding: 10px 5px; }
+  .mosaic-figures small { font-size: .54rem; letter-spacing: -.02em; text-overflow: clip; }
+  .mosaic-col .stock-logo { height: 28px; width: 28px; }
+  .mosaic-figures b { font-size: 1rem; }
+}
+@media (prefers-reduced-motion: reduce) { .mosaic-col a:hover, .mosaic-col a:focus-visible { transform: none; } }
 
 /* ---------- Theme toggle (sun and moon in a tiny sky) --------------------- */
 .theme-toggle.sky-toggle {
@@ -793,12 +805,29 @@ h3 { font-weight: 600; letter-spacing: -.025em; }
 .theme-toggle.sky-toggle:hover { filter: brightness(1.12); transform: none; }
 .sky-layer { inset: 0; pointer-events: none; position: absolute; z-index: -1; }
 .sky-layer.is-night { background: linear-gradient(180deg, #090f2a 0%, #16204b 60%, #2a2f66 100%); }
-.sky-layer.is-day { background: linear-gradient(180deg, #4ea8ff 0%, #9fd3ff 60%, #e3f3ff 100%); }
+.sky-layer.is-day {
+  background:
+    radial-gradient(60% 50% at 70% 30%, rgba(255, 236, 170, .55), transparent 70%),
+    linear-gradient(180deg, #2c74ff 0%, #4f9dff 55%, #93cfff 100%);
+  overflow: hidden;
+}
+.sky-cloud { background: #fff; border-radius: 99px; opacity: .92; position: absolute; }
+.sky-cloud::before { background: inherit; border-radius: 50%; content: ""; position: absolute; }
+.sky-cloud.is-a { bottom: 18%; height: 5px; left: 10%; width: 13px; }
+.sky-cloud.is-a::before { height: 7px; left: 3px; top: -4px; width: 7px; }
+.sky-cloud.is-b { height: 4px; right: 8%; top: 22%; width: 10px; opacity: .75; }
+.sky-cloud.is-b::before { height: 6px; left: 2px; top: -3px; width: 6px; }
+@keyframes sky-drift { from { translate: -3px 0; } to { translate: 3px 0; } }
+@media (prefers-reduced-motion: no-preference) {
+  .sky-cloud.is-a { animation: sky-drift 5s ease-in-out infinite alternate; }
+  .sky-cloud.is-b { animation: sky-drift 6.5s ease-in-out -2s infinite alternate-reverse; }
+}
 .sky-star { background: #fff; border-radius: 50%; opacity: .6; position: absolute; }
 .sky-body { align-items: center; display: flex; inset: 0; justify-content: center; pointer-events: none; position: absolute; }
 .sky-body svg { height: 50%; width: 50%; }
 .sky-body.is-moon { color: #fde68a; filter: drop-shadow(0 0 6px rgba(252, 211, 77, .6)); }
-.sky-body.is-sun { color: #fb923c; filter: drop-shadow(0 0 8px rgba(251, 146, 60, .7)); }
+.sky-body.is-sun { filter: drop-shadow(0 0 7px rgba(255, 190, 60, .85)); }
+.sky-body.is-sun svg { height: 62%; width: 62%; }
 @media (max-width: 359px) { .theme-toggle.sky-toggle { height: 32px; width: 32px; } }
 
 /* ---------- /stocks: the updates chip and the market card ---------------- */
@@ -875,3 +904,26 @@ h3 { font-weight: 600; letter-spacing: -.025em; }
   .loop-steps::before { left: 39px; }
 }
 @media (prefers-reduced-motion: reduce) { .loop-step:hover .loop-art img { transform: none; } }
+
+/* ---------- Docs tile (pairs with the theme toggle) ----------------------- */
+.site-icons a.docs-link { border-radius: 50%; height: 38px; padding: 0; width: 38px; }
+.site-icons a.docs-link:hover { background: transparent; }
+.docs-tile {
+  align-items: center;
+  background:
+    radial-gradient(80% 60% at 30% 15%, rgba(145, 212, 255, .45), transparent 70%),
+    linear-gradient(160deg, #2a6bff 0%, #0052ff 50%, #0036b8 100%);
+  border: 1px solid rgba(255, 255, 255, .14);
+  border-radius: 50%;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .25), 0 4px 12px -4px rgba(0, 60, 200, .6);
+  display: inline-flex;
+  height: 38px;
+  justify-content: center;
+  transition: filter .2s var(--ease), transform .3s var(--ease-out);
+  width: 38px;
+}
+.site-icons .docs-tile svg { filter: drop-shadow(0 2px 3px rgba(0, 20, 80, .45)); height: 58%; transition: transform .3s var(--ease-out); width: 58%; }
+.docs-link:hover .docs-tile { filter: brightness(1.12); }
+.docs-link:hover .docs-tile svg { transform: rotate(-6deg) translateY(-1px); }
+.docs-link.active .docs-tile { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .25), 0 0 0 2px var(--paper), 0 0 0 4px var(--blue); }
+@media (prefers-reduced-motion: reduce) { .docs-link:hover .docs-tile svg { transform: none; } }
