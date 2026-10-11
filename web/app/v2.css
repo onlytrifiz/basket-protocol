@@ -1828,3 +1828,78 @@ img[src*="/partners/stonks-exchange"] { image-rendering: pixelated; }
 }
 .stage-card-net { color: rgba(255, 255, 255, .62); flex: none; font: 500 calc(var(--card-w) * .036) var(--mono-stack); letter-spacing: .08em; }
 .stage-card:is([data-offset="1"], [data-offset="2"], [data-offset="3"]) .stage-card-wordmark { -webkit-mask-position: right center; mask-position: right center; }
+
+/* ---------- Docs: written for holders ------------------------------------- */
+.docs-steps { display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0, 1fr)); list-style: none; margin: 26px 0 0; padding: 0; }
+.docs-steps li {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  min-width: 0;
+  padding: 20px 20px 22px;
+  position: relative;
+}
+.docs-steps img { display: block; filter: drop-shadow(0 10px 16px rgba(13, 29, 59, .16)); height: 64px; margin-bottom: 14px; width: 64px; }
+.docs-step-n { color: var(--link); font: 600 .66rem var(--mono-stack); letter-spacing: .1em; position: absolute; right: 18px; top: 18px; }
+.docs-steps h3 { font-family: var(--display-stack); font-size: 1.08rem; letter-spacing: -.02em; margin: 0 0 6px; }
+.docs-steps p { color: var(--ink-2); font-size: .88rem; line-height: 1.55; margin: 0; }
+
+.docs-split-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+.docs-holdings { display: grid; gap: 10px; grid-template-columns: repeat(3, minmax(0, 1fr)); list-style: none; margin: 22px 0 0; padding: 0; }
+.docs-holdings li {
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  display: flex;
+  gap: 11px;
+  min-width: 0;
+  padding: 12px 14px;
+}
+.docs-holdings li > span { display: flex; flex: 1; flex-direction: column; min-width: 0; }
+.docs-holdings b { font-size: .92rem; }
+.docs-holdings small { color: var(--ink-3); font-size: .76rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.docs-holdings em { color: var(--link); font: 600 .82rem var(--mono-stack); font-style: normal; }
+.docs-holdings img[src*="/partners/stonks-exchange"] { image-rendering: pixelated; }
+
+.docs-inline-cta { align-items: center; color: var(--link); display: inline-flex; font-weight: 600; gap: 6px; margin-top: 20px; }
+.docs-inline-cta span { transition: transform .18s var(--ease); }
+.docs-inline-cta:hover span { transform: translateX(3px); }
+
+.docs-faq { border-top: 1px solid var(--line); margin-top: 18px; }
+.docs-faq details { border-bottom: 1px solid var(--line); }
+.docs-faq summary {
+  align-items: center;
+  cursor: pointer;
+  display: flex;
+  font-weight: 600;
+  gap: 12px;
+  justify-content: space-between;
+  list-style: none;
+  padding: 16px 2px;
+}
+.docs-faq summary::-webkit-details-marker { display: none; }
+.docs-faq summary::after { color: var(--link); content: "+"; font: 400 1.3rem/1 var(--mono-stack); transition: transform .2s var(--ease); }
+.docs-faq details[open] summary::after { transform: rotate(45deg); }
+.docs-faq details p { color: var(--ink-2); line-height: 1.6; margin: 0; max-width: 68ch; padding: 0 2px 18px; }
+
+.docs-addresses { border: 1px solid var(--line); border-radius: var(--r-md); list-style: none; margin: 20px 0 0; overflow: hidden; padding: 0; }
+.docs-addresses li { align-items: center; background: var(--surface); display: flex; gap: 14px; justify-content: space-between; padding: 13px 16px; }
+.docs-addresses li + li { border-top: 1px solid var(--line); }
+.docs-addresses span { color: var(--ink-2); font-size: .88rem; }
+.docs-addresses a { color: var(--link); font-size: .82rem; white-space: nowrap; }
+.docs-addresses code { background: none; padding: 0; }
+.docs-addr-short { display: none; }
+
+@media (max-width: 900px) {
+  .docs-steps, .docs-holdings { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 660px) {
+  .docs-steps, .docs-holdings, .docs-split-2 { grid-template-columns: minmax(0, 1fr); }
+  .docs-addr-full { display: none; }
+  .docs-table-wrap table { min-width: 0; }
+  .docs-addr-short { display: inline; }
+}
+.docs-holdings .stock-logo { flex: none; height: 34px; width: 34px; }
+.docs-holdings + .docs-note { margin-top: 18px; }
