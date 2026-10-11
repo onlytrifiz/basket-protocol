@@ -28,7 +28,8 @@ export const INDEX_ASSETS: IndexAsset[] = [
     symbol: "STONKEX",
     name: "The Stonks Exchange",
     logo: "/partners/stonks-exchange.png",
-    brand: "#3dbb4a",
+    // Its own "lit" blue, a step off the house and Coinbase blue (#0052ff) so the two cards differ.
+    brand: "#3d7dff",
     href: "https://www.thestonks.exchange/",
   },
 ];

@@ -130,6 +130,13 @@ export default async function Home() {
      Base lists tomorrow arrives with its own icon and its own supply, and only its colour falls
      back to the house blue. Index members lead, so the strip under the fan opens on a weight
      instead of on "not bought by the vault". */
+  /* Equal weights leave the order to the listing; this settles ties in the order the fan should read.
+     Anything not named keeps its place after these. */
+  const STAGE_ORDER = ["NVDAc", "AAPLc", "METAc", "GOOGLc", "SPCXc", "STONKEX", "COINc"];
+  const stageRank = (symbol: string) => {
+    const i = STAGE_ORDER.indexOf(symbol);
+    return i === -1 ? STAGE_ORDER.length : i;
+  };
   const weightByAddress = new Map(vault.holdings.map((h) => [h.address.toLowerCase(), h.weightBps]));
   const stageStocks: StageStock[] = assets
     .map((asset) => ({
@@ -169,7 +176,7 @@ export default async function Home() {
        the issuer of every one of these tokens rather than because the vault holds it. The full
        thirteen are one section down, as a grid, which is the shape a catalogue wants. */
     .filter((stock) => stock.weightBps !== null || stock.symbol === "COINc")
-    .sort((a, b) => (b.weightBps ?? -1) - (a.weightBps ?? -1));
+    .sort((a, b) => (b.weightBps ?? -1) - (a.weightBps ?? -1) || stageRank(a.symbol) - stageRank(b.symbol));
 
   const slices = vault.holdings.map((h) => {
     const asset = byAddress.get(h.address.toLowerCase());
