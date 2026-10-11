@@ -132,7 +132,7 @@ export default async function Home() {
      instead of on "not bought by the vault". */
   /* The order the fan reads in. Named cards come first in this order; anything else follows by
      weight, so a holding added later still lands somewhere sensible without an edit here. */
-  const STAGE_ORDER = ["NVDAc", "COINc", "AAPLc", "METAc", "GOOGLc", "SPCXc", "STONKEX"];
+  const STAGE_ORDER = ["NVDAc", "COINc", "AAPLc", "METAc", "GOOGLc", "STONKEX", "SPCXc"];
   const stageRank = (symbol: string) => {
     const i = STAGE_ORDER.indexOf(symbol);
     return i === -1 ? STAGE_ORDER.length : i;
