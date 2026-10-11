@@ -1669,3 +1669,30 @@ img[src*="/partners/stonks-exchange"] { image-rendering: pixelated; }
   .idx-holdings li { grid-template-columns: auto minmax(0, 1fr) 84px; }
 }
 .idx-pager-count { white-space: nowrap; }
+
+/* A coin's own mark: initials until its artwork arrives (server-rendered or filled by the browser). */
+.coin-mark {
+  align-items: center;
+  background: var(--surface-sunken) center / cover no-repeat;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  display: inline-flex;
+  flex: none;
+  height: 34px;
+  justify-content: center;
+  overflow: hidden;
+  width: 34px;
+}
+.coin-mark i { color: var(--ink-2); font: 600 .7rem var(--mono-stack); font-style: normal; }
+.coin-mark.has-art { background-image: var(--art); }
+.coin-mark.has-art i { display: none; }
+.idx-mark.coin-mark { background-color: var(--surface); border-radius: 22px; height: 84px; width: 84px; }
+.idx-mark.coin-mark i { color: var(--brand); font-family: var(--display-stack); font-size: 1.9rem; font-weight: 800; }
+@media (max-width: 660px) { .idx-mark.coin-mark { border-radius: 16px; height: 60px; width: 60px; } }
+.coin-mark[style*="/partners/stonks-exchange"] { image-rendering: pixelated; }
+.idx-links { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 0; }
+.idx-links .idx-addr-pill { margin-top: 0; }
+.idx-stonks-link { align-items: center; background: var(--surface); color: var(--ink); display: inline-flex; font-family: var(--ui-stack); font-weight: 600; gap: 6px; }
+.idx-stonks-link img { border-radius: 3px; }
+.idx-stonks-short { display: none; }
+@media (max-width: 480px) { .idx-stonks-full { display: none; } .idx-stonks-short { display: inline; } }

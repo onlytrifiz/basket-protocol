@@ -148,7 +148,7 @@ export function IndexCards({
     <div className="index-cards">
       <LogoSprite marks={[...assets.values()]} />
       {/* One request, and only for the cards the server did not fill. See `coin-art-client`. */}
-      <CoinArtClient coins={rows.map((row) => row.coin.toLowerCase())} />
+      <CoinArtClient />
       {rows.map((row) => (
         <IndexCard assets={assets} key={row.address} logo={logos?.get(row.coin.toLowerCase())} row={row} />
       ))}

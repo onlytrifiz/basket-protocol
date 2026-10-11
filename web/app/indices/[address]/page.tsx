@@ -16,6 +16,7 @@ import {
   splitOf,
 } from "../../../lib/indices";
 import { shares as fmtShares, since, usd, usdCompact } from "../../../lib/format";
+import { CoinArtClient } from "../../components/coin-art-client";
 import { IndexActions } from "../../components/index-actions";
 import { SiteFooter, SiteHeader } from "../../components/site-chrome";
 import { StockLogo } from "../../components/stock-logo";
@@ -280,12 +281,15 @@ export default async function IndexPage({
           <div className="detail-canvas idx-canvas" style={{ "--brand": tint } as React.CSSProperties}>
             <div className="idx-hero">
               <div className="idx-hero-id">
-                <span className="idx-mark">
-                  {art
-                    // eslint-disable-next-line @next/next/no-img-element
-                    ? <img alt="" height={72} src={art} width={72} />
-                    : <i aria-hidden="true">{symbol.slice(0, 2)}</i>}
+                {/* Filled here when the server got the artwork, and by the browser when it did not. */}
+                <span
+                  className={`idx-mark coin-mark${art ? " has-art" : ""}`}
+                  data-coin={bound ? index.coin.toLowerCase() : undefined}
+                  style={art ? ({ "--art": `url("${art}")` } as React.CSSProperties) : undefined}
+                >
+                  <i aria-hidden="true">{symbol.slice(0, 2)}</i>
                 </span>
+                <CoinArtClient />
                 <div>
                   <p className="idx-tags">
                     <span className={`idx-tag${burns ? " is-burn" : ""}`}>{burns ? "Buyback and burn" : "Holder rewards"}</span>
@@ -293,9 +297,18 @@ export default async function IndexPage({
                     {index.paused && <span className="idx-tag is-paused">Paused</span>}
                   </p>
                   <h1>{symbol}</h1>
-                  <a className="idx-addr-pill" href={`https://basescan.org/address/${index.address}`} rel="noreferrer" target="_blank">
-                    {shorten(index.address)} ↗
-                  </a>
+                  <p className="idx-links">
+                    <a className="idx-addr-pill" href={`https://basescan.org/address/${index.address}`} rel="noreferrer" target="_blank">
+                      {shorten(index.address)} ↗
+                    </a>
+                    {bound && (
+                      <a aria-label={`Trade ${index.coinSymbol ?? "the coin"} on The Stonks Exchange`} className="idx-addr-pill idx-stonks-link" href={`https://www.thestonks.exchange/token/${index.coin}`} rel="noreferrer" target="_blank">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img alt="" height={14} src="/partners/stonks-exchange.png" width={14} />
+                        <span>Trade on <span className="idx-stonks-full">The Stonks Exchange</span><span className="idx-stonks-short">Stonks</span> ↗</span>
+                      </a>
+                    )}
+                  </p>
                 </div>
               </div>
 

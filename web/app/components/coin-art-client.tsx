@@ -45,46 +45,121 @@ function resized(url: string) {
 
 type Pair = { baseToken?: { address?: string }; info?: { imageUrl?: string } };
 
-export function CoinArtClient({ coins }: { coins: string[] }) {
-  const key = coins.join(",");
+/** Shared by every mount on the page: what has been answered, and what is waiting to be asked. */
+const known = new Map<string, string | null>();
+const queue = new Set<string>();
+let timer: ReturnType<typeof setTimeout> | undefined;
+let inFlight = false;
+/** Consecutive refusals; each one doubles the wait before the next batch, up to a minute. */
+let refusals = 0;
+const BATCH = 30;
+const STORE_KEY = "stfy-coin-art";
 
-  useEffect(() => {
-    const cards = [...document.querySelectorAll<HTMLElement>(".index-card[data-coin]")]
-      .filter((card) => !card.classList.contains("has-art"));
-    // The server got them all. Asking anyway would cost every reader a request to a third party
-    // for pictures that are already on screen.
-    if (cards.length === 0) return;
+function paint(address: string) {
+  const url = known.get(address);
+  if (!url) return;
+  for (const el of document.querySelectorAll<HTMLElement>(`[data-coin="${address}"]:not(.has-art)`)) {
+    el.style.setProperty("--art", `url("${url}")`);
+    el.classList.add("has-art");
+  }
+}
 
-    const wanted = [...new Set(cards.map((c) => c.dataset.coin).filter(Boolean) as string[])];
-    const stop = new AbortController();
+function remember() {
+  try { sessionStorage.setItem(STORE_KEY, JSON.stringify([...known].filter(([, url]) => url))); } catch { /* storage blocked */ }
+}
 
-    fetch(`https://api.dexscreener.com/tokens/v1/base/${wanted.join(",")}`, {
-      headers: { accept: "application/json" },
-      signal: stop.signal,
+/**
+ * Ask for whatever is queued, thirty at a time and ONE REQUEST AT A TIME. Parallel calls from one
+ * browser are the burst that earns a 429 (see above). A refused batch goes back on the queue and the
+ * queue waits — five seconds, then ten, up to a minute — so the cards wear initials for a while
+ * instead of for good, and a throttled reader never retries in a tight loop.
+ */
+function flush() {
+  if (inFlight || queue.size === 0) return;
+  const wanted = [...queue].slice(0, BATCH);
+  wanted.forEach((a) => queue.delete(a));
+  inFlight = true;
+  fetch(`https://api.dexscreener.com/tokens/v1/base/${wanted.join(",")}`, { headers: { accept: "application/json" } })
+    .then((response) => (response.ok ? response.json() : null))
+    .then((pairs: Pair[] | null) => {
+      if (!Array.isArray(pairs)) throw new Error("refused");
+      refusals = 0;
+      for (const pair of pairs) {
+        const address = pair.baseToken?.address?.toLowerCase();
+        const image = pair.info?.imageUrl;
+        if (!address || !image || known.get(address)) continue;
+        const url = resized(image);
+        if (SAFE.test(url)) known.set(address, url);
+      }
+      // Answered without a picture is an answer too: not asked again on this page.
+      for (const address of wanted) if (!known.has(address)) known.set(address, null);
+      wanted.forEach(paint);
+      remember();
     })
-      .then((response) => (response.ok ? response.json() : null))
-      .then((pairs: Pair[] | null) => {
-        if (!Array.isArray(pairs)) return;
-        const art = new Map<string, string>();
-        for (const pair of pairs) {
-          const address = pair.baseToken?.address?.toLowerCase();
-          const image = pair.info?.imageUrl;
-          if (!address || !image || art.has(address)) continue;
-          const url = resized(image);
-          if (SAFE.test(url)) art.set(address, url);
-        }
-        for (const card of cards) {
-          const url = card.dataset.coin ? art.get(card.dataset.coin) : undefined;
-          if (!url) continue;
-          card.style.setProperty("--art", `url("${url}")`);
-          card.classList.add("has-art");
-        }
-      })
-      // A refusal here is the same non-event it is on the server: the cards keep their initials.
-      .catch(() => {});
+    .catch(() => {
+      wanted.forEach((a) => queue.add(a));
+      refusals += 1;
+    })
+    .finally(() => {
+      inFlight = false;
+      if (queue.size) timer = setTimeout(flush, refusals ? Math.min(60_000, 2_500 * 2 ** refusals) : 400);
+    });
+}
 
-    return () => stop.abort();
-  }, [key]);
+function request(address: string) {
+  if (known.has(address)) return paint(address);
+  queue.add(address);
+  // While backing off, the scheduled retry will pick this up; do not jump the queue.
+  if (refusals) return;
+  clearTimeout(timer);
+  timer = setTimeout(flush, 120);
+}
+
+/**
+ * Fills in coin artwork on every `[data-coin]` element the server left without it: the index cards,
+ * the rows of the full table, the mark on an index's own page.
+ *
+ * LAZY, because the full table is hundreds of coins. Each element is asked for only when it comes
+ * within a screen of the viewport, so a visit that reads the first twenty rows makes one request,
+ * and the answers are kept for the session so moving between pages does not ask twice.
+ *
+ * Renders nothing; mount it once per surface. Several mounts share one queue and one cache.
+ */
+export function CoinArtClient() {
+  useEffect(() => {
+    if (known.size === 0) {
+      try {
+        for (const [address, url] of JSON.parse(sessionStorage.getItem(STORE_KEY) ?? "[]") as Array<[string, string]>) {
+          if (SAFE.test(url)) known.set(address, url);
+        }
+      } catch { /* storage blocked or malformed */ }
+    }
+
+    // Per mount, not shared: a remount (Strict Mode does one on purpose) must observe afresh, and a
+    // shared set would tell it everything was already being watched by an observer now disconnected.
+    const watched = new WeakSet<Element>();
+    const observer = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (!entry.isIntersecting) continue;
+        observer.unobserve(entry.target);
+        const address = (entry.target as HTMLElement).dataset.coin;
+        if (address) request(address);
+      }
+    }, { rootMargin: "600px 0px" });
+
+    const scan = () => {
+      for (const el of document.querySelectorAll<HTMLElement>("[data-coin]:not(.has-art)")) {
+        if (watched.has(el)) continue;
+        watched.add(el);
+        observer.observe(el);
+      }
+    };
+    scan();
+    // Client-side navigation and filters swap rows in without remounting this.
+    const mutations = new MutationObserver(scan);
+    mutations.observe(document.body, { childList: true, subtree: true });
+    return () => { observer.disconnect(); mutations.disconnect(); };
+  }, []);
 
   return null;
 }

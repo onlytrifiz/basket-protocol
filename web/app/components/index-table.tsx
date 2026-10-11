@@ -5,6 +5,7 @@ import type { IndexRow } from "../../lib/indices";
 import { MODE, returnedUsd } from "../../lib/indices";
 import { compactNumber, usdCompact } from "../../lib/format";
 import { stockByAddress, washColor } from "../../lib/stocks";
+import { CoinArtClient } from "./coin-art-client";
 import { LogoSprite } from "./logo-sprite";
 import { StockLogo } from "./stock-logo";
 
@@ -32,6 +33,8 @@ export function IndexTable({
       {/* Emitted HERE rather than by the page, so the stylesheet and the classes that depend on it
           cannot drift apart: a surface that renders a row always renders the rules for its marks. */}
       <LogoSprite marks={[...assets.values()]} />
+      {/* The coin marks are filled from the reader's browser as rows come into view. */}
+      <CoinArtClient />
       <div className="idx-row idx-row-head" role="row">
         <span role="columnheader">Coin</span>
         <span role="columnheader">Holds</span>
@@ -60,9 +63,14 @@ export function IndexTable({
           : null;
         return (
           <Link className="idx-row" href={`/indices/${row.address}`} key={row.address} role="row">
-            <span className="idx-coin" role="cell">
-              <b>{row.coinSymbol ?? shorten(row.coin)}</b>
-              <small>{shorten(row.address)}</small>
+            <span className="idx-coin idx-coin-logo" role="cell">
+              <span aria-hidden="true" className="coin-mark" data-coin={row.coin.toLowerCase()}>
+                <i>{(row.coinSymbol ?? "?").slice(0, 2)}</i>
+              </span>
+              <span>
+                <b>{row.coinSymbol ?? shorten(row.coin)}</b>
+                <small>{shorten(row.address)}</small>
+              </span>
             </span>
 
             {/* Marks, not a comma list of tickers: six near-identical rows of text cannot be
