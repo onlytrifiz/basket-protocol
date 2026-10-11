@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Bricolage_Grotesque, Geist, Geist_Mono } from "next/font/google";
+import { Bricolage_Grotesque, Geist, Geist_Mono, Press_Start_2P } from "next/font/google";
 import "./globals.css";
 import "./v2.css";
 import { WalletProvider } from "./components/wallet";
@@ -23,6 +23,16 @@ const mono = Geist_Mono({
   subsets: ["latin"],
   display: "swap",
   variable: "--font-mono",
+});
+
+/* The Stonks Exchange's own wordmark face, used only for its name on the hero card. Not preloaded:
+   it is one short word on one card, and every other page would pay for it. */
+const pixel = Press_Start_2P({
+  subsets: ["latin"],
+  weight: "400",
+  display: "swap",
+  preload: false,
+  variable: "--font-pixel",
 });
 
 const TITLE = "Stockify — Stock dividend protocol";
@@ -79,7 +89,7 @@ const themeBoot = `(function(){try{var d=document.documentElement,m=window.match
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={`${display.variable} ${ui.variable} ${mono.variable}`} data-theme="dark" suppressHydrationWarning>
+    <html lang="en" className={`${display.variable} ${ui.variable} ${mono.variable} ${pixel.variable}`} data-theme="dark" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeBoot }} />
       </head>

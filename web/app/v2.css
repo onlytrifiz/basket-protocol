@@ -1801,3 +1801,30 @@ img[src*="/partners/stonks-exchange"] { image-rendering: pixelated; }
 .stage-card:is([data-offset="1"], [data-offset="2"], [data-offset="3"]) .stage-card-bottom { flex-direction: row-reverse; }
 .stage-card:is([data-offset="1"], [data-offset="2"], [data-offset="3"]) .stage-card-holder { align-items: flex-end; text-align: right; }
 .stage-card:is([data-offset="1"], [data-offset="2"], [data-offset="3"]) .stage-card-top { flex-direction: row-reverse; }
+
+/* The company's wordmark, painted white through its own shape so every logo sits on its colour. */
+.stage-card-wordmark {
+  background: #fff;
+  display: block;
+  flex: none;
+  height: calc(var(--card-w) * .072);
+  -webkit-mask: var(--wm) left center / contain no-repeat;
+  mask: var(--wm) left center / contain no-repeat;
+  max-width: 64%;
+  width: calc(var(--card-w) * .072 * var(--wm-ratio));
+}
+.stage-card-issuer { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stage-card-issuer.is-pixel {
+  font: 400 calc(var(--card-w) * .05) var(--font-pixel), monospace;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+.stage-card .stage-card-top { align-items: center; gap: 10px; justify-content: space-between; }
+.stage-card .stage-card-top .stage-card-no { color: rgba(255, 255, 255, .62); font-size: calc(var(--card-w) * .042); }
+.stage-card-ticker {
+  color: #fff;
+  font: 600 calc(var(--card-w) * .066) var(--mono-stack);
+  letter-spacing: .02em;
+}
+.stage-card-net { color: rgba(255, 255, 255, .62); flex: none; font: 500 calc(var(--card-w) * .036) var(--mono-stack); letter-spacing: .08em; }
+.stage-card:is([data-offset="1"], [data-offset="2"], [data-offset="3"]) .stage-card-wordmark { -webkit-mask-position: right center; mask-position: right center; }

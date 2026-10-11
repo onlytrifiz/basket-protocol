@@ -5,6 +5,35 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { StockLogo } from "./stock-logo";
 
+/**
+ * Each company's own wordmark, for the top of its card: the real logotype where one exists as a
+ * file, keyed by ticker without the trailing "c". `ratio` is width over height of the cropped SVG,
+ * so the mark can be sized from its height. A company missing here gets its name in the site face.
+ */
+const WORDMARKS: Record<string, { src: string; ratio: number } | { pixel: string }> = {
+  NVDA: { src: "/wordmarks/nvidia.svg", ratio: 5.42 },
+  COIN: { src: "/wordmarks/coinbase.svg", ratio: 5.6 },
+  GOOGL: { src: "/wordmarks/alphabet.svg", ratio: 4.14 },
+  META: { src: "/wordmarks/meta.svg", ratio: 4.96 },
+  SPCX: { src: "/wordmarks/spacex.svg", ratio: 8.18 },
+  // Not a file: The Stonks Exchange sets its name in a pixel face, which loads as a font.
+  STONKEX: { pixel: "Stonks" },
+};
+
+function Wordmark({ stock }: { stock: StageStock }) {
+  const mark = WORDMARKS[stock.symbol.replace(/c$/, "")];
+  if (mark && "src" in mark) {
+    return (
+      <span
+        className="stage-card-wordmark"
+        style={{ "--wm": `url("${mark.src}")`, "--wm-ratio": mark.ratio } as React.CSSProperties}
+      />
+    );
+  }
+  if (mark) return <span className="stage-card-issuer is-pixel">{mark.pixel}</span>;
+  return <span className="stage-card-issuer">{stock.name}</span>;
+}
+
 export type StageStock = {
   symbol: string;
   name: string;
@@ -263,22 +292,19 @@ export function StockStage({ stocks, variant = "panel" }: { stocks: StageStock[]
                 type="button"
               >
                 <span aria-hidden="true" className="stage-card-body">
-                  {/* A member card, landscape: the issuer and the network across the top, the
-                      company's mark, and its name with the card number along the bottom. */}
+                  {/* A member card, landscape: the company's own wordmark and the card number
+                      across the top, its mark in the middle, the ticker and network at the foot. */}
                   <span className="stage-card-face">
                     <span className="stage-card-top">
-                      <span className="stage-card-issuer">Stockify</span>
-                      <span>{stock.tag ?? "B20 / BASE"}</span>
+                      <Wordmark stock={stock} />
+                      <span className="stage-card-no">Nº {String(index + 1).padStart(2, "0")}</span>
                     </span>
                     <span className="stage-card-mid">
                       <StockLogo logo={stock.logo} size="large" stock={stock} />
                     </span>
                     <span className="stage-card-bottom">
-                      <span className="stage-card-holder">
-                        <small>{stock.symbol}</small>
-                        <strong>{stock.name}</strong>
-                      </span>
-                      <span className="stage-card-no">Nº {String(index + 1).padStart(2, "0")}</span>
+                      <strong className="stage-card-ticker">{stock.symbol}</strong>
+                      <span className="stage-card-net">{stock.tag ?? "B20 / BASE"}</span>
                     </span>
                   </span>
                 </span>
