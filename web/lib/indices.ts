@@ -300,7 +300,12 @@ function readAllAddresses(): Promise<string[]> {
  * and the set page keeps its name. `readIndex` still reads a treasury directly when it is past it,
  * so nothing is unreachable either way.
  */
-export const ROW_LIMIT = Math.max(1, Number(process.env.INDEX_ROW_LIMIT) || 400);
+/* 400 WAS REACHED. On 11 October 2026 the factory held 756 treasuries (block 52,452,852), so the list
+   loaded only the newest 400 and every ranking on it ran over half the registry: MAGIKARP, which led
+   the overview's "given back the most" three days earlier, and both STONKEX indices were among the
+   356 cut, and fell out of the ranking by being old rather than by paying less. Rows are read through
+   Multicall3 at 200 calls a request, so the whole registry is ~27 requests per cache refresh. */
+export const ROW_LIMIT = Math.max(1, Number(process.env.INDEX_ROW_LIMIT) || 3000);
 
 /** Is this address a treasury this factory minted? The only thing that makes a direct read safe. */
 async function factoryKnows(address: string): Promise<boolean> {
