@@ -5,6 +5,7 @@ import { readAssets } from "../lib/b20";
 import { readDecimals, toUnits } from "../lib/decimals";
 import { readLedger } from "../lib/ledger";
 import { countWord, shares as fmtShares, usdCompact } from "../lib/format";
+import { assetUsd, indexAsset } from "../lib/index-assets";
 import { marketBoard } from "../lib/market";
 import { stockByAddress, stocks, washColor } from "../lib/stocks";
 import { readVault } from "../lib/vault";
@@ -116,9 +117,12 @@ export default async function Home() {
      keeps saying something while the carousel is away rather than going quiet. Off the map above,
      so an asset whose scale went unread is skipped once rather than twice. */
   const paidShares = [...distributedByAsset.values()].reduce((sum, units) => sum + units, 0);
+  /* One price per distributed or indexed asset: the share price for a B20, the pool price for
+     anything else in the index (STONKEX). Asked once here and read everywhere below. */
+  const priced = [...new Set([...distributedAddresses, ...vault.holdings.map((h) => h.address.toLowerCase())])];
+  const prices = new Map(await Promise.all(priced.map(async (a) => [a, await assetUsd(a, market.quotes)] as const)));
   const paidValue = [...distributedByAsset].reduce((sum, [address, units]) => {
-    const ticker = byAddress.get(address)?.ticker;
-    const price = ticker ? market.quotes[ticker]?.price : undefined;
+    const price = prices.get(address);
     return sum + (price ? units * price : 0);
   }, 0);
 
@@ -142,10 +146,23 @@ export default async function Home() {
       distributed: distributedByAsset.get(asset.address.toLowerCase()) ?? 0,
       distributedValue: (() => {
         const units = distributedByAsset.get(asset.address.toLowerCase());
-        const price = asset.ticker ? market.quotes[asset.ticker]?.price : undefined;
+        const price = prices.get(asset.address.toLowerCase());
         // No quote is not zero dollars. The card says "unpriced" rather than inventing a figure.
         return units && price ? units * price : null;
       })(),
+    }))
+    /* Index members that are not B20 equities (STONKEX) are not in the listing, so they join the
+       fan from the vault's own holdings, described by lib/index-assets. */
+    .concat(vault.holdings.flatMap((h) => {
+      const extra = indexAsset(h.address);
+      if (!extra) return [];
+      const units = distributedByAsset.get(extra.address);
+      const price = prices.get(extra.address);
+      return [{
+        symbol: extra.symbol, name: extra.name, domain: undefined, brand: extra.brand, logo: extra.logo,
+        weightBps: h.weightBps, shares: null, distributed: units ?? 0,
+        distributedValue: units && price ? units * price : null, tag: "TOKEN / BASE",
+      }];
     }))
     /* THE FIVE THE VAULT BUYS, PLUS COINBASE. Thirteen cards made the band a catalogue; the five
        that actually pay out are the claim the page is making, and Coinbase is on it because it is
@@ -162,8 +179,8 @@ export default async function Home() {
       name: h.name,
       weightBps: h.weightBps,
       // A listing this repo has no colour for still gets an arc, in the house blue.
-      brand: known?.brand ?? "#7aa8ff",
-      logo: asset?.logo,
+      brand: known?.brand ?? indexAsset(h.address)?.brand ?? "#7aa8ff",
+      logo: asset?.logo ?? indexAsset(h.address)?.logo,
       domain: asset?.domain,
     };
   });

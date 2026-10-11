@@ -3,6 +3,7 @@ import "server-only";
 import { readAssets } from "./b20";
 import { cached } from "./cache";
 import { readDecimals, toUnits } from "./decimals";
+import { assetUsd, indexAsset } from "./index-assets";
 import { marketBoard } from "./market";
 import { batchCall, pad, toBigInt, type RpcCall } from "./rpc";
 import { stockByAddress } from "./stocks";
@@ -48,6 +49,8 @@ export type WalletStock = {
   name: string;
   logo?: string;
   domain?: string;
+  /** Its page here for a B20; its own site for an index asset that is not one. */
+  href: string;
   /** Shares received, all time. */
   shares: number;
   /** The same at today's share price; null when the stock has no quote. */
@@ -188,6 +191,8 @@ async function load(wallet: string): Promise<WalletDividends> {
   const tickers = stocks.map((s) => byAddress.get(s)?.ticker ?? stockByAddress(s)?.ticker).filter(Boolean) as string[];
   const board = tickers.length ? await marketBoard(tickers) : { quotes: {} as Record<string, { price: number }> };
 
+  const prices = new Map(await Promise.all(stocks.map(async (a) => [a, await assetUsd(a, board.quotes as Record<string, { price: number } | undefined>)] as const)));
+
   let partial = false;
   const rows: WalletStock[] = stocks.map((address, i) => {
     const history = histories[i];
@@ -198,13 +203,14 @@ async function load(wallet: string): Promise<WalletDividends> {
     const unpaidRaw = toBigInt(now[i]);
     const asset = byAddress.get(address);
     const seed = stockByAddress(address);
-    const ticker = asset?.ticker ?? seed?.ticker;
-    const price = ticker ? (board.quotes as Record<string, { price: number } | undefined>)[ticker]?.price : undefined;
+    const extra = indexAsset(address);
+    const price = prices.get(address) ?? undefined;
     return {
       address,
-      symbol: asset?.symbol ?? seed?.symbol ?? `${address.slice(0, 6)}…`,
-      name: seed?.name ?? asset?.name ?? "",
-      logo: asset?.logo,
+      symbol: asset?.symbol ?? seed?.symbol ?? extra?.symbol ?? `${address.slice(0, 6)}…`,
+      name: seed?.name ?? asset?.name ?? extra?.name ?? "",
+      logo: asset?.logo ?? extra?.logo,
+      href: extra?.href ?? `/stocks/${(asset?.symbol ?? seed?.symbol ?? address).toLowerCase()}`,
       domain: asset?.domain ?? seed?.domain,
       shares,
       value: price ? shares * price : null,

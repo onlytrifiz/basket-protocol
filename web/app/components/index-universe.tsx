@@ -57,7 +57,7 @@ export function IndexUniverse({ slices }: { slices: IndexSlice[] }) {
     <aside className="index-universe index-mosaic" aria-label="Dividend index weights">
       <div className="universe-head">
         <span>DIVIDEND INDEX</span>
-        <b>{slices.length} B20</b>
+        <b>{slices.length} assets</b>
       </div>
 
       <ul className="mosaic">

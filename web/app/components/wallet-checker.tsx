@@ -195,7 +195,7 @@ function Recap({ recap }: { recap: WalletDividends }) {
         <ul>
           {recap.stocks.map((stock) => (
             <li key={stock.address}>
-              <Link href={`/stocks/${stock.symbol.toLowerCase()}`}>
+              <Link href={stock.href}>
                 <span className="wallet-stock-id">
                   <StockLogo logo={stock.logo} size="small" stock={{ symbol: stock.symbol, domain: stock.domain }} />
                   <span><b>{stock.symbol}</b><small>{stock.name}</small></span>

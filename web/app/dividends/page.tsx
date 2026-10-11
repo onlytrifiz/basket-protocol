@@ -5,6 +5,7 @@ import { readAssets } from "../../lib/b20";
 import { readDecimals, toUnits } from "../../lib/decimals";
 import { readLedger } from "../../lib/ledger";
 import { stockByAddress, washColor } from "../../lib/stocks";
+import { assetUsd, indexAsset } from "../../lib/index-assets";
 import { marketBoard } from "../../lib/market";
 import { readVault } from "../../lib/vault";
 import { shares as fmtShares, stamp, usd } from "../../lib/format";
@@ -140,9 +141,15 @@ export default async function DividendPage({ searchParams }: PageProps<"/dividen
     return Array.from({ length: SPARK_POINTS }, (_, i) => points[Math.round(i * stride)]);
   };
 
+  /* One price per distributed or indexed asset: the share price for a B20, the pool price for
+     anything else in the index (STONKEX). */
+  const pricedAddresses = [...new Set([...distributedByAsset.keys(), ...vault.holdings.map((h) => h.address.toLowerCase())])];
+  const prices = new Map(await Promise.all(pricedAddresses.map(async (a) => [a, await assetUsd(a, market.quotes)] as const)));
+
   const rows = vault.holdings.map((holding) => {
     const asset = byAddress.get(holding.address.toLowerCase());
-    const quote = asset?.ticker ? market.quotes[asset.ticker] : undefined;
+    const price = prices.get(holding.address.toLowerCase()) ?? undefined;
+    const quote = price ? { price } : undefined;
     const held = toUnits(holding.heldRaw, holding.decimals);
     const distributed = distributedByAsset.get(holding.address.toLowerCase()) ?? 0;
     return {
@@ -163,8 +170,7 @@ export default async function DividendPage({ searchParams }: PageProps<"/dividen
    * contributes nothing, which is the same rule every other figure on this page follows.
    */
   const distributedValue = [...distributedByAsset].reduce((sum, [address, units]) => {
-    const ticker = byAddress.get(address)?.ticker;
-    const price = ticker ? market.quotes[ticker]?.price : undefined;
+    const price = prices.get(address);
     return sum + (price ? units * price : 0);
   }, 0);
   const anyDistributed = distributedShares > 0;
@@ -233,7 +239,9 @@ export default async function DividendPage({ searchParams }: PageProps<"/dividen
                     price: quote?.price,
                     distributed,
                     distributedValue,
-                    brand: washColor(stockByAddress(holding.address)),
+                    brand: indexAsset(holding.address)?.brand ?? washColor(stockByAddress(holding.address)),
+                    logo: indexAsset(holding.address)?.logo,
+                    href: indexAsset(holding.address)?.href,
                     series: sampled(seriesByAsset.get(holding.address.toLowerCase()) ?? []),
                   } satisfies AssetCardRow}
                 />

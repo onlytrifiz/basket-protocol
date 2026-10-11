@@ -1,6 +1,7 @@
 import { cached } from "./cache";
 import { readDecimals } from "./decimals";
 import { batchCall, getLogs, pad, toBigInt, type Log, type RpcCall } from "./rpc";
+import { indexAsset } from "./index-assets";
 import { stockByAddress } from "./stocks";
 
 /**
@@ -168,8 +169,8 @@ async function loadVault(): Promise<VaultState> {
       // An index entry we have no metadata for is still real; it renders by address rather than
       // being dropped, because a vault buying something this repo has never heard of is exactly the
       // thing a ledger must not hide.
-      symbol: known?.symbol ?? `${entry.address.slice(0, 6)}…${entry.address.slice(-4)}`,
-      name: known?.name ?? "Unlisted B20 asset",
+      symbol: known?.symbol ?? indexAsset(entry.address)?.symbol ?? `${entry.address.slice(0, 6)}…${entry.address.slice(-4)}`,
+      name: known?.name ?? indexAsset(entry.address)?.name ?? "Unlisted asset",
       weightBps: entry.weightBps,
       heldRaw: held.state === "unavailable" ? null : (toBigInt(held) ?? 0n).toString(),
       unpaidRaw: unpaid.state === "unavailable" ? null : (toBigInt(unpaid) ?? 0n).toString(),

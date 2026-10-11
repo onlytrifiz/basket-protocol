@@ -52,6 +52,9 @@ export type AssetCardRow = {
   asset?: B20Asset;
   /** Share price of the underlying, when a quote landed. */
   price?: number;
+  /** For an index asset that is not a B20 (lib/index-assets): its own mark, and where it links. */
+  logo?: string;
+  href?: string;
   /** Cumulative shares pushed to holders, all time. */
   distributed: number;
   /** The same quantity in dollars, `null` when the equity has no quote to price it with. */
@@ -68,7 +71,10 @@ const fmtShares = (value: number) =>
 const usd = (value?: number | null) =>
   value === undefined || value === null
     ? "—"
-    : value.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 });
+    : value > 0 && value < 1
+      // A token priced in fractions of a cent (STONKEX) would round to $0.01; keep three digits.
+      ? value.toLocaleString("en-US", { style: "currency", currency: "USD", maximumSignificantDigits: 3 })
+      : value.toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 2 });
 
 const usdCompact = (value: number) =>
   value >= 1000
@@ -89,17 +95,17 @@ const usdCompact = (value: number) =>
  * on white is around 1.3:1, which is a decorative colour, not a legible one.
  */
 export function AssetCard({ row }: { row: AssetCardRow }) {
-  const { asset, brand, distributed, distributedValue, name, price, symbol, weightBps, series } = row;
+  const { asset, brand, distributed, distributedValue, name, price, symbol, weightBps, series, logo, href } = row;
   const paid = distributed > 0;
 
   return (
     <Link
       className="asset-card"
-      href={asset ? `/stocks/${asset.symbol.toLowerCase()}` : "/stocks"}
+      href={href ?? (asset ? `/stocks/${asset.symbol.toLowerCase()}` : "/stocks")}
       style={{ "--brand": brand } as React.CSSProperties}
     >
       <span className="asset-card-head">
-        <StockLogo logo={asset?.logo} stock={{ symbol, domain: asset?.domain }} />
+        <StockLogo logo={asset?.logo ?? logo} stock={{ symbol, domain: asset?.domain }} />
         <span className="asset-card-id">
           <strong>{symbol}</strong>
           <small>{name}</small>
@@ -126,7 +132,7 @@ export function AssetCard({ row }: { row: AssetCardRow }) {
 
       <span className="asset-card-foot">
         <span>
-          <small>Share price</small>
+          <small>{asset ? "Share price" : "Price"}</small>
           <b>{usd(price)}</b>
         </span>
         {/* The same quantity as the headline, in dollars. An equity with no quote shows no figure

@@ -23,6 +23,8 @@ export type StageStock = {
   distributed: number;
   /** The same quantity in dollars, `null` when the equity has no quote to price it with. */
   distributedValue: number | null;
+  /** The card's corner label; B20 equities default to "B20 / BASE". */
+  tag?: string;
 };
 
 /** How far ahead of the centre a card is still POSED. Beyond this every card shares one parked
@@ -263,7 +265,7 @@ export function StockStage({ stocks, variant = "panel" }: { stocks: StageStock[]
                 <span aria-hidden="true" className="stage-card-body">
                   <span className="stage-card-face">
                     <span className="stage-card-top">
-                      <span>B20 / BASE</span>
+                      <span>{stock.tag ?? "B20 / BASE"}</span>
                       <span>{String(index + 1).padStart(2, "0")}</span>
                     </span>
                     {/* The ticker in outline, behind the mark. It is the card's texture rather than
