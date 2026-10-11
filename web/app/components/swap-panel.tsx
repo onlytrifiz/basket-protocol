@@ -213,7 +213,15 @@ export function SwapPanel() {
     setIsBusy(true);
     try {
       if (isDirect) {
-        const out = estimateOut(BigInt(raw), source.symbol === "STFY" ? "sell" : "buy", stfyPool);
+        const side = source.symbol === "STFY" ? "sell" : "buy";
+        /* The exact fill from Uniswap's v4 quoter, hook fee and price impact included. The mid-price
+           estimate is only the fallback when the quoter cannot be reached: it ignores impact, and on
+           this pool 0.1 ETH came in ~8% under it, past a 5% floor. */
+        const exact = await fetch(`/api/stfy/quote?side=${side}&amount=${raw}`, { cache: "no-store" })
+          .then((r) => (r.ok ? r.json() as Promise<{ out?: string }> : null))
+          .then((body) => (body?.out ? BigInt(body.out) : null))
+          .catch(() => null);
+        const out = exact ?? estimateOut(BigInt(raw), side, stfyPool);
         if (token !== quoteToken.current) return;
         if (out === null) {
           setQuote(undefined);
@@ -221,7 +229,7 @@ export function SwapPanel() {
           return;
         }
         // `minOut` is a floor, not MEV protection — Base has no public mempool. It only stops a
-        // badly mispriced call from filling, so it sits well below the estimate.
+        // badly mispriced call from filling, so it sits below the quote by the chosen slippage.
         const minOut = (out * BigInt(10_000 - slippageBps)) / 10_000n;
         setQuote({
           destAmount: out.toString(),
