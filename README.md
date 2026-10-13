@@ -193,6 +193,14 @@ The active index is **read from the chain**, never from this file: `stocksLength
 | VALEc | Vale S.A. | `0xb20000000000000000000063376b142c0764b489` |
 | WMTc | Walmart | `0xb2000000000000000000008a7508619c717a7106` |
 | WRDc | WeRide | `0xb200000000000000000000e88efe88d8ade3f0da` |
+| AURc | Aurora Innovation | `0xb200000000000000000000cf62d7125cc77d2f96` |
+| CAVAc | CAVA Group | `0xb2000000000000000000001b6e407239eb31edcf` |
+| CHWYc | Chewy | `0xb200000000000000000000a5e12a1842dfcdb118` |
+| HSYc | The Hershey Company | `0xb200000000000000000000f327a373aa86ac86a8` |
+| LEUc | Centrus Energy | `0xb200000000000000000000fab55ad3773f2c8ef1` |
+| RXRXc | Recursion Pharmaceuticals | `0xb200000000000000000000501ef81f911eb57656` |
+| STZc | Constellation Brands | `0xb2000000000000000000001ac12227a8ae0ef3ac` |
+| YUMc | Yum! Brands | `0xb2000000000000000000005c8324136de0f4134a` |
 
 Every one of these was created through the B20 factory (`0xB20f…0000`) by the same issuer account, `0xe090ecbee12d4b6aee5e73ff60945f2545ef5c6f`. Anyone can create a B20, and the factory has minted tens of thousands of them, so a symbol match proves nothing. Before adding a listing, check its creator in the factory's creation log.
 
