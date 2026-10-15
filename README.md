@@ -201,6 +201,26 @@ The active index is **read from the chain**, never from this file: `stocksLength
 | RXRXc | Recursion Pharmaceuticals | `0xb200000000000000000000501ef81f911eb57656` |
 | STZc | Constellation Brands | `0xb2000000000000000000001ac12227a8ae0ef3ac` |
 | YUMc | Yum! Brands | `0xb2000000000000000000005c8324136de0f4134a` |
+| ABNBc | Airbnb | `0xb200000000000000000000045beafafbe0dc7664` |
+| APPc | AppLovin | `0xb20000000000000000000006f910a0e7bbd3c168` |
+| BALLc | Ball | `0xb200000000000000000000747bffa52fe2c2510b` |
+| BLNKc | Blink Charging Co. | `0xb2000000000000000000004ec7c19212979672f9` |
+| BOOTc | Boot Barn Holdings | `0xb2000000000000000000003e5e2892158e25dd7b` |
+| CHPTc | ChargePoint Holdings | `0xb2000000000000000000001ca01a48688ec7d3cc` |
+| DASHc | DoorDash | `0xb200000000000000000000bf391678bf2e38cedb` |
+| DNAc | Ginkgo Bioworks Holdings | `0xb200000000000000000000cc17eea8c9495e1499` |
+| MCDc | McDonald's | `0xb200000000000000000000d2f4cf2f7debb244bb` |
+| ONDSc | Ondas | `0xb200000000000000000000e7137ca231c5e35f25` |
+| PLAYc | Dave & Buster's Entertainment | `0xb20000000000000000000087d144f2c70cd1a5f6` |
+| PLc | Planet Labs PBC | `0xb200000000000000000000cb6b2f4e33f0471556` |
+| PZZAc | Papa John's International | `0xb20000000000000000000068987dacde1db79cd4` |
+| RUNc | Sunrun | `0xb200000000000000000000b1b9200405fb52a8cf` |
+| SHAZc | SharonAI Holdings | `0xb2000000000000000000000d9947c759429e7fe5` |
+| UBERc | Uber Technologies | `0xb200000000000000000000cae20cb1446462e24c` |
+| UNHc | UnitedHealth Group | `0xb200000000000000000000c367d37d07150182a2` |
+| WOLFc | Wolfspeed | `0xb2000000000000000000008df9bc22db1d7da2a5` |
+| Wc | Wayfair | `0xb20000000000000000000089bc72c3e637a02adb` |
+| YETIc | YETI Holdings | `0xb200000000000000000000613c15f118df2b189b` |
 
 Every one of these was created through the B20 factory (`0xB20f…0000`) by the same issuer account, `0xe090ecbee12d4b6aee5e73ff60945f2545ef5c6f`. Anyone can create a B20, and the factory has minted tens of thousands of them, so a symbol match proves nothing. Before adding a listing, check its creator in the factory's creation log.
 
