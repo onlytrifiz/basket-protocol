@@ -60,6 +60,12 @@ export type B20Asset = {
 
 const FACTORY = "0xB20f000000000000000000000000000000000000";
 const ICON = /^https:\/\/metadata\.coinbase\.com\/equity_icons\/[0-9a-f]{64}\.png$/;
+/** Coinbase's metadata endpoint, which `contractURI()` has named instead of inline JSON since ~2026-10-13. */
+const METADATA = /^https:\/\/api\.coinbase\.com\/v1\/tokenized-stocks\/metadata\/[A-Za-z0-9.]+$/;
+const REMOTE_ICON = /^https:\/\/api\.coinbase\.com\/v1\/tokenized-stocks\/images\/[A-Za-z0-9.]+\.png$/;
+/** A remote icon's answer is kept this long, a missing one included: Coinbase uploads them late. */
+const ICON_TTL_MS = 6 * 3_600_000;
+const ICON_BATCH = 80;
 const WAD = 10n ** 18n;
 
 /** 4-byte selectors. Kept literal so this module stays dependency-free, as `check-b20.mjs` does. */
@@ -74,14 +80,16 @@ const SIG = {
 /**
  * The official icon, from the token itself.
  *
- * `contractURI()` returns a base64 data-URI carrying `{name, symbol, image}` where `image` points at
- * Coinbase's own equity icon. Reading it means a ticker Base lists tomorrow arrives with correct
- * branding and no asset added to this repo — the difference between a hub and a hardcoded list.
- * Every listed asset answers it today, so the favicon fallback covers a read that did not land
- * rather than an issuer that never published one.
+ * `contractURI()` used to return a base64 data-URI carrying `{name, symbol, image}`. Around
+ * 13 October 2026 Coinbase switched EVERY token, old listings included, to a URL instead —
+ * `https://api.coinbase.com/v1/tokenized-stocks/metadata/<SYMBOL>` — and every official icon on the
+ * site silently fell back to a favicon. Both shapes are read: inline JSON as before, or that one
+ * metadata URL, which `remoteIcon` resolves. Any other URL is ignored: the token controls this
+ * string, and a hostile issuer should not get to send our server to an arbitrary host.
  */
-function decodeContractURI(result: CallResult): { name?: string; symbol?: string; image?: string } | undefined {
+function decodeContractURI(result: CallResult): { name?: string; symbol?: string; image?: string; metadataUrl?: string } | undefined {
   const uri = decodeString(result);
+  if (uri && METADATA.test(uri)) return { metadataUrl: uri };
   if (!uri?.startsWith("data:application/json;base64,")) return undefined;
   try {
     const json = JSON.parse(Buffer.from(uri.split(",", 2)[1], "base64").toString("utf8")) as Record<string, unknown>;
@@ -105,7 +113,48 @@ function decodeContractURI(result: CallResult): { name?: string; symbol?: string
  * LANDED is cached — committing the result of a throttled request would pin a token to "no icon,
  * assume 8 decimals" forever on the strength of one bad second.
  */
-const staticFacts = new Map<string, { logo?: string; decimals: number }>();
+const staticFacts = new Map<string, { logo?: string; metadataUrl?: string; decimals: number }>();
+
+/**
+ * The icon behind a metadata URL, or undefined when Coinbase has none to serve.
+ *
+ * Two requests, because the metadata alone is not proof: on 16 October ten listings named an
+ * `images/<SYMBOL>.png` that answered 404, and four more had empty metadata. So the JSON must name
+ * this very token and an image in the expected shape, and the image itself must answer before it
+ * becomes an `<img src>`. A request that did not land throws, so `cached` keeps the last answer and
+ * asks again next time rather than filing a timeout as "no icon".
+ */
+async function resolveRemoteIcon(address: string, metadataUrl: string): Promise<string | undefined> {
+  const meta = await fetch(metadataUrl, { signal: AbortSignal.timeout(6_000), cache: "no-store" });
+  if (meta.status === 404) return undefined;
+  if (!meta.ok) throw new Error(`coinbase metadata ${meta.status}`);
+  const json = await meta.json() as Record<string, unknown>;
+  const image = typeof json.image === "string" ? json.image : undefined;
+  const self = typeof json.contract_address === "string" && json.contract_address.toLowerCase() === address;
+  if (!image || !self || !REMOTE_ICON.test(image)) return undefined;
+  const head = await fetch(image, { method: "HEAD", signal: AbortSignal.timeout(6_000), cache: "no-store" });
+  if (head.ok) return image;
+  if (head.status === 404 || head.status === 403) return undefined;
+  throw new Error(`coinbase icon ${head.status}`);
+}
+
+const remoteIcon = (address: string, metadataUrl: string) =>
+  cached(`icon:${address}`, ICON_TTL_MS, () => resolveRemoteIcon(address, metadataUrl)).catch(() => undefined);
+
+/**
+ * Resolve many remote icons, eighty at a time. Measured on 159 listings: sixteen at a time took 8.6s
+ * of a cold render, eighty took 2.3s, and Coinbase refused none of either. Only a cold instance pays
+ * this; every answer is then kept for six hours.
+ */
+async function remoteIcons(entries: Array<[string, string]>): Promise<Map<string, string | undefined>> {
+  const out = new Map<string, string | undefined>();
+  for (let i = 0; i < entries.length; i += ICON_BATCH) {
+    const slice = entries.slice(i, i + ICON_BATCH);
+    const icons = await Promise.all(slice.map(([address, url]) => remoteIcon(address, url)));
+    slice.forEach(([address], j) => out.set(address, icons[j]));
+  }
+  return out;
+}
 
 /** Raw units to displayed shares. See the multiplier note at the top of this file. */
 export function toShares(raw: bigint, decimals: number, multiplier = WAD): number {
@@ -149,10 +198,16 @@ async function loadAssets(list: IndexStock[]): Promise<B20Asset[]> {
     if (meta || decimals !== null) {
       staticFacts.set(stock.address.toLowerCase(), {
         logo: meta?.image,
+        metadataUrl: meta?.metadataUrl,
         decimals: decimals !== null ? Number(decimals) : 8,
       });
     }
   });
+
+  const remote = await remoteIcons(list.flatMap((stock) => {
+    const facts = staticFacts.get(stock.address.toLowerCase());
+    return facts?.metadataUrl ? [[stock.address.toLowerCase(), facts.metadataUrl] as [string, string]] : [];
+  }));
 
   return list.map((stock, i) => {
     const known = staticFacts.get(stock.address.toLowerCase());
@@ -175,7 +230,7 @@ async function loadAssets(list: IndexStock[]): Promise<B20Asset[]> {
       shares: unread ? null : toShares(supply ?? 0n, decimals, multiplier),
       multiplier: multiplier.toString(),
       hasSplit: multiplier !== WAD,
-      logo: known?.logo,
+      logo: known?.logo ?? remote.get(stock.address.toLowerCase()),
       domain: stock.domain,
       inIndex: Boolean(stock.inIndex),
     };
