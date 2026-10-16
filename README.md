@@ -221,6 +221,15 @@ The active index is **read from the chain**, never from this file: `stocksLength
 | WOLFc | Wolfspeed | `0xb2000000000000000000008df9bc22db1d7da2a5` |
 | Wc | Wayfair | `0xb20000000000000000000089bc72c3e637a02adb` |
 | YETIc | YETI Holdings | `0xb200000000000000000000613c15f118df2b189b` |
+| BKSYc | BlackSky Technology | `0xb200000000000000000000bc4d895df1eeed1d06` |
+| ENPHc | Enphase Energy | `0xb2000000000000000000007a90b2d9ed101035a8` |
+| IBRXc | ImmunityBio | `0xb20000000000000000000077d13d6c79b6c11c5a` |
+| JACKc | Jack in the Box | `0xb200000000000000000000b44f193b3ffdf17037` |
+| LFMDc | LifeMD | `0xb200000000000000000000db15c02e133a9dab99` |
+| SMPLc | The Simply Good Foods | `0xb2000000000000000000001409f816682b7772b7` |
+| TAPc | Molson Coors Beverage | `0xb200000000000000000000e0b9460c97f38f412f` |
+| TTDc | The Trade Desk | `0xb2000000000000000000008baf7bb82e4c37743f` |
+| UAAc | Under Armour | `0xb200000000000000000000879a74c76c73a27d71` |
 
 Every one of these was created through the B20 factory (`0xB20f…0000`) by the same issuer account, `0xe090ecbee12d4b6aee5e73ff60945f2545ef5c6f`. Anyone can create a B20, and the factory has minted tens of thousands of them, so a symbol match proves nothing. Before adding a listing, check its creator in the factory's creation log.
 
