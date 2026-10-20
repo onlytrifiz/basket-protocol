@@ -230,6 +230,35 @@ The active index is **read from the chain**, never from this file: `stocksLength
 | TAPc | Molson Coors Beverage | `0xb200000000000000000000e0b9460c97f38f412f` |
 | TTDc | The Trade Desk | `0xb2000000000000000000008baf7bb82e4c37743f` |
 | UAAc | Under Armour | `0xb200000000000000000000879a74c76c73a27d71` |
+| ACHRc | Archer Aviation | `0xb2000000000000000000008a494d531d88cf55d6` |
+| AIc | C3.ai | `0xb20000000000000000000072b5c2b2d18ee8a2a5` |
+| ANFc | Abercrombie & Fitch Co. | `0xb20000000000000000000019641b253b3e2c8a24` |
+| APLDc | Applied Digital | `0xb2000000000000000000007cbdf8fa3861e51721` |
+| BBAIc | BigBear.ai Holdings | `0xb200000000000000000000898ed394469db1845c` |
+| BROSc | Dutch Bros | `0xb2000000000000000000001ecfaccd9047d3b544` |
+| CMCSAc | Comcast | `0xb2000000000000000000003bd46dbde905508b16` |
+| COHRc | Coherent | `0xb200000000000000000000a8c925f62e6d194715` |
+| DISc | The Walt Disney | `0xb2000000000000000000000bd75bf439a38bf7df` |
+| FIZZc | National Beverage | `0xb200000000000000000000ee6fd7de967ea1a0dc` |
+| FLYc | Firefly Aerospace | `0xb2000000000000000000004fc7a0c25178a0d633` |
+| FSLRc | First Solar | `0xb200000000000000000000b096f2f6021ac39617` |
+| Fc | Ford Motor | `0xb200000000000000000000ce4f8fc7ba5ca0359b` |
+| LOVEc | The Lovesac | `0xb200000000000000000000c3e498043bb44e8cbf` |
+| LUNRc | Intuitive Machines | `0xb200000000000000000000674e1325dbdf06b309` |
+| NNEc | NANO Nuclear Energy | `0xb20000000000000000000069d694d397b9388dac` |
+| OPADc | Offerpad Solutions | `0xb2000000000000000000003086b1355bd43e25da` |
+| PEPc | PepsiCo | `0xb2000000000000000000006d1bc7faa266eb099d` |
+| PLUGc | Plug Power | `0xb200000000000000000000c6dbae193c95c4e056` |
+| QSc | QuantumScape | `0xb200000000000000000000bd938fa95e3e20c5a1` |
+| RUMc | RUM Group | `0xb2000000000000000000000f28146eb28ea2835b` |
+| SAMc | The Boston Beer | `0xb200000000000000000000e410ae30abdda3aee0` |
+| SIDUc | Sidus Space | `0xb2000000000000000000002b9ac07a0544688079` |
+| SLDPc | Solid Power | `0xb200000000000000000000df3eb2af7316b29122` |
+| SPCEc | Virgin Galactic Holdings | `0xb200000000000000000000d65c9253b025af8c56` |
+| SWBIc | Smith & Wesson Brands | `0xb2000000000000000000003fe90a64263b7f9e74` |
+| TGTc | Target | `0xb200000000000000000000c715439d0cc5a8c67d` |
+| VRTc | Vertiv Holdings Co | `0xb200000000000000000000b2e8dba585b1ffb158` |
+| WKHSc | Workhorse Group | `0xb200000000000000000000dfa6c77aea5329d187` |
 
 Every one of these was created through the B20 factory (`0xB20f…0000`) by the same issuer account, `0xe090ecbee12d4b6aee5e73ff60945f2545ef5c6f`. Anyone can create a B20, and the factory has minted tens of thousands of them, so a symbol match proves nothing. Before adding a listing, check its creator in the factory's creation log.
 
