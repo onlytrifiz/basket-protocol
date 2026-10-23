@@ -259,6 +259,7 @@ The active index is **read from the chain**, never from this file: `stocksLength
 | TGTc | Target | `0xb200000000000000000000c715439d0cc5a8c67d` |
 | VRTc | Vertiv Holdings Co | `0xb200000000000000000000b2e8dba585b1ffb158` |
 | WKHSc | Workhorse Group | `0xb200000000000000000000dfa6c77aea5329d187` |
+| SKYDc | Skydance Corporation (formerly Paramount Skydance) | `0xb200000000000000000000a21b5ae62fea392b73` |
 
 Every one of these was created through the B20 factory (`0xB20f…0000`) by the same issuer account, `0xe090ecbee12d4b6aee5e73ff60945f2545ef5c6f`. Anyone can create a B20, and the factory has minted tens of thousands of them, so a symbol match proves nothing. Before adding a listing, check its creator in the factory's creation log.
 

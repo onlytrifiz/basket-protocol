@@ -83,6 +83,8 @@ export const stocks: IndexStock[] = [
   // quoted in dollars, whatever home exchange Finnhub's profile names.
   // Simply Good Foods' own domains serve no favicon; atkins.com, its main brand, stands in.
   // RUMc is Rumble, renamed RUM Group Inc. on 18 June 2026 with the ticker kept.
+  // SKYDc is Paramount Skydance, renamed Skydance Corporation on 6 October 2026 and moved from
+  // Nasdaq PSKY to NYSE SKYD. skydance.com serves no favicon; paramount.com, its main brand, does.
   // Oura has no ticker: it postponed its Nasdaq IPO (as OURA) on 29 September 2026. Give it one
   // when it trades.
   { symbol: "AAOIc", name: "Applied Optoelectronics", domain: "ao-inc.com", ticker: "AAOI", brand: "#3F8FD8", address: "0xb200000000000000000000cf36d05963a3e2205c" },
@@ -237,6 +239,7 @@ export const stocks: IndexStock[] = [
   { symbol: "SHAZc", name: "SharonAI", domain: "sharonai.com", ticker: "SHAZ", brand: "#E6E6E6", wash: "#111111", address: "0xb2000000000000000000000d9947c759429e7fe5" },
   { symbol: "SIDUc", name: "Sidus Space", domain: "sidusspace.com", ticker: "SIDU", brand: "#5B7BE0", wash: "#0B2D6B", address: "0xb2000000000000000000002b9ac07a0544688079" },
   { symbol: "SKHYc", name: "SK hynix", domain: "skhynix.com", ticker: "SKHY", brand: "#F2793D", address: "0xb200000000000000000000187f7071d6e321a7d2" },
+  { symbol: "SKYDc", name: "Skydance", domain: "paramount.com", ticker: "SKYD", brand: "#4F7BF0", wash: "#0064FF", address: "0xb200000000000000000000a21b5ae62fea392b73" },
   { symbol: "SLDPc", name: "Solid Power", domain: "solidpowerbattery.com", ticker: "SLDP", brand: "#3FA9F5", address: "0xb200000000000000000000df3eb2af7316b29122" },
   { symbol: "SMPLc", name: "Simply Good Foods", domain: "atkins.com", ticker: "SMPL", brand: "#E35A2B", address: "0xb2000000000000000000001409f816682b7772b7" },
   { symbol: "SMRc", name: "NuScale", domain: "nuscalepower.com", ticker: "SMR", brand: "#5F78D8", wash: "#1E2D78", address: "0xb200000000000000000000978546fe604b8dcbc6" },
