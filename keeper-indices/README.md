@@ -90,6 +90,30 @@ recipient, and the coin is the unknown), so it waits out `COIN_MISS_TTL` instead
 share of the round's total computed off the same snapshot, and the last batch takes the remainder so
 the batches add up to exactly the budget the contract fixed when the round opened.
 
+## Skipping quiet treasuries
+
+A pass walks every treasury the factory has minted, one after another, at about a second each — and
+most of them, launches that never traded, reach the same "holding" every time. `SKIP_IDLE` lets a pass
+leave those out. A treasury is skipped only when **both** hold:
+
+- **its last run ended idle** — on one of four named endings in `runIndex` (paused; no round ready;
+  ready with nothing bought and nothing due; a buyback with nothing to burn), with nothing attempted on
+  the way: no harvest over its floor, no slice over its buy floor, no open round, no missing exclusion,
+  no transaction, no failure. The default is busy; idle has to be earned;
+- **its fingerprint has not moved since** — its pool's fee growth, its own quote and coin balances and
+  spendable quote, its pause flag, and every basket entry's pending amount and `readyAt`, all read in a
+  few multicalls at the start of the pass.
+
+A round coming due ends the skip at its `readyAt`, and every skipped treasury is re-run at least every
+`IDLE_RECHECK_SEC` (at most `IDLE_RECHECKS_PER_PASS` per pass), because the one thing the fingerprint
+cannot see is a price. Memory is per process: the first pass after a restart runs everything.
+
+Rollout: it ships as `shadow`, which changes nothing — every treasury still runs, and each prediction is
+checked against the run it predicted. A contradiction is logged as `QUIET-CHECK MISMATCH` with the
+reason; the pass ends with `quiet-check (shadow): N would have been skipped · M contradicted`. Switch to
+`on` after a few hours at `0 contradicted`, and back to `off` (no code change, just the variable) if
+anything looks wrong.
+
 ## Env
 
 See `.env.example`. The ones worth knowing:

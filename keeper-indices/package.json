@@ -7,7 +7,8 @@
   "scripts": {
     "start": "tsx src/keeper.ts",
     "once": "RUN_ONCE=1 tsx src/keeper.ts",
-    "status": "RUN_ONCE=1 DRY_RUN=1 tsx src/keeper.ts"
+    "status": "RUN_ONCE=1 DRY_RUN=1 tsx src/keeper.ts",
+    "test": "tsx --test test/*.test.ts"
   },
   "dependencies": {
     "dotenv": "^16.4.5",

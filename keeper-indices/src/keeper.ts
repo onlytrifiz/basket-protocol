@@ -70,6 +70,8 @@ import {
   RPC_TIMEOUT_MS,
   RPC_URL,
   RUN_ONCE,
+  RUN_PASSES,
+  SKIP_IDLE,
   SPLIT_CANDIDATES,
   SPLIT_LOOKBACK,
   GAS_BUFFER_BPS,
@@ -81,6 +83,21 @@ import { directQuote, quote } from "./venue.js";
 import { unitsForUsd, usdPrice, usdValue } from "./prices.js";
 import { fetchHolders } from "./holders.js";
 import { announce } from "./notify.js";
+import {
+  beginTrace,
+  endTrace,
+  markBusy,
+  markIdleExit,
+  onlyPriceNoise,
+  plan,
+  readFingerprints,
+  remember,
+  traceReady,
+  UNPRICED_BUY,
+  UNPRICED_HARVEST,
+  wasIdle,
+  type Plan,
+} from "./quiet.js";
 
 
 const account = privateKeyToAccount(KEEPER_PRIVATE_KEY);
@@ -301,6 +318,7 @@ async function margined(
 }
 
 async function send(tx: (nonce?: number) => Promise<Hex>): Promise<Hex> {
+  markBusy("sent a transaction");
   try {
     return await tx();
   } catch (e) {
@@ -326,6 +344,7 @@ async function send(tx: (nonce?: number) => Promise<Hex>): Promise<Hex> {
  * stale nonce is exactly the kind of thing that comes back as "invalid parameters".
  */
 async function sendRetrying(tx: (nonce?: number) => Promise<Hex>, what: string, attempts = 5): Promise<Hex> {
+  markBusy("sent a transaction");
   for (let attempt = 1; ; attempt++) {
     try {
       if (attempt === 1) return await send(tx);
@@ -404,6 +423,7 @@ const exclusionsDone = new Set<Address>();
 let soonestReady: number | null = null;
 const noteReady = (at: number) => {
   if (soonestReady === null || at < soonestReady) soonestReady = at;
+  traceReady(at);
 };
 
 // ─────────────────────────────────────────────────────────────────────── exclusions
@@ -641,6 +661,7 @@ async function ensureExclusions(treasury: Address, coin: Address) {
      * cheap read is worth repeating; the silent gap is not.
      */
     exclusionsDone.delete(treasury);
+    markBusy("custodian lookup failed");
     console.log(`    ${short(treasury)} custodian lookup failed — retrying next cycle`);
     return;
   }
@@ -657,6 +678,7 @@ async function ensureExclusions(treasury: Address, coin: Address) {
   }
   if (missing.length === 0) return;
 
+  markBusy("exclusions missing");
   console.log(`    excluding ${missing.map(short).join(", ")}`);
   if (DRY_RUN) return;
   const gas = await margined({
@@ -718,6 +740,7 @@ async function harvest(treasury: Address, quoteToken: Address, quoteDecimals: nu
       return 0n;
     }
 
+    markBusy(worth === null ? UNPRICED_HARVEST : "fees worth harvesting");
     // The quote's own scale, not ether's. An 8-decimal quote printed as ether reads 10^10 too small.
     console.log(`    harvest ${fmt(received, quoteDecimals)}${worth === null ? "" : ` ($${worth.toFixed(2)})`}`);
     if (DRY_RUN) return result as bigint;
@@ -728,6 +751,7 @@ async function harvest(treasury: Address, quoteToken: Address, quoteDecimals: nu
     await confirm(hash);
     return result as bigint;
   } catch (e) {
+    markBusy("harvest failed");
     console.error(`    harvest skipped: ${(e as Error).message.split("\n")[0]}`);
     return 0n;
   }
@@ -780,11 +804,11 @@ async function valueInEth(quoteToken: Address, amount: bigint, decimals: number)
  * deliberate: the old fallback refused forever, and an unpriced asset should cost us a check rather
  * than the programme. `PAYOUT_COST_MAX_BPS` still stands behind this on the expensive half.
  */
-async function thresholdIn(quoteToken: Address, decimals: number): Promise<bigint> {
+async function thresholdIn(quoteToken: Address, decimals: number): Promise<{ units: bigint; priced: boolean }> {
   const units = await unitsForUsd(quoteToken, MIN_ROUND_USD, decimals);
-  if (units !== null && units > 0n) return units;
+  if (units !== null && units > 0n) return { units, priced: true };
   console.log(`    ${short(quoteToken)} has no price — buying without a value floor`);
-  return parseUnits(MIN_ROUND_UNPRICED, decimals);
+  return { units: parseUnits(MIN_ROUND_UNPRICED, decimals), priced: false };
 }
 
 async function allocate(treasury: Address, index: number, size: bigint, decimals: number): Promise<bigint> {
@@ -844,7 +868,7 @@ async function buy(
   const decimals = isNative
     ? 18
     : Number(await publicClient.readContract({ address: quoteToken, abi: erc20Abi, functionName: "decimals" }));
-  const threshold = await thresholdIn(quoteToken, decimals);
+  const { units: threshold, priced } = await thresholdIn(quoteToken, decimals);
 
   // The treasury pays no gas, but leaving it bone dry means an owner rescue has nothing to work with.
   const spendable = isNative
@@ -857,6 +881,8 @@ async function buy(
     const slice = (spendable * BigInt(weights[i])) / 10_000n;
     const size = slice > left ? left : slice;
     if (size < threshold) continue;
+    // Over its floor: whether or not the buy then lands, this treasury has work until it does.
+    markBusy(priced ? "a slice over its buy floor" : UNPRICED_BUY);
 
     /**
      * The basket entry that IS the quote asset needs no venue at all.
@@ -1288,6 +1314,7 @@ async function resumeOpenRounds(treasury: Address, coin: Address, tokens: Addres
   try {
     window = Number(await read<bigint>("batchWindow"));
   } catch (e) {
+    markBusy("open rounds unchecked");
     return console.error(`    open rounds not checked: ${why(e).split("\n")[0]}`);
   }
   for (let i = 0; i < tokens.length; i++) {
@@ -1300,6 +1327,7 @@ async function resumeOpenRounds(treasury: Address, coin: Address, tokens: Addres
         read<Address>("roundCursor", [BigInt(i)]),
       ]);
     } catch (e) {
+      markBusy("open rounds unchecked");
       console.error(`    [${i}] open round not checked: ${why(e).split("\n")[0]}`);
       continue;
     }
@@ -1316,6 +1344,7 @@ async function resumeOpenRounds(treasury: Address, coin: Address, tokens: Addres
       );
       continue;
     }
+    markBusy("an open round to resume");
     console.log(`    [${i}] an open round is unfinished: ${fmt(left, decimals)} left, ${closesAt - now()}s to close it`);
     if (DRY_RUN) continue;
 
@@ -1343,7 +1372,10 @@ async function runIndex(treasury: Address) {
     publicClient.readContract({ address: treasury, abi: treasuryAbi, functionName: "mode" }),
   ])) as [Address, Address, boolean, number];
 
-  if (paused) return console.log(`  ${short(treasury)} paused`);
+  if (paused) {
+    markIdleExit();
+    return console.log(`  ${short(treasury)} paused`);
+  }
 
   if (coin === ZERO) {
     const refused = unbindable.get(treasury);
@@ -1451,7 +1483,10 @@ async function runIndex(treasury: Address) {
       const held = (await publicClient.readContract({
         address: coin, abi: erc20Abi, functionName: "balanceOf", args: [treasury],
       })) as bigint;
-      if (held === 0n) return;
+      if (held === 0n) {
+        markIdleExit();
+        return;
+      }
       console.log(`    ${fmt(held, coinDecimals)} left unburned from an earlier cycle`);
     }
     if (DRY_RUN) return console.log("    dry run: would burn whatever the buy back bought");
@@ -1500,6 +1535,7 @@ async function runIndex(treasury: Address) {
   // Saying nothing when a round has not come round yet reads exactly like a failure — and it is the
   // most common thing the keeper does.
   if (ready.length === 0) {
+    markIdleExit(); // until the soonest readyAt, which `noteReady` has just recorded for it
     if (waiting.length) console.log(`    holding: next round ${waiting.join(", ")}`);
     return;
   }
@@ -1532,6 +1568,7 @@ async function runIndex(treasury: Address) {
     if (amount > (bought ? 0n : MIN_PAYOUT_UNITS)) due.push({ index: i, amount });
   }
   if (due.length === 0) {
+    if (!bought) markIdleExit();
     console.log(bought ? "    nothing to pay out" : "    holding: under the buy threshold, nothing bought this round");
     return;
   }
@@ -1627,12 +1664,70 @@ async function cycle() {
   console.log(
     `${baskets.length} index(es)${ONLY_INDEXES.size ? ` of ${all.length} (ONLY_INDEXES)` : ""}`
   );
+
+  // Which of them can sit this pass out (see quiet.ts). Off means nothing extra is even read.
+  let plans: Map<string, Plan> | null = null;
+  let rechecked = 0;
+  if (SKIP_IDLE !== "off") {
+    const fps = await readFingerprints(publicClient, baskets, padFor, chain.contracts.multicall3.address);
+    ({ plans, rechecked } = plan(baskets, fps, now()));
+  }
+
+  let skipped = 0;
+  let predicted = 0;
+  let contradicted = 0;
+  let priceNoise = 0;
   for (const b of baskets) {
+    const planned = plans?.get(b.toLowerCase());
+    // Exclusions are checked once per process and retried on failure: a treasury still owed that
+    // check is never quiet, whatever its fingerprint says.
+    const quiet = planned?.skip === true && exclusionsDone.has(b);
+    if (quiet && SKIP_IDLE === "on") {
+      skipped += 1;
+      // The loop sleeps until the soonest round anywhere; a skipped treasury's round still counts.
+      if (planned!.nextReadyAt !== null) noteReady(planned!.nextReadyAt);
+      continue;
+    }
+
+    const trace = plans ? beginTrace() : null;
+    const startedAt = now();
+    let threw = false;
     try {
       await runIndex(b);
     } catch (e) {
+      threw = true;
       console.error(`  ${short(b)} failed: ${(e as Error).message.split("\n")[0]}`);
+    } finally {
+      endTrace();
     }
+
+    if (trace) {
+      const idle = wasIdle(trace, threw);
+      if (quiet) {
+        // Shadow mode: the prediction was made, the run happened anyway, and they must agree.
+        predicted += 1;
+        if (!idle && onlyPriceNoise(trace, threw)) {
+          // Same state, different answer from the price source: the run acted only because a price
+          // did not arrive, which the skip would have spared it. Counted apart, never hidden.
+          priceNoise += 1;
+          console.log(`  ${short(b)} quiet-check: predicted idle; differed only by a missing price (${trace.busy.join(", ")})`);
+        } else if (!idle) {
+          contradicted += 1;
+          const why = threw ? "the run failed" : trace.busy.join(", ") || "it did not end on an idle exit";
+          console.error(`  ${short(b)} QUIET-CHECK MISMATCH: predicted idle, but ${why}`);
+        }
+      }
+      remember(b, planned?.fp ?? null, idle, trace.nextReadyAt, startedAt);
+    }
+  }
+
+  if (SKIP_IDLE === "on") {
+    console.log(`${skipped} quiet index(es) skipped${rechecked ? ` · ${rechecked} re-checked after IDLE_RECHECK_SEC` : ""}`);
+  } else if (SKIP_IDLE === "shadow") {
+    console.log(
+      `quiet-check (shadow): ${predicted} would have been skipped · ${contradicted} contradicted by their run` +
+        ` · ${priceNoise} differed only by a missing price`
+    );
   }
 
   if (unboundThisCycle > 0) {
@@ -1644,7 +1739,8 @@ async function main() {
   // The poll interval belongs in the banner: "nothing happened" and "nothing happened yet" look the
   // same in a log, and only one of them is a problem.
   console.log(
-    `indices keeper · ${account.address} · factory ${short(FACTORY)} · every ${INTERVAL_SEC}s${DRY_RUN ? " · DRY RUN" : ""}`
+    `indices keeper · ${account.address} · factory ${short(FACTORY)} · every ${INTERVAL_SEC}s${DRY_RUN ? " · DRY RUN" : ""}` +
+      ` · skip idle: ${SKIP_IDLE}`
   );
 
   // The single operational mistake worth failing loudly on: an unauthorised wallet reverts every
@@ -1675,6 +1771,7 @@ async function main() {
       ` · gas capped at ${PAYOUT_COST_MAX_BPS / 100}% of it`
   );
 
+  let passes = 0;
   for (;;) {
     const started = Date.now();
     try {
@@ -1683,6 +1780,8 @@ async function main() {
       console.error(`cycle failed: ${(e as Error).message.split("\n")[0]}`);
     }
     if (RUN_ONCE) return;
+    passes += 1;
+    if (RUN_PASSES > 0 && passes >= RUN_PASSES) return;
     const elapsed = Math.floor((Date.now() - started) / 1000);
     /**
      * Wake for the next round, or for the routine pass, whichever comes first.
