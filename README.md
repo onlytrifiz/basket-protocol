@@ -260,6 +260,23 @@ The active index is **read from the chain**, never from this file: `stocksLength
 | VRTc | Vertiv Holdings Co | `0xb200000000000000000000b2e8dba585b1ffb158` |
 | WKHSc | Workhorse Group | `0xb200000000000000000000dfa6c77aea5329d187` |
 | SKYDc | Skydance Corporation (formerly Paramount Skydance) | `0xb200000000000000000000a21b5ae62fea392b73` |
+| AALc | American Airlines Group | `0xb2000000000000000000004feb8d277dd14b08bb` |
+| AEHRc | Aehr Test Systems | `0xb2000000000000000000001775bd17f2289de527` |
+| BXc | Blackstone | `0xb200000000000000000000645c1ec509e4261682` |
+| CRMc | Salesforce | `0xb2000000000000000000006432a3a7991e718dbb` |
+| CRWDc | CrowdStrike Holdings | `0xb200000000000000000000a0de75786c9f8fc58c` |
+| DAVEc | Dave | `0xb2000000000000000000009bba9a926f19cff8e7` |
+| DNUTc | Krispy Kreme | `0xb2000000000000000000005c41b0018612629072` |
+| FLNCc | Fluence Energy | `0xb200000000000000000000695b10dd3e1b0ea070` |
+| FUBOc | FuboTV | `0xb200000000000000000000ffada41c4ed20b8d0f` |
+| FUNc | Six Flags Entertainment | `0xb2000000000000000000000199ae48796c61909e` |
+| GAPc | The Gap | `0xb200000000000000000000bba79a25edfd4b66c0` |
+| GSc | The Goldman Sachs Group | `0xb200000000000000000000a82a0c88dd258ed141` |
+| NVTSc | Navitas Semiconductor | `0xb2000000000000000000002a0ec8f8861ce98983` |
+| SNOWc | Snowflake | `0xb2000000000000000000004acdc9a922fcfbcc7f` |
+| TEMc | Tempus AI | `0xb200000000000000000000d033253abb1104107b` |
+| VSTc | Vistra | `0xb20000000000000000000079dc24fe2fbd09110f` |
+| WOOFc | Petco Health and Wellness Company | `0xb200000000000000000000b5e07d13b2d68d60dd` |
 
 Every one of these was created through the B20 factory (`0xB20f…0000`) by the same issuer account, `0xe090ecbee12d4b6aee5e73ff60945f2545ef5c6f`. Anyone can create a B20, and the factory has minted tens of thousands of them, so a symbol match proves nothing. Before adding a listing, check its creator in the factory's creation log.
 
