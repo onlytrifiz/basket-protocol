@@ -277,6 +277,62 @@ The active index is **read from the chain**, never from this file: `stocksLength
 | TEMc | Tempus AI | `0xb200000000000000000000d033253abb1104107b` |
 | VSTc | Vistra | `0xb20000000000000000000079dc24fe2fbd09110f` |
 | WOOFc | Petco Health and Wellness Company | `0xb200000000000000000000b5e07d13b2d68d60dd` |
+| ADBEc | Adobe | `0xb20000000000000000000034533ed3961f222cd4` |
+| ADIc | Analog Devices | `0xb200000000000000000000c33e458d1f892a7917` |
+| AFRMc | Affirm Holdings | `0xb200000000000000000000896d4cf2f1866d9bce` |
+| ALABc | Astera Labs | `0xb200000000000000000000476c5a355abe1a2794` |
+| AMATc | Applied Materials | `0xb2000000000000000000009c1a6794874ddab197` |
+| AMGNc | Amgen | `0xb20000000000000000000049d38a179c97e33381` |
+| ANETc | Arista Networks | `0xb200000000000000000000e71d4e45d1421251cb` |
+| BACc | Bank of America | `0xb200000000000000000000e3e784cdf88df2959d` |
+| BIIBc | Biogen | `0xb20000000000000000000077bbd6469ecfe8c0b4` |
+| BZFDc | BuzzFeed | `0xb20000000000000000000084b031036e4dc7515b` |
+| CATc | Caterpillar | `0xb2000000000000000000005de7f2e0aca219c070` |
+| CIENc | Ciena | `0xb2000000000000000000008258e8647cea5f4a19` |
+| CMGc | Chipotle Mexican Grill | `0xb200000000000000000000e4a60215e10d6d8c2b` |
+| COMPc | Compass | `0xb200000000000000000000a1d16a625a68f38811` |
+| CSCOc | Cisco Systems | `0xb20000000000000000000015776ea82655c4f034` |
+| CVXc | Chevron | `0xb2000000000000000000003bf350e420c13e431a` |
+| DDOGc | Datadog | `0xb2000000000000000000002c99976e240ed773e6` |
+| EBAYc | eBay | `0xb2000000000000000000007578836b0ff7780eb4` |
+| GILDc | Gilead Sciences | `0xb200000000000000000000acccfe56da68b19a0d` |
+| GLWc | Corning | `0xb2000000000000000000008c06c1b3e7590ac982` |
+| GTLBc | GitLab | `0xb200000000000000000000df14b76c292a32982d` |
+| HDc | The Home Depot | `0xb200000000000000000000b11c7e7295fe11fba7` |
+| HOGc | Harley-Davidson | `0xb2000000000000000000001faa7fa5ef4184ede5` |
+| HPEc | Hewlett Packard Enterprise Company | `0xb200000000000000000000d8aeccf70906ab125d` |
+| HYMCc | Hycroft Mining Holding | `0xb200000000000000000000fbc17101e786511a5e` |
+| IBMc | International Business Machines | `0xb2000000000000000000009db9ea88c3583b1ec8` |
+| INFQc | Infleqtion | `0xb200000000000000000000b387255897c96fa9b1` |
+| INTUc | Intuit | `0xb200000000000000000000989432cd85947ee845` |
+| JNJc | Johnson & Johnson | `0xb20000000000000000000090658e3f9b29e2f5c2` |
+| JPMc | JPMorgan Chase & Co. | `0xb200000000000000000000fde956536a25725156` |
+| KLACc | KLA | `0xb200000000000000000000dba9e310296c1066c0` |
+| KOc | The Coca-Cola Company | `0xb200000000000000000000ffef181db6dc5ed6a3` |
+| LRCXc | Lam Research | `0xb20000000000000000000034975347ff1848aab9` |
+| LULUc | lululemon athletica | `0xb200000000000000000000989dc22d3656717734` |
+| MDBc | MongoDB | `0xb20000000000000000000086fffb23cbfbb1f1d8` |
+| MEDc | Medifast | `0xb200000000000000000000c7d6120c543159ac73` |
+| MPc | MP Materials | `0xb2000000000000000000003958003d801724f9d3` |
+| MRKc | Merck & Co. | `0xb200000000000000000000241fe94fe97fcbf034` |
+| MVISc | MicroVision | `0xb2000000000000000000001bcf8e5022d7f61919` |
+| NKEc | NIKE | `0xb20000000000000000000071f6c75c5892b09beb` |
+| OKTAc | Okta | `0xb2000000000000000000002570652530a5e0f771` |
+| OUSTc | Ouster | `0xb200000000000000000000314b9f5f580168766a` |
+| PANWc | Palo Alto Networks | `0xb2000000000000000000008b934a18e189efe90f` |
+| PENGc | Penguin Solutions | `0xb200000000000000000000ef65afe26a07bab24e` |
+| QCOMc | Qualcomm | `0xb2000000000000000000005672d78eff30d24665` |
+| QNTc | Quantinuum | `0xb2000000000000000000003963c3beaa3eba9bfc` |
+| SBUXc | Starbucks | `0xb200000000000000000000c3de197eac6faa1e64` |
+| SMCIc | Super Micro Computer | `0xb20000000000000000000065f11d53a1e442bb84` |
+| SNAPc | Snap | `0xb2000000000000000000003f265ab1f74dd89ac0` |
+| TEAMc | Atlassian | `0xb2000000000000000000004217b9b4f6f6acb7b8` |
+| TERc | Teradyne | `0xb2000000000000000000006bc65af32d24870a2d` |
+| UMACc | Unusual Machines | `0xb2000000000000000000003ae0817c304acbb1de` |
+| USARc | USA Rare Earth | `0xb200000000000000000000d80d163781a37a20f6` |
+| Vc | Visa | `0xb20000000000000000000054b11fd279a4f7d4ef` |
+| ZMc | Zoom Communications | `0xb2000000000000000000000e63b7b0b6bc5b9213` |
+| ZSc | Zscaler | `0xb20000000000000000000076a288b15b61ec78f6` |
 
 Every one of these was created through the B20 factory (`0xB20f…0000`) by the same issuer account, `0xe090ecbee12d4b6aee5e73ff60945f2545ef5c6f`. Anyone can create a B20, and the factory has minted tens of thousands of them, so a symbol match proves nothing. Before adding a listing, check its creator in the factory's creation log.
 
