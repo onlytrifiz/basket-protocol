@@ -322,7 +322,17 @@ export default async function IndexPage({
                     ? "could not be read"
                     : burns
                       ? history?.burnedUnits
-                        ? `${fmtShares(history.burnedUnits)} ${index.coinSymbol ?? "coins"} destroyed`
+                        ? (
+                          <>
+                            {fmtShares(history.burnedUnits)} {index.coinSymbol ?? "coins"} destroyed
+                            {/* Manual burns count in the headline; this says how much was the index's own.
+                                Only when the two PRINT differently, and kept whole so it wraps as one. */}
+                            {history.burnedByIndexUnits !== null
+                              && fmtShares(history.burnedByIndexUnits) !== fmtShares(history.burnedUnits) && (
+                              <>{" "}<span style={{ whiteSpace: "nowrap" }}>· {fmtShares(history.burnedByIndexUnits)} by this index</span></>
+                            )}
+                          </>
+                        )
                         : "nothing yet"
                       : history?.paidUnits.length
                         ? history.paidUnits.map((p) => `${amount(p.units)} ${p.symbol}`).join(" · ")

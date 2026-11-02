@@ -578,9 +578,14 @@ export type IndexRow = Index & {
   paidUnits: Array<{ token: string; symbol: string; units: number }>;
   /** Dollars collected in fees, ever. */
   feesUsd: number | null;
-  /** For a buyback, what has been destroyed — the figure that stands where a payout would. */
+  /**
+   * For a buyback, what has been destroyed — the figure that stands where a payout would. Everything
+   * at the burn address, manual burns included; see `readBurnBalances`.
+   */
   burnedUsd: number | null;
   burnedUnits: number | null;
+  /** Of that, what the treasury itself burned. Whether the index has RUN is decided on this. */
+  burnedByIndexUnits: number | null;
   rounds: number;
   payments: number;
   /** True when the history could not be read; the row shows dashes rather than zeros. */
@@ -671,6 +676,41 @@ const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 /** `mode` on a treasury: buy the coin back and destroy it, rather than pay a basket out. */
 export const MODE_BUYBACK = 1;
 
+/** Where `IndexTreasury` sends every coin it buys back — the contract's `BURN` constant. */
+const BURN_ADDRESS = "0x000000000000000000000000000000000000dead";
+const BALANCE_OF = "0x70a08231"; // balanceOf(address)
+
+/**
+ * Raw units of each coin sitting at the burn address, keyed by lowercase coin. Absent = unread.
+ *
+ * A buyback's headline is the coin's TOTAL burned, not only what the treasury sent. Holders and
+ * creators burn by hand too — on DCAT ~450K of the 28.68M at `0x…dEaD` came from two wallets — and a
+ * figure counting only the treasury's `Burned` events reads as an undercount to anyone who checks
+ * the burn address. The treasury's own share is still carried, for the sub-line.
+ */
+async function readBurnBalances(coins: string[]): Promise<Map<string, bigint>> {
+  const keys = [...new Set(coins.map((c) => c.toLowerCase()))].filter((c) => c !== ZERO_ADDRESS);
+  if (keys.length === 0) return new Map();
+  return cached(`indices:burn:${keys.sort().join(",")}`, PRICE_TTL_MS, async () => {
+    const results = await batchCall(keys.map((to) => ({ to, data: `${BALANCE_OF}${pad(BURN_ADDRESS)}` })));
+    const out = new Map<string, bigint>();
+    keys.forEach((key, i) => {
+      const value = toBigInt(results[i]);
+      if (value !== null) out.set(key, value);
+    });
+    return out;
+  }).catch(() => new Map());
+}
+
+/**
+ * Everything at the burn address, never less than what this index itself burned there.
+ *
+ * The floor keeps an unread or lagging balance from shrinking the figure below the index's own
+ * events. When the balance could not be read at all the index's share stands alone.
+ */
+const burnedTotal = (byIndex: bigint, atBurnAddress: bigint | undefined) =>
+  atBurnAddress !== undefined && atBurnAddress > byIndex ? atBurnAddress : byIndex;
+
 /**
  * What an index has actually returned to its holders, in dollars — the one figure both modes have.
  *
@@ -703,7 +743,8 @@ export function returnedUsd(
  * different states that a dollars-only sort collapses into the same bottom of the list.
  */
 function hasRun(row: IndexRow): boolean {
-  return row.mode === MODE_BUYBACK ? (row.burnedUnits ?? 0) > 0 : row.rounds > 0;
+  // The index's own burns, not the coin's: a holder burning by hand is not this index running.
+  return row.mode === MODE_BUYBACK ? (row.burnedByIndexUnits ?? 0) > 0 : row.rounds > 0;
 }
 
 
@@ -727,9 +768,11 @@ async function loadRows(): Promise<{ rows: IndexRow[]; totals: IndexTotals }> {
     if (index.coin && BigInt(index.coin) !== 0n) tokens.add(index.coin.toLowerCase());
   }
   const tickers = [...tokens].map((t) => stockByAddress(t)?.ticker).filter(Boolean) as string[];
-  const [decimals, board] = await Promise.all([
+  const buybackCoins = all.filter((i) => i.mode === MODE_BUYBACK).map((i) => i.coin);
+  const [decimals, board, atBurn] = await Promise.all([
     readDecimals([...tokens]),
     tickers.length ? marketBoard(tickers) : Promise.resolve({ quotes: {} as Record<string, never> }),
+    readBurnBalances(buybackCoins),
   ]);
   const quotes = board.quotes as Record<string, { price: number }>;
 
@@ -750,7 +793,7 @@ async function loadRows(): Promise<{ rows: IndexRow[]; totals: IndexTotals }> {
     if (!a) {
       return {
         ...index, paidUsd: null, paidUnits: [], feesUsd: null,
-        burnedUsd: null, burnedUnits: null, rounds: 0, payments: 0, unread: true,
+        burnedUsd: null, burnedUnits: null, burnedByIndexUnits: null, rounds: 0, payments: 0, unread: true,
       };
     }
 
@@ -772,9 +815,12 @@ async function loadRows(): Promise<{ rows: IndexRow[]; totals: IndexTotals }> {
     // A buyback pays nobody: everything it does ends at the burn, so that is the figure that has to
     // stand where a payout would, or its row reads as an index that has never done anything.
     const coinDecimals = decimals.get(index.coin.toLowerCase());
-    const burnedUnits = a.burnedRaw === 0n || coinDecimals === null || coinDecimals === undefined
-      ? (a.burnedRaw === 0n ? 0 : null)
-      : Number(a.burnedRaw) / 10 ** coinDecimals;
+    const burnedRaw = index.mode === MODE_BUYBACK
+      ? burnedTotal(a.burnedRaw, atBurn.get(index.coin.toLowerCase()))
+      : a.burnedRaw;
+    const burnedUnits = burnedRaw === 0n || coinDecimals === null || coinDecimals === undefined
+      ? (burnedRaw === 0n ? 0 : null)
+      : Number(burnedRaw) / 10 ** coinDecimals;
     const coinPrice = priced.get(index.coin.toLowerCase());
 
     return {
@@ -783,6 +829,9 @@ async function loadRows(): Promise<{ rows: IndexRow[]; totals: IndexTotals }> {
       paidUnits,
       feesUsd: a.feesRaw === 0n ? 0 : usd(index.quote, a.feesRaw),
       burnedUnits,
+      burnedByIndexUnits: a.burnedRaw === 0n || coinDecimals === null || coinDecimals === undefined
+        ? (a.burnedRaw === 0n ? 0 : null)
+        : Number(a.burnedRaw) / 10 ** coinDecimals,
       burnedUsd: burnedUnits === null || coinPrice === null || coinPrice === undefined
         ? null
         : burnedUnits * coinPrice,
@@ -853,9 +902,14 @@ export async function readIndexHistory(address: string): Promise<{
   feesUsd: number | null;
   feesUnits: number | null;
   creatorUsd: number | null;
-  /** A buyback's entire output: what it destroyed. Zero-safe, null when the coin has no price. */
+  /**
+   * A buyback's entire output: everything at the burn address, this index's burns and manual ones
+   * alike. Zero-safe, null when the coin has no price.
+   */
   burnedUsd: number | null;
   burnedUnits: number | null;
+  /** Of that, what this index's own `Burned` events sent. */
+  burnedByIndexUnits: number | null;
   rounds: number;
   payments: number;
   events: IndexEvent[];
@@ -886,10 +940,13 @@ export async function readIndexHistory(address: string): Promise<{
     ),
   ];
   const tickers = tokens.map((t) => stockByAddress(t)?.ticker).filter(Boolean) as string[];
-  const [decimals, board] = await Promise.all([
+  const buyback = index.mode === MODE_BUYBACK;
+  const [decimals, board, atBurn] = await Promise.all([
     readDecimals(tokens),
     tickers.length ? marketBoard(tickers) : Promise.resolve({ quotes: {} as Record<string, never> }),
+    buyback ? readBurnBalances([index.coin]) : Promise.resolve(new Map<string, bigint>()),
   ]);
+  const burnedRaw = buyback ? burnedTotal(a.burnedRaw, atBurn.get(index.coin.toLowerCase())) : a.burnedRaw;
   const quotes = board.quotes as Record<string, { price: number }>;
 
   const priced = new Map<string, number | null>();
@@ -920,8 +977,9 @@ export async function readIndexHistory(address: string): Promise<{
     feesUsd: a.feesRaw === 0n ? 0 : value(index.quote, a.feesRaw),
     feesUnits: units(index.quote, a.feesRaw),
     creatorUsd: a.creatorRaw === 0n ? 0 : value(index.quote, a.creatorRaw),
-    burnedUsd: a.burnedRaw === 0n ? 0 : value(index.coin, a.burnedRaw),
-    burnedUnits: a.burnedRaw === 0n ? 0 : units(index.coin, a.burnedRaw),
+    burnedUsd: burnedRaw === 0n ? 0 : value(index.coin, burnedRaw),
+    burnedUnits: burnedRaw === 0n ? 0 : units(index.coin, burnedRaw),
+    burnedByIndexUnits: a.burnedRaw === 0n ? 0 : units(index.coin, a.burnedRaw),
     rounds: a.rounds,
     payments: a.payments,
     events: a.events,
