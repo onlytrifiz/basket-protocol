@@ -333,6 +333,37 @@ The active index is **read from the chain**, never from this file: `stocksLength
 | Vc | Visa | `0xb20000000000000000000054b11fd279a4f7d4ef` |
 | ZMc | Zoom Communications | `0xb2000000000000000000000e63b7b0b6bc5b9213` |
 | ZSc | Zscaler | `0xb20000000000000000000076a288b15b61ec78f6` |
+| ALNTc | Allient | `0xb20000000000000000000011eea811eaedb29156` |
+| AMKRc | Amkor Technology | `0xb2000000000000000000002c8b0e3d7ff26f81a0` |
+| ASSTc | Strive | `0xb2000000000000000000002cd78d7c981e97c330` |
+| BNCc | BNB Standard | `0xb2000000000000000000008c1bad82fa061f818a` |
+| CGNXc | Cognex | `0xb2000000000000000000002451af655ae942308d` |
+| CLFc | Cleveland-Cliffs | `0xb200000000000000000000bf75a42183508f2614` |
+| DELLc | Dell Technologies | `0xb20000000000000000000050fe6d1ef35b02e8fd` |
+| EMRc | Emerson Electric | `0xb200000000000000000000fcd9c2a4ee4a2b5481` |
+| FIGc | Figma | `0xb2000000000000000000003fa80315bfd87efed8` |
+| GEc | General Electric | `0xb200000000000000000000f5049c6a6f3a47348d` |
+| GSATc | Globalstar | `0xb2000000000000000000007e032680bad472032f` |
+| ISRGc | Intuitive Surgical | `0xb2000000000000000000002f7bd112b645574214` |
+| NDSNc | Nordson | `0xb2000000000000000000005b1e5ad3c6aeabeddd` |
+| ONc | ON Semiconductor | `0xb20000000000000000000085367ee92c15b5f613` |
+| OPNWc | OpenWorld | `0xb2000000000000000000002a3e91e59ffc3ced94` |
+| OPRAc | Opera | `0xb200000000000000000000fe6b283199e6bd432d` |
+| PATHc | UiPath | `0xb2000000000000000000006d02167c4864e72bd2` |
+| QBTSc | D-Wave Quantum | `0xb2000000000000000000000d46361d597f543d06` |
+| RCATc | Red Cat Holdings | `0xb200000000000000000000a67c3271f0584f6c1d` |
+| REGNc | Regeneron Pharmaceuticals | `0xb2000000000000000000006377b3c06a3e3e9ae5` |
+| ROKc | Rockwell Automation | `0xb200000000000000000000252c42b75f49dacf59` |
+| RRc | Richtech Robotics | `0xb20000000000000000000020790305a981e88a67` |
+| SERVc | Serve Robotics | `0xb2000000000000000000001a114de6d32433f3c0` |
+| SRPTc | Sarepta Therapeutics | `0xb200000000000000000000964b7f3f335d7e70b5` |
+| SYMc | Symbotic | `0xb20000000000000000000047984ecae84db5fcf9` |
+| TKRc | The Timken Company | `0xb20000000000000000000049b9fc3b3c8c9402ff` |
+| TRONc | Tron Inc. | `0xb2000000000000000000000a22ac22d031b657da` |
+| VPGc | Vishay Precision Group | `0xb20000000000000000000051b531471096c5caf6` |
+| VRTXc | Vertex Pharmaceuticals | `0xb200000000000000000000b92922f6d0c592a456` |
+| XOMc | ExxonMobil Holdings | `0xb20000000000000000000065f7d0d6aac5fd4bfd` |
+| ZBRAc | Zebra Technologies | `0xb200000000000000000000e2c4cb0f18b68cc776` |
 
 Every one of these was created through the B20 factory (`0xB20f…0000`) by the same issuer account, `0xe090ecbee12d4b6aee5e73ff60945f2545ef5c6f`. Anyone can create a B20, and the factory has minted tens of thousands of them, so a symbol match proves nothing. Before adding a listing, check its creator in the factory's creation log.
 
