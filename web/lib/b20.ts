@@ -123,36 +123,54 @@ const staticFacts = new Map<string, { logo?: string; metadataUrl?: string; decim
  * this very token and an image in the expected shape, and the image itself must answer before it
  * becomes an `<img src>`. A request that did not land throws, so `cached` keeps the last answer and
  * asks again next time rather than filing a timeout as "no icon".
+ *
+ * Both requests go through Next's data cache, which every instance shares. Coinbase allows about
+ * 300 requests before refusing everything for about 30 seconds (measured 2026-11-05), and 302
+ * listings cost 604, so an instance resolving them on its own could never finish in one render, and
+ * a page drawn past the limit showed favicons. Only a 200 is stored: a 429 stays out of the cache,
+ * so the set fills up over successive renders and a cold instance then asks Coinbase for nothing.
  */
+const iconFetch = () => ({ signal: AbortSignal.timeout(6_000), next: { revalidate: ICON_TTL_MS / 1000 } });
+
 async function resolveRemoteIcon(address: string, metadataUrl: string): Promise<string | undefined> {
-  const meta = await fetch(metadataUrl, { signal: AbortSignal.timeout(6_000), cache: "no-store" });
+  const meta = await fetch(metadataUrl, iconFetch());
   if (meta.status === 404) return undefined;
   if (!meta.ok) throw new Error(`coinbase metadata ${meta.status}`);
   const json = await meta.json() as Record<string, unknown>;
   const image = typeof json.image === "string" ? json.image : undefined;
   const self = typeof json.contract_address === "string" && json.contract_address.toLowerCase() === address;
   if (!image || !self || !REMOTE_ICON.test(image)) return undefined;
-  const head = await fetch(image, { method: "HEAD", signal: AbortSignal.timeout(6_000), cache: "no-store" });
+  const head = await fetch(image, { ...iconFetch(), method: "HEAD" });
   if (head.ok) return image;
   if (head.status === 404 || head.status === 403) return undefined;
   throw new Error(`coinbase icon ${head.status}`);
 }
 
 const remoteIcon = (address: string, metadataUrl: string) =>
-  cached(`icon:${address}`, ICON_TTL_MS, () => resolveRemoteIcon(address, metadataUrl)).catch(() => undefined);
+  cached(`icon:${address}`, ICON_TTL_MS, () => resolveRemoteIcon(address, metadataUrl));
 
 /**
  * Resolve many remote icons, eighty at a time. Measured on 159 listings: sixteen at a time took 8.6s
- * of a cold render, eighty took 2.3s, and Coinbase refused none of either. Only a cold instance pays
- * this; every answer is then kept for six hours.
+ * of a cold render, eighty took 2.3s. Lowering this does not help with Coinbase's limit, which counts
+ * requests rather than concurrency. An icon that did not land falls back to the favicon for this
+ * render and is counted in one log line: these failures used to vanish without a trace.
  */
 async function remoteIcons(entries: Array<[string, string]>): Promise<Map<string, string | undefined>> {
   const out = new Map<string, string | undefined>();
+  const failures: Record<string, number> = {};
   for (let i = 0; i < entries.length; i += ICON_BATCH) {
     const slice = entries.slice(i, i + ICON_BATCH);
-    const icons = await Promise.all(slice.map(([address, url]) => remoteIcon(address, url)));
-    slice.forEach(([address], j) => out.set(address, icons[j]));
+    const icons = await Promise.allSettled(slice.map(([address, url]) => remoteIcon(address, url)));
+    slice.forEach(([address], j) => {
+      const icon = icons[j];
+      if (icon.status === "fulfilled") out.set(address, icon.value);
+      else {
+        const reason = icon.reason instanceof Error ? icon.reason.message : String(icon.reason);
+        failures[reason] = (failures[reason] ?? 0) + 1;
+      }
+    });
   }
+  if (Object.keys(failures).length) console.warn(`icons of ${entries.length} listings not resolved`, failures);
   return out;
 }
 

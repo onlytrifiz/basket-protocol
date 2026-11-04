@@ -19,8 +19,8 @@ export const metadata: Metadata = {
   description: "Every B20 tokenized equity on Base: live supply, on-chain markets, and how far each trades from its real share price.",
 };
 
-/** Supply and pools move on a minute scale. Rebuilt at that cadence, shared by every visitor. */
-export const revalidate = 60;
+/** Rendered per request, with the data behind it cached in `lib/`: see the note on the detail page. */
+export const dynamic = "force-dynamic";
 
 export default async function StocksPage() {
   const assets = await readAssets();

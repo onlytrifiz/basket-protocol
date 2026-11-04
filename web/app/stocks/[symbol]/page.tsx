@@ -12,12 +12,16 @@ import { SiteFooter, SiteHeader } from "../../components/site-chrome";
 import { StockLogo } from "../../components/stock-logo";
 import { TradeCard } from "../../components/trade-card";
 
-export const revalidate = 60;
-
-/** Pre-render every listed equity: the set is small, known, and changes only when we add one. */
-export function generateStaticParams() {
-  return stocks.map((stock) => ({ symbol: stock.symbol.toLowerCase() }));
-}
+/**
+ * Rendered per request, with the data behind it cached in `lib/`.
+ *
+ * Pre-rendering this page with a 60s revalidate left it in one of two states, decided by chance at
+ * build time. A render whose quote fetch fired became dynamic, as the `no-store` fetch demands. A
+ * render served from another page's warm cache, or past the quote budget, was stored as static, and
+ * then could never regenerate: the same fetch aborts the regeneration, so it stayed on its build-time
+ * copy until the next deploy, some of them with no share price at all.
+ */
+export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: { params: Promise<{ symbol: string }> }): Promise<Metadata> {
   const { symbol } = await params;
