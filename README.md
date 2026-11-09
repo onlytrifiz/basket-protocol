@@ -364,6 +364,26 @@ The active index is **read from the chain**, never from this file: `stocksLength
 | VRTXc | Vertex Pharmaceuticals | `0xb200000000000000000000b92922f6d0c592a456` |
 | XOMc | ExxonMobil Holdings | `0xb20000000000000000000065f7d0d6aac5fd4bfd` |
 | ZBRAc | Zebra Technologies | `0xb200000000000000000000e2c4cb0f18b68cc776` |
+| IRONc | Disc Medicine | `0xb200000000000000000000bfeabea0524c94af03` |
+| UPSTc | Upstart | `0xb2000000000000000000007a8a3ab2d3b319036d` |
+| CEGc | Constellation Energy | `0xb200000000000000000000da9874b62b55e791b5` |
+| RTXc | RTX | `0xb200000000000000000000e6eb8a05d09d73dad5` |
+| ULTAc | Ulta Beauty | `0xb20000000000000000000053d000bac95662d1e4` |
+| VOYGc | Voyager Technologies | `0xb2000000000000000000004f13a2441d3c82ee54` |
+| COPc | ConocoPhillips | `0xb200000000000000000000ec622942b76a2d3b21` |
+| PUMPc | ProPetro | `0xb200000000000000000000e1b0b17fd671771813` |
+| QXOc | QXO | `0xb2000000000000000000000cd31253817b36f88a` |
+| SLSc | SELLAS Life Sciences | `0xb2000000000000000000000c431e2a7c0ce7ea31` |
+| NEMc | Newmont | `0xb2000000000000000000003aa0410688baf4da88` |
+| ITc | Gartner | `0xb20000000000000000000042cbbae483635c3774` |
+| WTIc | W&T Offshore | `0xb200000000000000000000d2f94f19aa759f4690` |
+| KRMNc | Karman | `0xb200000000000000000000a70e43dff7acc203b0` |
+| PRc | Permian Resources | `0xb200000000000000000000a0390525880c1ac72b` |
+| BAc | Boeing | `0xb200000000000000000000fd10d35a781efb5c2f` |
+| NTLAc | Intellia Therapeutics | `0xb20000000000000000000054a4a3659b55272125` |
+| RHc | RH | `0xb20000000000000000000080bae0f654b5cc762c` |
+| LYFTc | Lyft | `0xb20000000000000000000005717baa337022c782` |
+| VSXYc | Victoria's Secret | `0xb200000000000000000000a9dabfd3f0c5f21304` |
 
 Every one of these was created through the B20 factory (`0xB20f…0000`) by the same issuer account, `0xe090ecbee12d4b6aee5e73ff60945f2545ef5c6f`. Anyone can create a B20, and the factory has minted tens of thousands of them, so a symbol match proves nothing. Before adding a listing, check its creator in the factory's creation log.
 
