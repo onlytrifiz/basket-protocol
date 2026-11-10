@@ -384,6 +384,16 @@ The active index is **read from the chain**, never from this file: `stocksLength
 | RHc | RH | `0xb20000000000000000000080bae0f654b5cc762c` |
 | LYFTc | Lyft | `0xb20000000000000000000005717baa337022c782` |
 | VSXYc | Victoria's Secret | `0xb200000000000000000000a9dabfd3f0c5f21304` |
+| SPBc | Spectrum Brands | `0xb200000000000000000000ec3cd781acad151fdc` |
+| PINSc | Pinterest | `0xb2000000000000000000001dfd8c413ecd6ec630` |
+| HOODc | Robinhood | `0xb2000000000000000000006f944897540579d3f2` |
+| TTMIc | TTM Technologies | `0xb2000000000000000000007292d3d91c6b559058` |
+| ACMRc | ACM Research | `0xb200000000000000000000bd0ea991ec5b5a8a03` |
+| ENVXc | Enovix | `0xb200000000000000000000bbc68170eb0b049e42` |
+| KDc | Kyndryl | `0xb200000000000000000000a8fff5b07c6c45a5d2` |
+| DOCNc | DigitalOcean | `0xb20000000000000000000005befa57b9b871e737` |
+| RBRKc | Rubrik | `0xb200000000000000000000b6354bc256dbcd93a8` |
+| Sc | SentinelOne | `0xb2000000000000000000008cae79b36e9269eb86` |
 
 Every one of these was created through the B20 factory (`0xB20f…0000`) by the same issuer account, `0xe090ecbee12d4b6aee5e73ff60945f2545ef5c6f`. Anyone can create a B20, and the factory has minted tens of thousands of them, so a symbol match proves nothing. Before adding a listing, check its creator in the factory's creation log.
 
