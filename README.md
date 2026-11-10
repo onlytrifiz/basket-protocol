@@ -394,6 +394,16 @@ The active index is **read from the chain**, never from this file: `stocksLength
 | DOCNc | DigitalOcean | `0xb20000000000000000000005befa57b9b871e737` |
 | RBRKc | Rubrik | `0xb200000000000000000000b6354bc256dbcd93a8` |
 | Sc | SentinelOne | `0xb2000000000000000000008cae79b36e9269eb86` |
+| DHRc | Danaher | `0xb2000000000000000000001bcf0441201d513fa5` |
+| TGTXc | TG Therapeutics | `0xb2000000000000000000003a67b9f116f25513d6` |
+| TDOCc | Teladoc Health | `0xb200000000000000000000a49b5eed0c1cf792ba` |
+| TWSTc | Twist Bioscience | `0xb200000000000000000000a15628dcea6934ede0` |
+| OMERc | Omeros | `0xb200000000000000000000178d4c37485ea47ef6` |
+| WGSc | GeneDx | `0xb200000000000000000000c6f4b26bd2be77f18d` |
+| ABTc | Abbott | `0xb200000000000000000000d6351d2eb7ed29bf0b` |
+| ABSIc | Absci | `0xb20000000000000000000010718397aca876a20a` |
+| MDGLc | Madrigal Pharmaceuticals | `0xb2000000000000000000008d426f3543babee7bb` |
+| BEAMc | Beam Therapeutics | `0xb200000000000000000000da21e7163dc02c0616` |
 
 Every one of these was created through the B20 factory (`0xB20f…0000`) by the same issuer account, `0xe090ecbee12d4b6aee5e73ff60945f2545ef5c6f`. Anyone can create a B20, and the factory has minted tens of thousands of them, so a symbol match proves nothing. Before adding a listing, check its creator in the factory's creation log.
 
