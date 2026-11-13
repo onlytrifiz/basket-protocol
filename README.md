@@ -404,6 +404,26 @@ The active index is **read from the chain**, never from this file: `stocksLength
 | ABSIc | Absci | `0xb20000000000000000000010718397aca876a20a` |
 | MDGLc | Madrigal Pharmaceuticals | `0xb2000000000000000000008d426f3543babee7bb` |
 | BEAMc | Beam Therapeutics | `0xb200000000000000000000da21e7163dc02c0616` |
+| OLLIc | Ollie's Bargain Outlet | `0xb20000000000000000000097ca7d4003399c67e6` |
+| ETSYc | Etsy | `0xb200000000000000000000ba75b2046aad1c0a13` |
+| PGc | Procter & Gamble | `0xb200000000000000000000c25611c4bda138d298` |
+| CPNGc | Coupang | `0xb20000000000000000000038e9982fe875b7e066` |
+| DKSc | Dick's Sporting Goods | `0xb2000000000000000000008463bf2557b483abf9` |
+| WHRc | Whirlpool | `0xb2000000000000000000006448a906e8942850fa` |
+| REALc | The RealReal | `0xb200000000000000000000211a2ed33fad95b0b3` |
+| GRPNc | Groupon | `0xb2000000000000000000004637e5a787885c720d` |
+| DECKc | Deckers Brands | `0xb200000000000000000000b85fff48d4a26c3145` |
+| KMBc | Kimberly-Clark | `0xb200000000000000000000a8f1c97d05a15e89e2` |
+| JBLUc | JetBlue | `0xb20000000000000000000064832d0d2d38e2f4fc` |
+| WUc | Western Union | `0xb20000000000000000000033be01089cf02a2025` |
+| FOURc | Shift4 | `0xb2000000000000000000008c02be39ba2cbda822` |
+| AXPc | American Express | `0xb2000000000000000000009cfe164a21cb5a11c5` |
+| YOUc | CLEAR Secure | `0xb2000000000000000000003cdb2c0f94e4ebf605` |
+| ALLc | Allstate | `0xb2000000000000000000009b05748ece723cc6a6` |
+| OWLc | Blue Owl Capital | `0xb200000000000000000000b1e11478cdd89ef7b2` |
+| EVERc | EverQuote | `0xb200000000000000000000ad4ca95ce451578243` |
+| UALc | United Airlines | `0xb200000000000000000000cdbf3e786ff34dbe51` |
+| GTc | Goodyear | `0xb200000000000000000000264d3a9dea68aa6631` |
 
 Every one of these was created through the B20 factory (`0xB20f…0000`) by the same issuer account, `0xe090ecbee12d4b6aee5e73ff60945f2545ef5c6f`. Anyone can create a B20, and the factory has minted tens of thousands of them, so a symbol match proves nothing. Before adding a listing, check its creator in the factory's creation log.
 
