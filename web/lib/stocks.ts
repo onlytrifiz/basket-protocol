@@ -94,8 +94,10 @@ export const stocks: IndexStock[] = [
   // danaher.com and twistbioscience.com serve no favicon; DHRc and TWSTc rely on their Coinbase icons.
   // allstate.com serves no favicon but www.allstate.com does; deckers.com serves none at all, so DECKc
   // relies on its Coinbase icon.
-  // Oura has no ticker: it postponed its Nasdaq IPO (as OURA) on 29 September 2026. Give it one
-  // when it trades.
+  // next-decade.com serves no favicon, so NEXTc relies on its Coinbase icon.
+  // Oura has no ticker: it postponed its Nasdaq IPO (as OURA) on 29 September 2026. Anthropic has none
+  // either: ANTc was issued on 16 November 2026 while the company is still private, and Coinbase's
+  // metadata endpoint does not list it yet. Give each a ticker when it trades.
   { symbol: "AALc", name: "American Airlines", domain: "aa.com", ticker: "AAL", brand: "#5B9BD5", wash: "#0078D2", address: "0xb2000000000000000000004feb8d277dd14b08bb" },
   { symbol: "AAOIc", name: "Applied Optoelectronics", domain: "ao-inc.com", ticker: "AAOI", brand: "#3F8FD8", address: "0xb200000000000000000000cf36d05963a3e2205c" },
   { symbol: "ABNBc", name: "Airbnb", domain: "airbnb.com", ticker: "ABNB", brand: "#FF5A5F", address: "0xb200000000000000000000045beafafbe0dc7664" },
@@ -120,12 +122,14 @@ export const stocks: IndexStock[] = [
   { symbol: "AMZNc", name: "Amazon", domain: "amazon.com", ticker: "AMZN", brand: "#FF9900", address: "0xb200000000000000000000d9192b6b456483c2e8" },
   { symbol: "ANETc", name: "Arista", domain: "arista.com", ticker: "ANET", brand: "#3E8FD8", wash: "#00599C", address: "0xb200000000000000000000e71d4e45d1421251cb" },
   { symbol: "ANFc", name: "Abercrombie & Fitch", domain: "abercrombie.com", ticker: "ANF", brand: "#E6E6E6", wash: "#111111", address: "0xb20000000000000000000019641b253b3e2c8a24" },
+  { symbol: "ANTc", name: "Anthropic", domain: "anthropic.com", brand: "#D97757", wash: "#141413", address: "0xb20000000000000000000016e38fd364d271ba28" },
   { symbol: "APLDc", name: "Applied Digital", domain: "applieddigital.com", ticker: "APLD", brand: "#5B7BE0", wash: "#0B2D6B", address: "0xb2000000000000000000007cbdf8fa3861e51721" },
   { symbol: "APPc", name: "AppLovin", domain: "applovin.com", ticker: "APP", brand: "#E6E6E6", wash: "#111111", address: "0xb20000000000000000000006f910a0e7bbd3c168" },
   { symbol: "ARMc", name: "Arm", domain: "arm.com", ticker: "ARM", brand: "#2AC4C4", wash: "#111111", address: "0xb20000000000000000000026215d755356e5043f" },
   { symbol: "ASSTc", name: "Strive", domain: "strive.com", ticker: "ASST", brand: "#F28C28", address: "0xb2000000000000000000002cd78d7c981e97c330" },
   { symbol: "ASTSc", name: "AST SpaceMobile", domain: "ast-science.com", ticker: "ASTS", brand: "#F58220", address: "0xb200000000000000000000b1a29cf17a1819288a" },
   { symbol: "AURc", name: "Aurora", domain: "aurora.tech", ticker: "AUR", brand: "#5B7BE0", wash: "#0A2A66", address: "0xb200000000000000000000cf62d7125cc77d2f96" },
+  { symbol: "AVAVc", name: "AeroVironment", domain: "avinc.com", ticker: "AVAV", brand: "#A8B0B4", wash: "#1E1E1E", address: "0xb200000000000000000000d0d00a5e1f2d2eb61a" },
   { symbol: "AVGOc", name: "Broadcom", domain: "broadcom.com", ticker: "AVGO", brand: "#CC092F", address: "0xb200000000000000000000fc737aea6196ab5a4c" },
   { symbol: "AXONc", name: "Axon", domain: "axon.com", ticker: "AXON", brand: "#E6E6E6", wash: "#111111", address: "0xb2000000000000000000004cc3e96ceb78541d33" },
   { symbol: "AXPc", name: "American Express", domain: "americanexpress.com", ticker: "AXP", brand: "#2E86D6", wash: "#006FCF", address: "0xb2000000000000000000009cfe164a21cb5a11c5" },
@@ -157,6 +161,7 @@ export const stocks: IndexStock[] = [
   { symbol: "CATc", name: "Caterpillar", domain: "caterpillar.com", ticker: "CAT", brand: "#FFCD11", wash: "#111111", address: "0xb2000000000000000000005de7f2e0aca219c070" },
   { symbol: "CAVAc", name: "CAVA", domain: "cava.com", ticker: "CAVA", brand: "#F2C94C", wash: "#B8860B", address: "0xb2000000000000000000001b6e407239eb31edcf" },
   { symbol: "CBRSc", name: "Cerebras", domain: "cerebras.ai", ticker: "CBRS", brand: "#F05A28", address: "0xb200000000000000000000720133eedf525f93e2" },
+  { symbol: "CCc", name: "Chemours", domain: "chemours.com", ticker: "CC", brand: "#E5482F", address: "0xb200000000000000000000e359b2ca361e1905c9" },
   { symbol: "CEGc", name: "Constellation Energy", domain: "constellationenergy.com", ticker: "CEG", brand: "#F05A1A", address: "0xb200000000000000000000da9874b62b55e791b5" },
   { symbol: "CELHc", name: "Celsius", domain: "celsius.com", ticker: "CELH", brand: "#F5821F", address: "0xb2000000000000000000004161b4168d03841511" },
   { symbol: "CGNXc", name: "Cognex", domain: "cognex.com", ticker: "CGNX", brand: "#FFE600", wash: "#C9A800", address: "0xb2000000000000000000002451af655ae942308d" },
@@ -203,6 +208,7 @@ export const stocks: IndexStock[] = [
   { symbol: "EMRc", name: "Emerson", domain: "emerson.com", ticker: "EMR", brand: "#4F8FCF", wash: "#004B8D", address: "0xb200000000000000000000fcd9c2a4ee4a2b5481" },
   { symbol: "ENPHc", name: "Enphase", domain: "enphase.com", ticker: "ENPH", brand: "#F58220", address: "0xb2000000000000000000007a90b2d9ed101035a8" },
   { symbol: "ENVXc", name: "Enovix", domain: "enovix.com", ticker: "ENVX", brand: "#4A78C8", wash: "#1F4E9E", address: "0xb200000000000000000000bbc68170eb0b049e42" },
+  { symbol: "ESc", name: "Eversource Energy", domain: "eversource.com", ticker: "ES", brand: "#2DB55D", wash: "#007A3D", address: "0xb200000000000000000000e90b1ac2da02106417" },
   { symbol: "ETSYc", name: "Etsy", domain: "etsy.com", ticker: "ETSY", brand: "#F1641E", address: "0xb200000000000000000000ba75b2046aad1c0a13" },
   { symbol: "EVERc", name: "EverQuote", domain: "everquote.com", ticker: "EVER", brand: "#4A6BC8", wash: "#14317F", address: "0xb200000000000000000000ad4ca95ce451578243" },
   { symbol: "FIGRc", name: "Figure", domain: "figure.com", ticker: "FIGR", brand: "#6C5CE7", address: "0xb2000000000000000000005a41bef59807119850" },
@@ -210,6 +216,7 @@ export const stocks: IndexStock[] = [
   { symbol: "FIZZc", name: "National Beverage", domain: "nationalbeverage.com", ticker: "FIZZ", brand: "#E31837", address: "0xb200000000000000000000ee6fd7de967ea1a0dc" },
   { symbol: "FLNCc", name: "Fluence", domain: "fluenceenergy.com", ticker: "FLNC", brand: "#3FB6A8", address: "0xb200000000000000000000695b10dd3e1b0ea070" },
   { symbol: "FLYc", name: "Firefly Aerospace", domain: "fireflyspace.com", ticker: "FLY", brand: "#F7941D", address: "0xb2000000000000000000004fc7a0c25178a0d633" },
+  { symbol: "FMCc", name: "FMC", domain: "fmc.com", ticker: "FMC", brand: "#E33B2E", address: "0xb2000000000000000000002756093a39e13e08c6" },
   { symbol: "FOURc", name: "Shift4", domain: "shift4.com", ticker: "FOUR", brand: "#2F7FF2", wash: "#0F62D6", address: "0xb2000000000000000000008c02be39ba2cbda822" },
   { symbol: "FSLRc", name: "First Solar", domain: "firstsolar.com", ticker: "FSLR", brand: "#E31837", address: "0xb200000000000000000000b096f2f6021ac39617" },
   { symbol: "FUBOc", name: "FuboTV", domain: "fubo.tv", ticker: "FUBO", brand: "#F26B3A", address: "0xb200000000000000000000ffada41c4ed20b8d0f" },
@@ -231,8 +238,10 @@ export const stocks: IndexStock[] = [
   { symbol: "GTLBc", name: "GitLab", domain: "gitlab.com", ticker: "GTLB", brand: "#FC6D26", address: "0xb200000000000000000000df14b76c292a32982d" },
   { symbol: "GTc", name: "Goodyear", domain: "goodyear.com", ticker: "GT", brand: "#F2B300", wash: "#0B2470", address: "0xb200000000000000000000264d3a9dea68aa6631" },
   { symbol: "HDc", name: "Home Depot", domain: "homedepot.com", ticker: "HD", brand: "#F96302", address: "0xb200000000000000000000b11c7e7295fe11fba7" },
+  { symbol: "HEc", name: "Hawaiian Electric", domain: "hei.com", ticker: "HE", brand: "#4A79C7", wash: "#124A8E", address: "0xb200000000000000000000d2a1ee1f57be718e71" },
   { symbol: "HIMSc", name: "Hims & Hers", domain: "forhims.com", ticker: "HIMS", brand: "#E6E6E6", wash: "#111111", address: "0xb20000000000000000000043a599976181bcf336" },
   { symbol: "HOGc", name: "Harley-Davidson", domain: "harley-davidson.com", ticker: "HOG", brand: "#F26B1D", address: "0xb2000000000000000000001faa7fa5ef4184ede5" },
+  { symbol: "HONc", name: "Honeywell", domain: "honeywell.com", ticker: "HON", brand: "#E5262B", address: "0xb200000000000000000000ab665a0775e19f0dc5" },
   { symbol: "HOODc", name: "Robinhood", domain: "robinhood.com", ticker: "HOOD", brand: "#00C805", wash: "#1F4D2E", address: "0xb2000000000000000000006f944897540579d3f2" },
   { symbol: "HPEc", name: "HPE", domain: "hpe.com", ticker: "HPE", brand: "#01A982", address: "0xb200000000000000000000d8aeccf70906ab125d" },
   { symbol: "HPQc", name: "HP", domain: "hp.com", ticker: "HPQ", brand: "#0096D6", address: "0xb2000000000000000000009a3602cf5d020afa98" },
@@ -262,6 +271,7 @@ export const stocks: IndexStock[] = [
   { symbol: "KOc", name: "Coca-Cola", domain: "coca-colacompany.com", ticker: "KO", brand: "#F40009", address: "0xb200000000000000000000ffef181db6dc5ed6a3" },
   { symbol: "KRMNc", name: "Karman", domain: "karman-sd.com", ticker: "KRMN", brand: "#8FA3BF", address: "0xb200000000000000000000a70e43dff7acc203b0" },
   { symbol: "KSSc", name: "Kohl's", domain: "kohls.com", ticker: "KSS", brand: "#D6497D", wash: "#860036", address: "0xb200000000000000000000105a1f43ff3605c5de" },
+  { symbol: "KTOSc", name: "Kratos Defense", domain: "kratosdefense.com", ticker: "KTOS", brand: "#B04A5A", wash: "#6E1F2E", address: "0xb200000000000000000000e47c019ec313aad347" },
   { symbol: "LCIDc", name: "Lucid", domain: "lucidmotors.com", ticker: "LCID", brand: "#E6E6E6", wash: "#111111", address: "0xb20000000000000000000081050ac3d4395df527" },
   { symbol: "LEUc", name: "Centrus Energy", domain: "centrusenergy.com", ticker: "LEU", brand: "#3FA76B", wash: "#1F6B4A", address: "0xb200000000000000000000fab55ad3773f2c8ef1" },
   { symbol: "LFMDc", name: "LifeMD", domain: "lifemd.com", ticker: "LFMD", brand: "#3FB6A8", wash: "#0B6E66", address: "0xb200000000000000000000db15c02e133a9dab99" },
@@ -292,6 +302,7 @@ export const stocks: IndexStock[] = [
   { symbol: "MVISc", name: "MicroVision", domain: "microvision.com", ticker: "MVIS", brand: "#3E8FD8", address: "0xb2000000000000000000001bcf8e5022d7f61919" },
   { symbol: "NDSNc", name: "Nordson", domain: "nordson.com", ticker: "NDSN", brand: "#3E9BE8", wash: "#0072CE", address: "0xb2000000000000000000005b1e5ad3c6aeabeddd" },
   { symbol: "NEMc", name: "Newmont", domain: "newmont.com", ticker: "NEM", brand: "#5B6FD0", wash: "#14247F", address: "0xb2000000000000000000003aa0410688baf4da88" },
+  { symbol: "NEXTc", name: "NextDecade", domain: "next-decade.com", ticker: "NEXT", brand: "#5A6FC8", wash: "#0B1A52", address: "0xb2000000000000000000007c92881e458338b34d" },
   { symbol: "NFLXc", name: "Netflix", domain: "netflix.com", ticker: "NFLX", brand: "#E50914", address: "0xb20000000000000000000058b8c947e44011dfe6" },
   { symbol: "NIOc", name: "NIO", domain: "nio.com", ticker: "NIO", brand: "#E6E6E6", wash: "#111111", address: "0xb2000000000000000000002d2b5dc53c61f1ba06" },
   { symbol: "NKEc", name: "Nike", domain: "nike.com", ticker: "NKE", brand: "#E6E6E6", wash: "#111111", address: "0xb20000000000000000000071f6c75c5892b09beb" },
@@ -386,6 +397,7 @@ export const stocks: IndexStock[] = [
   { symbol: "SOFIc", name: "SoFi", domain: "sofi.com", ticker: "SOFI", brand: "#26B6E8", address: "0xb2000000000000000000003ef37a7c863dc1482a" },
   { symbol: "SONYc", name: "Sony", domain: "sony.com", ticker: "SONY", brand: "#E6E6E6", wash: "#111111", address: "0xb200000000000000000000a26326a922ffa87f6c" },
   { symbol: "SOUNc", name: "SoundHound", domain: "soundhound.com", ticker: "SOUN", brand: "#E6E6E6", wash: "#111111", address: "0xb2000000000000000000002137743d4a01fe4e88" },
+  { symbol: "SOc", name: "Southern Company", domain: "southerncompany.com", ticker: "SO", brand: "#E5243B", address: "0xb200000000000000000000f814b4666c2d70a670" },
   { symbol: "SPBc", name: "Spectrum Brands", domain: "spectrumbrands.com", ticker: "SPB", brand: "#2FA8DC", address: "0xb200000000000000000000ec3cd781acad151fdc" },
   { symbol: "SPCEc", name: "Virgin Galactic", domain: "virgingalactic.com", ticker: "SPCE", brand: "#E6E6E6", wash: "#111111", address: "0xb200000000000000000000d65c9253b025af8c56" },
   { symbol: "SRPTc", name: "Sarepta Therapeutics", domain: "sarepta.com", ticker: "SRPT", brand: "#A77BC0", wash: "#4F2A5F", address: "0xb200000000000000000000964b7f3f335d7e70b5" },
@@ -420,6 +432,7 @@ export const stocks: IndexStock[] = [
   { symbol: "USDEc", name: "StablecoinX", domain: "ir.stablecoinx.com", ticker: "USDE", brand: "#E6E6E6", wash: "#111111", address: "0xb2000000000000000000009426b660396ebcf343" },
   { symbol: "Uc", name: "Unity", domain: "unity.com", ticker: "U", brand: "#E6E6E6", wash: "#111111", address: "0xb200000000000000000000902f48cba1f39149f7" },
   { symbol: "VALEc", name: "Vale", domain: "vale.com", ticker: "VALE", brand: "#2BA6A0", wash: "#007E7A", address: "0xb20000000000000000000063376b142c0764b489" },
+  { symbol: "VCc", name: "Visteon", domain: "visteon.com", ticker: "VC", brand: "#F28C28", address: "0xb20000000000000000000030945cb9c538d0b326" },
   { symbol: "VKTXc", name: "Viking Therapeutics", domain: "vikingtherapeutics.com", ticker: "VKTX", brand: "#E8502E", address: "0xb200000000000000000000979ef4dd6a001b58b1" },
   { symbol: "VOYGc", name: "Voyager Technologies", domain: "voyagertechnologies.com", ticker: "VOYG", brand: "#5A78C8", wash: "#0B1F4D", address: "0xb2000000000000000000004f13a2441d3c82ee54" },
   { symbol: "VPGc", name: "Vishay Precision", domain: "vpgsensors.com", ticker: "VPG", brand: "#2F8FD0", wash: "#1B75BB", address: "0xb20000000000000000000051b531471096c5caf6" },

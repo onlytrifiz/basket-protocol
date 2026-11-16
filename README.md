@@ -424,6 +424,17 @@ The active index is **read from the chain**, never from this file: `stocksLength
 | EVERc | EverQuote | `0xb200000000000000000000ad4ca95ce451578243` |
 | UALc | United Airlines | `0xb200000000000000000000cdbf3e786ff34dbe51` |
 | GTc | Goodyear | `0xb200000000000000000000264d3a9dea68aa6631` |
+| ANTc | Anthropic | `0xb20000000000000000000016e38fd364d271ba28` |
+| VCc | Visteon | `0xb20000000000000000000030945cb9c538d0b326` |
+| AVAVc | AeroVironment | `0xb200000000000000000000d0d00a5e1f2d2eb61a` |
+| ESc | Eversource Energy | `0xb200000000000000000000e90b1ac2da02106417` |
+| KTOSc | Kratos Defense | `0xb200000000000000000000e47c019ec313aad347` |
+| SOc | Southern Company | `0xb200000000000000000000f814b4666c2d70a670` |
+| CCc | Chemours | `0xb200000000000000000000e359b2ca361e1905c9` |
+| HEc | Hawaiian Electric | `0xb200000000000000000000d2a1ee1f57be718e71` |
+| HONc | Honeywell | `0xb200000000000000000000ab665a0775e19f0dc5` |
+| FMCc | FMC | `0xb2000000000000000000002756093a39e13e08c6` |
+| NEXTc | NextDecade | `0xb2000000000000000000007c92881e458338b34d` |
 
 Every one of these was created through the B20 factory (`0xB20f…0000`) by the same issuer account, `0xe090ecbee12d4b6aee5e73ff60945f2545ef5c6f`. Anyone can create a B20, and the factory has minted tens of thousands of them, so a symbol match proves nothing. Before adding a listing, check its creator in the factory's creation log.
 
