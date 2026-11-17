@@ -435,6 +435,15 @@ The active index is **read from the chain**, never from this file: `stocksLength
 | HONc | Honeywell | `0xb200000000000000000000ab665a0775e19f0dc5` |
 | FMCc | FMC | `0xb2000000000000000000002756093a39e13e08c6` |
 | NEXTc | NextDecade | `0xb2000000000000000000007c92881e458338b34d` |
+| TOSTc | Toast | `0xb200000000000000000000cf2593d5ffc13bd817` |
+| NNc | NextNav | `0xb2000000000000000000005d6afb89705cd203ea` |
+| YELPc | Yelp | `0xb2000000000000000000006454926ad8576dc50e` |
+| NTAPc | NetApp | `0xb200000000000000000000e6d729a9705303bd2b` |
+| SWKSc | Skyworks Solutions | `0xb200000000000000000000d154b5666b2d1e5a02` |
+| AMPXc | Amprius Technologies | `0xb2000000000000000000007c7088757cb3703648` |
+| UIc | Ubiquiti | `0xb2000000000000000000003fc6f17c8b775bca78` |
+| COHUc | Cohu | `0xb20000000000000000000007b4fcc48e2d70dcc6` |
+| LWLGc | Lightwave Logic | `0xb200000000000000000000ba4309e1e35bc09f54` |
 
 Every one of these was created through the B20 factory (`0xB20f…0000`) by the same issuer account, `0xe090ecbee12d4b6aee5e73ff60945f2545ef5c6f`. Anyone can create a B20, and the factory has minted tens of thousands of them, so a symbol match proves nothing. Before adding a listing, check its creator in the factory's creation log.
 
