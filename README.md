@@ -444,6 +444,43 @@ The active index is **read from the chain**, never from this file: `stocksLength
 | UIc | Ubiquiti | `0xb2000000000000000000003fc6f17c8b775bca78` |
 | COHUc | Cohu | `0xb20000000000000000000007b4fcc48e2d70dcc6` |
 | LWLGc | Lightwave Logic | `0xb200000000000000000000ba4309e1e35bc09f54` |
+| FPSc | Forgent Power Solutions | `0xb20000000000000000000095528fb26ac48bda96` |
+| IONSc | Ionis Pharmaceuticals | `0xb2000000000000000000001997390508a5617d47` |
+| NRGc | NRG Energy | `0xb2000000000000000000008ce554342c043602a4` |
+| ANNXc | Annexon | `0xb200000000000000000000473f033036350312da` |
+| SNDXc | Syndax Pharmaceuticals | `0xb2000000000000000000005b8cece4a5f9306bb4` |
+| PSc | Pershing Square | `0xb200000000000000000000a071d80fa5b480c448` |
+| SOCc | Sable Offshore | `0xb2000000000000000000001fab744de0b829eed1` |
+| WAYc | Waystar | `0xb2000000000000000000003496c04fcfee6997e0` |
+| CRMDc | CorMedix | `0xb200000000000000000000386f243773d48a4be7` |
+| FIGSc | FIGS | `0xb2000000000000000000003ebe6a3a1df07db619` |
+| PRMEc | Prime Medicine | `0xb200000000000000000000351bd76098b359ada8` |
+| TNDMc | Tandem Diabetes Care | `0xb2000000000000000000001f6b9c31e43560a924` |
+| ACIc | Albertsons | `0xb200000000000000000000964eed57d188766e55` |
+| SMc | SM Energy | `0xb200000000000000000000dd40740e9c445e211b` |
+| NOCc | Northrop Grumman | `0xb200000000000000000000c5b17c065e5378d2a5` |
+| MIRc | Mirion Technologies | `0xb20000000000000000000009614107be6f562ba8` |
+| PCTc | PureCycle Technologies | `0xb200000000000000000000796c05dd2536c7f91c` |
+| HRBc | H&R Block | `0xb2000000000000000000003c5564b8161680c86d` |
+| CADLc | Candel Therapeutics | `0xb200000000000000000000593460934fec1b43dc` |
+| NUVBc | Nuvation Bio | `0xb2000000000000000000000de6a780902db4ec09` |
+| UPSc | UPS | `0xb2000000000000000000008d84c0d360848dbbde` |
+| SHAKc | Shake Shack | `0xb2000000000000000000005c16dd6f675bf8ceb7` |
+| QUITc | Achieve Life Sciences | `0xb200000000000000000000426663e7212288fa97` |
+| VERAc | Vera Therapeutics | `0xb200000000000000000000ef7f9a89256fa06887` |
+| DRIc | Darden Restaurants | `0xb2000000000000000000008451db06977def7b3a` |
+| SPHRc | Sphere Entertainment | `0xb200000000000000000000abadf9b1fdb845db73` |
+| TRIPc | Tripadvisor | `0xb2000000000000000000002f12afa8f583b6ce85` |
+| AAPc | Advance Auto Parts | `0xb200000000000000000000b576d2d93de1e93c8e` |
+| BWc | Babcock & Wilcox | `0xb200000000000000000000f9274fe22c626373f2` |
+| TMDXc | TransMedics | `0xb200000000000000000000aa0aa80f99c33081e1` |
+| SANAc | Sana Biotechnology | `0xb200000000000000000000bc043cf5053540a588` |
+| CRVSc | Corvus Pharmaceuticals | `0xb200000000000000000000cf9b4854beb312e351` |
+| VRDNc | Viridian Therapeutics | `0xb200000000000000000000ef8d64f65302ec1fb2` |
+| MTNc | Vail Resorts | `0xb200000000000000000000ee80a37e1f888644b3` |
+| RIGLc | Rigel Pharmaceuticals | `0xb200000000000000000000966cbe5b99be9b981a` |
+| NRGVc | Energy Vault | `0xb2000000000000000000003ac3d02891f0fc785e` |
+| NKTRc | Nektar Therapeutics | `0xb2000000000000000000009b6d9e39d1667cabe1` |
 
 Every one of these was created through the B20 factory (`0xB20f…0000`) by the same issuer account, `0xe090ecbee12d4b6aee5e73ff60945f2545ef5c6f`. Anyone can create a B20, and the factory has minted tens of thousands of them, so a symbol match proves nothing. Before adding a listing, check its creator in the factory's creation log.
 
