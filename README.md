@@ -481,6 +481,26 @@ The active index is **read from the chain**, never from this file: `stocksLength
 | RIGLc | Rigel Pharmaceuticals | `0xb200000000000000000000966cbe5b99be9b981a` |
 | NRGVc | Energy Vault | `0xb2000000000000000000003ac3d02891f0fc785e` |
 | NKTRc | Nektar Therapeutics | `0xb2000000000000000000009b6d9e39d1667cabe1` |
+| BILLc | BILL | `0xb2000000000000000000005d391f5778c856a625` |
+| NCNOc | nCino | `0xb200000000000000000000be12213c22be20bd15` |
+| TWLOc | Twilio | `0xb2000000000000000000001efb895a436ef861c6` |
+| SAILc | SailPoint | `0xb2000000000000000000005f70980a7864da6fa6` |
+| ADSKc | Autodesk | `0xb200000000000000000000aa6470078cc929cf50` |
+| HUBSc | HubSpot | `0xb2000000000000000000002505cadf02c8a515ed` |
+| WDAYc | Workday | `0xb200000000000000000000439057abbebd3164e6` |
+| BOXc | Box | `0xb200000000000000000000fe850d3b1339314e46` |
+| IOTc | Samsara | `0xb200000000000000000000828945c9970fe196b3` |
+| TDCc | Teradata | `0xb200000000000000000000c7ae77ba53222f80b0` |
+| SMMTc | Summit Therapeutics | `0xb200000000000000000000bd5c201c8b3030efc2` |
+| CELCc | Celcuity | `0xb2000000000000000000008f7ee7d4321cecf830` |
+| KURAc | Kura Oncology | `0xb2000000000000000000006b1e307720e41ea08c` |
+| XNCRc | Xencor | `0xb2000000000000000000004bfc005c86bb282e68` |
+| VSTMc | Verastem | `0xb2000000000000000000002af8913bdeef12ee0a` |
+| INCYc | Incyte | `0xb200000000000000000000a2fda6767891924f2d` |
+| EXELc | Exelixis | `0xb200000000000000000000a396b64e3df80d5f0f` |
+| TNGXc | Tango Therapeutics | `0xb200000000000000000000cd740c7a29afae38a4` |
+| GERNc | Geron | `0xb2000000000000000000008310362a22b2f33304` |
+| OLMAc | Olema Oncology | `0xb200000000000000000000e27ee68303d79914f1` |
 
 Every one of these was created through the B20 factory (`0xB20f…0000`) by the same issuer account, `0xe090ecbee12d4b6aee5e73ff60945f2545ef5c6f`. Anyone can create a B20, and the factory has minted tens of thousands of them, so a symbol match proves nothing. Before adding a listing, check its creator in the factory's creation log.
 
